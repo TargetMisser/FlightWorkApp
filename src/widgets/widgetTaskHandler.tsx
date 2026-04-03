@@ -1,6 +1,7 @@
 import React from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { WidgetTaskHandlerProps } from 'react-native-android-widget';
+import type { HexColor } from '../utils/airlineOps';
 import { ShiftWidget } from './ShiftWidget';
 
 /** Key used by the main app (FlightScreen) to push pre-built widget data */
@@ -15,7 +16,7 @@ export type WidgetFlight = {
   ciClose: string;
   gateOpen: string;
   gateClose: string;
-  airlineColor: string;
+  airlineColor: HexColor;
   departureTs: number;
   isPinned?: boolean;
 };

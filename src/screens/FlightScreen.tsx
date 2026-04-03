@@ -9,7 +9,7 @@ import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAppTheme } from '../context/ThemeContext';
-import { getAirlineOps, getAirlineColor } from '../utils/airlineOps';
+import { getAirlineOps, getAirlineColor, ALLOWED_AIRLINES } from '../utils/airlineOps';
 import { fetchPSAScheduleRaw } from '../utils/fr24api';
 import { requestWidgetUpdate } from 'react-native-android-widget';
 import { WIDGET_CACHE_KEY } from '../widgets/widgetTaskHandler';
