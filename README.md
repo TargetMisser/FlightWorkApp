@@ -10,6 +10,18 @@ Serve soprattutto per:
 - usare un companion Wear OS per informazioni essenziali
 - salvare note, password, contatti e manuali operativi
 
+## Sviluppo con IA
+
+Una parte fondamentale del progetto e che e stato costruito con supporto IA lungo tutto il processo di sviluppo.
+
+Questo include:
+
+- ideazione e progettazione delle funzioni
+- sviluppo e refactoring del codice
+- debug e correzione di problemi
+- preparazione della documentazione
+- organizzazione del workflow di repository e release
+
 ## Funzioni principali
 
 - Calendario turni con inserimento manuale e import.
