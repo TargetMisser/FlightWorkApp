@@ -1,37 +1,37 @@
 ---
 name: Bug report
-about: Segnala un problema o una regressione
+about: Report a bug or regression
 title: "[Bug] "
 labels: bug
 assignees: ""
 ---
 
-## Problema
+## Problem
 
-Descrivi in modo chiaro cosa non funziona.
+Describe clearly what is not working.
 
-## Passi per riprodurre
+## Steps to Reproduce
 
-1. Vai su `...`
-2. Tocca `...`
-3. Inserisci `...`
-4. Vedi errore
+1. Go to `...`
+2. Tap `...`
+3. Enter `...`
+4. See the error
 
-## Comportamento atteso
+## Expected Behavior
 
-Descrivi cosa ti aspettavi.
+Describe what you expected to happen.
 
-## Screenshot o log
+## Screenshots or Logs
 
-Se utili, aggiungili qui.
+Add them here if useful.
 
-## Ambiente
+## Environment
 
 - Device:
 - OS:
 - App version:
-- Branch o commit:
+- Branch or commit:
 
-## Note aggiuntive
+## Additional Notes
 
-Qualsiasi contesto utile per capire meglio il problema.
+Any extra context that may help understand the issue.

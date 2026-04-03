@@ -1,29 +1,29 @@
 ---
 name: Feature request
-about: Proponi una miglioria o una nuova funzione
+about: Propose an improvement or a new feature
 title: "[Feature] "
 labels: enhancement
 assignees: ""
 ---
 
-## Obiettivo
+## Goal
 
-Che cosa vuoi ottenere?
+What do you want to achieve?
 
-## Soluzione proposta
+## Proposed Solution
 
-Descrivi l'idea in modo pratico.
+Describe the idea in practical terms.
 
-## Alternative considerate
+## Alternatives Considered
 
-Hai valutato altre opzioni?
+Did you consider other approaches?
 
-## Impatto
+## Impact
 
-- Chi ne beneficia:
-- Dove cambia il flusso:
-- Eventuali rischi:
+- Who benefits:
+- Which part of the flow changes:
+- Possible risks:
 
-## Note aggiuntive
+## Additional Notes
 
-Mockup, screenshot, riferimenti o dettagli operativi.
+Mockups, screenshots, references, or operational notes.

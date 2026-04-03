@@ -1,18 +1,18 @@
-## Cosa cambia
+## What Changed
 
-Descrivi in poche righe il risultato della modifica.
+Describe the outcome of the change in a few lines.
 
 ## Checklist
 
-- [ ] Ho testato il comportamento principale
-- [ ] Ho verificato che il typecheck passi
-- [ ] Ho aggiornato eventuale documentazione utile
-- [ ] Ho controllato eventuali impatti su Android / Wear OS
+- [ ] I tested the main behavior
+- [ ] I verified that typecheck passes
+- [ ] I updated any relevant documentation
+- [ ] I checked possible Android / Wear OS impact
 
-## Screenshot o video
+## Screenshot or Video
 
-Se la modifica tocca UI o UX, allega qualcosa qui.
+If the change affects UI or UX, attach something here.
 
-## Note per review
+## Review Notes
 
-Segnala qui punti delicati, dubbi o aree su cui concentrarsi.
+Call out sensitive areas, open questions, or review focus points here.

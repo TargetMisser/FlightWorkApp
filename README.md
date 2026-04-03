@@ -1,35 +1,35 @@
 # FlightWorkApp
 
-FlightWorkApp e un'app Expo / React Native pensata per chi lavora in ambito aeroportuale e vuole avere in un solo posto turni, operativita voli, manuali rapidi e supporto da telefono + Wear OS.
+FlightWorkApp is an Expo / React Native app designed for airport operations work, bringing shift planning, flight activity, quick-reference manuals, and phone + Wear OS support into one place.
 
-Serve soprattutto per:
+It is mainly built to:
 
-- consultare il turno del giorno
-- vedere la timeline operativa dei voli
-- avere widget Android rapidi
-- usare un companion Wear OS per informazioni essenziali
-- salvare note, password, contatti e manuali operativi
+- check the current shift
+- view the operational flight timeline
+- use quick Android widgets
+- use a Wear OS companion for essential info
+- store notes, passwords, contacts, and operational manuals
 
-## Sviluppo con IA
+## AI-Assisted Development
 
-Una parte fondamentale del progetto e che e stato costruito con supporto IA lungo tutto il processo di sviluppo.
+A core part of this project is that it was built with AI support throughout the development process.
 
-Questo include:
+That includes:
 
-- ideazione e progettazione delle funzioni
-- sviluppo e refactoring del codice
-- debug e correzione di problemi
-- preparazione della documentazione
-- organizzazione del workflow di repository e release
+- feature ideation and planning
+- code implementation and refactoring
+- debugging and issue fixing
+- documentation drafting
+- repository and release workflow setup
 
-## Funzioni principali
+## Main Features
 
-- Calendario turni con inserimento manuale e import.
-- Timeline voli e operativita di turno.
-- Widget Android per i voli del turno.
+- Shift calendar with manual entry and import tools.
+- Flight timeline and shift operations view.
+- Android widget for shift flights.
 - Companion Wear OS.
-- Manuali e note operative modificabili.
-- Rubrica, blocco note e gestione password.
+- Editable manuals and operational notes.
+- Contacts, notepad, and password management.
 
 ## Stack
 
@@ -37,18 +37,18 @@ Questo include:
 - React Native 0.81
 - React 19
 - TypeScript
-- Android native module + modulo Wear OS
+- Android native module + Wear OS module
 
-## Requisiti
+## Requirements
 
-- Node.js 20 consigliato
+- Node.js 20 recommended
 - npm
-- Android Studio + Android SDK per build Android locali
-- Java 17 o superiore
+- Android Studio + Android SDK for local Android builds
+- Java 17 or newer
 
-## Clonazione e avvio
+## Clone and Run
 
-Per lavorarci da un altro computer:
+To work on the project from another computer:
 
 ```bash
 git clone https://github.com/TargetMisser/FlightWorkApp.git
@@ -57,21 +57,21 @@ npm ci
 npm run start
 ```
 
-## Comandi utili
+## Useful Commands
 
-Avvio Metro:
+Start Metro:
 
 ```bash
 npm run start
 ```
 
-Avvio Android:
+Run Android:
 
 ```bash
 npm run android
 ```
 
-Avvio Web:
+Run Web:
 
 ```bash
 npm run web
@@ -83,30 +83,30 @@ Typecheck:
 npm run typecheck
 ```
 
-## Build e release
+## Build and Releases
 
-Nel repository vengono pubblicati anche gli APK nelle GitHub Releases quando disponibili.
+APK files are also published in GitHub Releases when available.
 
-Asset previsti:
+Expected assets:
 
-- `FlightWorkApp-v1.1.0-release.apk`: app Android principale
-- `FlightWorkApp-Wear-v1.1.0.apk`: companion Wear OS
+- `FlightWorkApp-v1.1.0-release.apk`: main Android app
+- `FlightWorkApp-Wear-v1.1.0.apk`: Wear OS companion
 
-Per installare una release:
+To install a release:
 
-1. Vai nella sezione Releases del repository.
-2. Scarica l'APK che ti serve.
-3. Installa l'APK sul dispositivo Android.
-4. Per Wear OS usa l'APK dedicato all'orologio.
+1. Open the repository Releases section.
+2. Download the APK you need.
+3. Install the APK on your Android device.
+4. For Wear OS, use the watch-specific APK.
 
-## Struttura rami
+## Branch Structure
 
-- `main`: ramo piu stabile e condivisibile
-- `dev`: ramo di sviluppo corrente
+- `main`: most stable and shareable branch
+- `dev`: current development branch
 
 ## Workflow Git
 
-Flusso consigliato:
+Suggested flow:
 
 ```bash
 git checkout dev
@@ -114,25 +114,25 @@ git pull
 git checkout -b feature/nome-modifica
 ```
 
-Quando hai finito:
+When you are done:
 
 ```bash
 git add .
-git commit -m "Descrizione modifica"
+git commit -m "Describe your change"
 git push
 ```
 
 ## GitHub Actions
 
-Nel repository sono presenti workflow per:
+The repository includes workflows for:
 
-- CI base
-- release snapshot su `main`
+- basic CI
+- snapshot releases on `main`
 
-Nota: l'esecuzione dipende dalla disponibilita di GitHub Actions sull'account/repository.
+Note: execution depends on GitHub Actions being available for the account/repository.
 
-## Note utili
+## Notes
 
-- Il repository e pensato per essere usato da piu computer.
-- File locali, log, output temporanei e keystore non vengono pubblicati.
-- Il modulo Android / Wear OS e incluso nel repository.
+- The repository is set up to be used from multiple computers.
+- Local files, logs, temporary outputs, and keystores are not published.
+- The Android / Wear OS module is included in the repository.
