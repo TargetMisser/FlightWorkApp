@@ -1,0 +1,181 @@
+import * as Calendar from 'expo-calendar';
+import * as Notifications from 'expo-notifications';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { ALLOWED_AIRLINES, getAirlineOps } from './airlineOps';
+
+const NOTIF_IDS_KEY = 'aerostaff_notif_ids_v1';
+const LAST_SCHEDULE_KEY = 'aerostaff_notif_last_schedule';
+
+async function cancelPrevious() {
+  const raw = await AsyncStorage.getItem(NOTIF_IDS_KEY);
+  if (!raw) return;
+  const ids: string[] = JSON.parse(raw);
+  await Promise.all(ids.map(id => Notifications.cancelScheduledNotificationAsync(id).catch(() => {})));
+  await AsyncStorage.removeItem(NOTIF_IDS_KEY);
+}
+
+/**
+ * Auto-schedule notifications for today's shift departures.
+ * For each departure during the shift, notifies at check-in open time.
+ * Called once on app startup. Skips if already scheduled today.
+ */
+export async function autoScheduleNotifications(): Promise<number> {
+  try {
+    // Skip if already scheduled today
+    const todayKey = new Date().toISOString().split('T')[0];
+    const lastSchedule = await AsyncStorage.getItem(LAST_SCHEDULE_KEY);
+    if (lastSchedule === todayKey) return 0;
+
+    // Request notification permission
+    const { status } = await Notifications.requestPermissionsAsync();
+    if (status !== 'granted') return 0;
+
+    // Get calendar and find today's work shift
+    const { status: calStatus } = await Calendar.requestCalendarPermissionsAsync();
+    if (calStatus !== 'granted') return 0;
+
+    const cals = await Calendar.getCalendarsAsync(Calendar.EntityTypes.EVENT);
+    const cal = cals.find(c => c.allowsModifications && c.isPrimary) || cals.find(c => c.allowsModifications);
+    if (!cal) return 0;
+
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(today); endOfDay.setHours(23, 59, 59, 999);
+    const events = await Calendar.getEventsAsync([cal.id], today, endOfDay);
+    const shiftEvent = events.find(e => e.title.includes('Lavoro'));
+    if (!shiftEvent) return 0;
+
+    const shiftStart = new Date(shiftEvent.startDate).getTime() / 1000;
+    const shiftEnd = new Date(shiftEvent.endDate).getTime() / 1000;
+
+    // Fetch departures and arrivals from FR24
+    const res = await fetch('https://api.flightradar24.com/common/v1/airport.json?code=psa&plugin[]=schedule&page=1&limit=100', {
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+    });
+    const json = await res.json();
+    const filterAirlines = (data: any[]) => data.filter((i: any) => ALLOWED_AIRLINES.some(k => (i.flight?.airline?.name || '').toLowerCase().includes(k)));
+    const allDepartures = filterAirlines(json.result?.response?.airport?.pluginData?.schedule?.departures?.data || []);
+    const allArrivals = filterAirlines(json.result?.response?.airport?.pluginData?.schedule?.arrivals?.data || []);
+
+    // Filter departures during shift
+    const shiftDepartures = allDepartures.filter((item: any) => {
+      const ts = item.flight?.time?.scheduled?.departure;
+      return ts && ts >= shiftStart && ts <= shiftEnd;
+    });
+
+    // Filter arrivals during shift (inbound aircraft that become our departures)
+    const shiftArrivals = allArrivals.filter((item: any) => {
+      const ts = item.flight?.time?.scheduled?.arrival;
+      return ts && ts >= shiftStart && ts <= shiftEnd;
+    });
+
+    // Cancel old and schedule new
+    await cancelPrevious();
+    const now = Date.now() / 1000;
+    const newIds: string[] = [];
+
+    // ── Arrival notifications: 15 min before landing ──
+    for (const item of shiftArrivals) {
+      try {
+        const arrTs: number | undefined = item.flight?.time?.scheduled?.arrival;
+        if (!arrTs || isNaN(arrTs)) continue;
+        const secondsUntilNotify = arrTs - 15 * 60 - now;
+        if (secondsUntilNotify <= 0 || isNaN(secondsUntilNotify)) continue;
+
+        const flightNumber = item.flight?.identification?.number?.default || 'N/A';
+        const airline = item.flight?.airline?.name || 'Sconosciuta';
+        const origin = item.flight?.airport?.origin?.name
+          || item.flight?.airport?.origin?.code?.iata || 'N/A';
+        const arrivalTime = new Date(arrTs * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+
+        const id = await Notifications.scheduleNotificationAsync({
+          content: {
+            title: `✈️ Arrivo tra 15 min — ${flightNumber}`,
+            body: `${airline} da ${origin} · arrivo alle ${arrivalTime}`,
+            sound: true,
+            data: { flightNumber, arrTs, type: 'arrival_15min' },
+          },
+          trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: Math.round(secondsUntilNotify), repeats: false },
+        });
+        newIds.push(id);
+      } catch (err) {
+        console.error('Failed to schedule arrival notification:', err);
+      }
+    }
+
+    // ── Departure notifications: check-in open + gate open ──
+    for (const item of shiftDepartures) {
+      try {
+        const depTs: number | undefined = item.flight?.time?.scheduled?.departure;
+        if (!depTs || isNaN(depTs)) continue;
+
+        const airline = item.flight?.airline?.name || 'Sconosciuta';
+        const flightNumber = item.flight?.identification?.number?.default || 'N/A';
+        const destination = item.flight?.airport?.destination?.name
+          || item.flight?.airport?.destination?.code?.iata || 'N/A';
+        const depTime = new Date(depTs * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+
+        // Get airline-specific ops times
+        const ops = getAirlineOps(airline);
+
+        // Notification at check-in open (e.g. 2h before departure)
+        const ciOpenTs = depTs - ops.checkInOpen * 60;
+        const secondsUntilCI = ciOpenTs - now;
+        if (secondsUntilCI > 0 && !isNaN(secondsUntilCI)) {
+          const ciTime = new Date(ciOpenTs * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+          const id = await Notifications.scheduleNotificationAsync({
+            content: {
+              title: `📌 Check-in aperto — ${flightNumber}`,
+              body: `${airline} per ${destination} · partenza ${depTime} · CI dalle ${ciTime}`,
+              sound: true,
+              data: { flightNumber, depTs, type: 'checkin_open' },
+            },
+            trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: Math.round(secondsUntilCI), repeats: false },
+          });
+          newIds.push(id);
+        }
+
+        // Notification at gate open
+        const gateOpenTs = depTs - ops.gateOpen * 60;
+        const secondsUntilGate = gateOpenTs - now;
+        if (secondsUntilGate > 0 && !isNaN(secondsUntilGate)) {
+          const gateTime = new Date(gateOpenTs * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+          const id = await Notifications.scheduleNotificationAsync({
+            content: {
+              title: `🚪 Gate aperto — ${flightNumber}`,
+              body: `${airline} per ${destination} · gate dalle ${gateTime} · partenza ${depTime}`,
+              sound: true,
+              data: { flightNumber, depTs, type: 'gate_open' },
+            },
+            trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: Math.round(secondsUntilGate), repeats: false },
+          });
+          newIds.push(id);
+        }
+      } catch (err) {
+        console.error('Failed to schedule departure notification:', err);
+      }
+    }
+
+    // Shift end notification
+    const secondsUntilEnd = shiftEnd - now;
+    if (secondsUntilEnd > 0) {
+      const endTime = new Date(shiftEnd * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+      const endId = await Notifications.scheduleNotificationAsync({
+        content: {
+          title: 'Turno terminato',
+          body: `Buon lavoro! Il tuo turno delle ${endTime} è concluso.`,
+          sound: true,
+          data: { type: 'shift_end' },
+        },
+        trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: Math.round(secondsUntilEnd), repeats: false },
+      });
+      newIds.push(endId);
+    }
+
+    await AsyncStorage.setItem(NOTIF_IDS_KEY, JSON.stringify(newIds));
+    await AsyncStorage.setItem(LAST_SCHEDULE_KEY, todayKey);
+    return newIds.length;
+  } catch (e) {
+    console.error('autoScheduleNotifications error:', e);
+    return 0;
+  }
+}

@@ -1,0 +1,40 @@
+pluginManagement {
+  def nodeResolve = { String script ->
+    def proc = ["node", "--print", script].execute(null, rootDir)
+    proc.waitFor()
+    return proc.text.trim()
+  }
+
+  def reactNativeGradlePlugin = new File(
+    nodeResolve("require.resolve('@react-native/gradle-plugin/package.json', { paths: [require.resolve('react-native/package.json')] })")
+  ).getParentFile().absolutePath
+  includeBuild(reactNativeGradlePlugin)
+
+  def expoPluginsPath = new File(
+    nodeResolve("require.resolve('expo-modules-autolinking/package.json', { paths: [require.resolve('expo/package.json')] })"),
+    "../android/expo-gradle-plugin"
+  ).absolutePath
+  includeBuild(expoPluginsPath)
+}
+
+plugins {
+  id("com.facebook.react.settings")
+  id("expo-autolinking-settings")
+}
+
+extensions.configure(com.facebook.react.ReactSettingsExtension) { ex ->
+  if (System.getenv('EXPO_USE_COMMUNITY_AUTOLINKING') == '1') {
+    ex.autolinkLibrariesFromCommand()
+  } else {
+    ex.autolinkLibrariesFromCommand(expoAutolinking.rnConfigCommand)
+  }
+}
+expoAutolinking.useExpoModules()
+
+rootProject.name = 'FlightWorkApp'
+
+expoAutolinking.useExpoVersionCatalog()
+
+include ':app'
+include ':wear'
+includeBuild(expoAutolinking.reactNativeGradlePlugin)
