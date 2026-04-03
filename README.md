@@ -1,6 +1,14 @@
 # FlightWorkApp
 
-App Expo / React Native pensata per organizzare il lavoro operativo in aeroporto, con focus su turni, voli, manuali rapidi e integrazione Android / Wear OS.
+FlightWorkApp e un'app Expo / React Native pensata per chi lavora in ambito aeroportuale e vuole avere in un solo posto turni, operativita voli, manuali rapidi e supporto da telefono + Wear OS.
+
+Serve soprattutto per:
+
+- consultare il turno del giorno
+- vedere la timeline operativa dei voli
+- avere widget Android rapidi
+- usare un companion Wear OS per informazioni essenziali
+- salvare note, password, contatti e manuali operativi
 
 ## Funzioni principali
 
@@ -26,7 +34,9 @@ App Expo / React Native pensata per organizzare il lavoro operativo in aeroporto
 - Android Studio + Android SDK per build Android locali
 - Java 17 o superiore
 
-## Avvio rapido
+## Clonazione e avvio
+
+Per lavorarci da un altro computer:
 
 ```bash
 git clone https://github.com/TargetMisser/FlightWorkApp.git
@@ -35,22 +45,54 @@ npm ci
 npm run start
 ```
 
-Per Android:
+## Comandi utili
+
+Avvio Metro:
+
+```bash
+npm run start
+```
+
+Avvio Android:
 
 ```bash
 npm run android
 ```
 
-Per typecheck:
+Avvio Web:
+
+```bash
+npm run web
+```
+
+Typecheck:
 
 ```bash
 npm run typecheck
 ```
 
-## Workflow Git
+## Build e release
 
-- `main`: stato piu stabile e pronto da condividere.
-- `dev`: ramo di lavoro principale.
+Nel repository vengono pubblicati anche gli APK nelle GitHub Releases quando disponibili.
+
+Asset previsti:
+
+- `FlightWorkApp-v1.1.0-release.apk`: app Android principale
+- `FlightWorkApp-Wear-v1.1.0.apk`: companion Wear OS
+
+Per installare una release:
+
+1. Vai nella sezione Releases del repository.
+2. Scarica l'APK che ti serve.
+3. Installa l'APK sul dispositivo Android.
+4. Per Wear OS usa l'APK dedicato all'orologio.
+
+## Struttura rami
+
+- `main`: ramo piu stabile e condivisibile
+- `dev`: ramo di sviluppo corrente
+
+## Workflow Git
 
 Flusso consigliato:
 
@@ -70,11 +112,12 @@ git push
 
 ## GitHub Actions
 
-Il repository include una CI base che ad ogni push / pull request:
+Nel repository sono presenti workflow per:
 
-- installa le dipendenze
-- esegue il typecheck TypeScript
-- verifica che la config Expo si risolva correttamente
+- CI base
+- release snapshot su `main`
+
+Nota: l'esecuzione dipende dalla disponibilita di GitHub Actions sull'account/repository.
 
 ## Note utili
 
