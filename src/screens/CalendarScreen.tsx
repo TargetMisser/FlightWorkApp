@@ -11,6 +11,13 @@ import { WebView } from 'react-native-webview';
 import { MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAppTheme } from '../context/ThemeContext';
+import { useAirport } from '../context/AirportContext';
+import { fetchAirportScheduleRaw } from '../utils/fr24api';
+import {
+  getWritableCalendarId,
+  replaceShiftForDate,
+  replaceShiftsForRange,
+} from '../utils/shiftCalendar';
 import {
   getPdfExtractorHtml, parseShiftCells,
   type ParsedSchedule, type ParsedEmployee, type ParsedShift,
@@ -50,6 +57,7 @@ function getMonday(d: Date) {
 
 export default function CalendarScreen() {
   const { colors } = useAppTheme();
+  const { airportCode, isLoading: airportLoading } = useAirport();
   const [currentWeekStart, setCurrentWeekStart] = useState<Date>(getMonday(new Date()));
   const [selectedDay, setSelectedDay] = useState<string>(new Date().toISOString().split('T')[0]);
   const [markedDates, setMarkedDates] = useState<Record<string, string>>({});
@@ -86,28 +94,22 @@ export default function CalendarScreen() {
   };
 
   const saveManualShift = async () => {
-    if (!calId) {
-      const { status } = await SystemCalendar.requestCalendarPermissionsAsync();
-      if (status !== 'granted') { Alert.alert('Permesso negato'); return; }
-      const cals = await SystemCalendar.getCalendarsAsync(SystemCalendar.EntityTypes.EVENT);
-      const cal = cals.find(c => c.allowsModifications && c.isPrimary) || cals.find(c => c.allowsModifications);
-      if (!cal) { Alert.alert('Errore', 'Nessun calendario scrivibile'); return; }
-      setCalId(cal.id);
-    }
+    const { status } = await SystemCalendar.requestCalendarPermissionsAsync();
+    if (status !== 'granted') { Alert.alert('Permesso negato'); return; }
+
     try {
-      const [y, m, d] = manualDate.split('-').map(Number);
-      if (manualType === 'Riposo') {
-        await SystemCalendar.createEventAsync(calId!, {
-          title: 'Riposo', startDate: new Date(y, m - 1, d, 0, 0), endDate: new Date(y, m - 1, d, 23, 59), timeZone: 'Europe/Rome',
-        });
-      } else {
-        const start = new Date(y, m - 1, d, +manualStartH, +manualStartM);
-        const end = new Date(y, m - 1, d, +manualEndH, +manualEndM);
-        if (end <= start) end.setDate(end.getDate() + 1);
-        await SystemCalendar.createEventAsync(calId!, {
-          title: 'Lavoro', startDate: start, endDate: end, timeZone: 'Europe/Rome',
-        });
-      }
+      const calendarId = calId ?? await getWritableCalendarId();
+      if (!calendarId) { Alert.alert('Errore', 'Nessun calendario scrivibile'); return; }
+      if (!calId) setCalId(calendarId);
+
+      await replaceShiftForDate({
+        calendarId,
+        date: manualDate,
+        type: manualType === 'Riposo' ? 'rest' : 'work',
+        startTime: manualType === 'Lavoro' ? `${manualStartH.padStart(2, '0')}:${manualStartM.padStart(2, '0')}` : undefined,
+        endTime: manualType === 'Lavoro' ? `${manualEndH.padStart(2, '0')}:${manualEndM.padStart(2, '0')}` : undefined,
+      });
+
       setManualModalOpen(false);
       fetchCalendar();
       Alert.alert('Turno salvato!');
@@ -165,7 +167,9 @@ export default function CalendarScreen() {
       };
     });
 
-  useEffect(() => { fetchCalendar(); }, [currentWeekStart]);
+  useEffect(() => {
+    if (!airportLoading) fetchCalendar();
+  }, [currentWeekStart, airportCode, airportLoading]);
 
   const fetchCalendar = async () => {
     try {
@@ -216,15 +220,17 @@ export default function CalendarScreen() {
       }
     } catch (_) {}
     try {
-      const fr = await fetch('https://api.flightradar24.com/common/v1/airport.json?code=psa&plugin[]=schedule&page=1&limit=100', { headers: { 'User-Agent': 'Mozilla/5.0' } });
-      const fj = await fr.json();
-      const allF = [...(fj.result?.response?.airport?.pluginData?.schedule?.arrivals?.data || []), ...(fj.result?.response?.airport?.pluginData?.schedule?.departures?.data || [])];
-      const allowed = ['wizz', 'aer lingus', 'easyjet', 'british airways', 'sas', 'scandinavian', 'flydubai'];
+      const { arrivals, departures } = await fetchAirportScheduleRaw(airportCode);
+      const allF = [...arrivals, ...departures];
       Object.keys(localData).forEach(iso => {
         const sh = localData[iso].find(e => e.title.includes('Lavoro'));
         if (sh) {
-          const sTS = new Date(sh.startDate).getTime() / 1000, eTS = new Date(sh.endDate).getTime() / 1000;
-          const cnt = allF.filter(f => { const a = (f.flight?.airline?.name || '').toLowerCase(); if (!allowed.some(k => a.includes(k))) return false; const ts = f.flight?.time?.scheduled?.arrival || f.flight?.time?.scheduled?.departure; return ts && ts >= sTS && ts <= eTS; }).length;
+          const sTS = new Date(sh.startDate).getTime() / 1000;
+          const eTS = new Date(sh.endDate).getTime() / 1000;
+          const cnt = allF.filter(f => {
+            const ts = f.flight?.time?.scheduled?.arrival || f.flight?.time?.scheduled?.departure;
+            return ts && ts >= sTS && ts <= eTS;
+          }).length;
           if (dict[iso]) dict[iso].flightCount = cnt; else dict[iso] = { weatherText: 'N/A', weatherIcon: '❓', flightCount: cnt };
         }
       });
@@ -315,48 +321,27 @@ export default function CalendarScreen() {
   };
 
   const confirmImport = async () => {
-    if (!selectedEmployee || !calId) return;
+    if (!selectedEmployee) return;
     setImportStep('saving');
 
     try {
-      // Delete existing Lavoro/Riposo events for the imported date range
-      const shiftDates = selectedEmployee.shifts.map(s => s.date).sort();
-      if (shiftDates.length > 0) {
-        const [fy, fm, fd] = shiftDates[0].split('-').map(Number);
-        const [ly, lm, ld] = shiftDates[shiftDates.length - 1].split('-').map(Number);
-        const rangeStart = new Date(fy, fm - 1, fd, 0, 0);
-        const rangeEnd = new Date(ly, lm - 1, ld, 23, 59);
-        const existing = await SystemCalendar.getEventsAsync([calId], rangeStart, rangeEnd);
-        for (const e of existing) {
-          if (e.title.includes('Lavoro') || e.title.includes('Riposo')) {
-            await SystemCalendar.deleteEventAsync(e.id);
-          }
-        }
+      const calendarId = calId ?? await getWritableCalendarId();
+      if (!calendarId) {
+        Alert.alert('Errore', 'Nessun calendario scrivibile');
+        setImportStep('idle');
+        return;
       }
+      if (!calId) setCalId(calendarId);
 
-      let saved = 0;
-      for (const shift of selectedEmployee.shifts) {
-        const [y, m, d] = shift.date.split('-').map(Number);
-        if (shift.type === 'work' && shift.start && shift.end) {
-          const [sh, sm] = shift.start.split(':').map(Number);
-          const [eh, em] = shift.end.split(':').map(Number);
-          await SystemCalendar.createEventAsync(calId, {
-            title: 'Lavoro',
-            startDate: new Date(y, m - 1, d, sh, sm),
-            endDate: new Date(y, m - 1, d, eh, em),
-            timeZone: 'Europe/Rome',
-          });
-          saved++;
-        } else if (shift.type === 'rest') {
-          await SystemCalendar.createEventAsync(calId, {
-            title: 'Riposo',
-            startDate: new Date(y, m - 1, d, 0, 0),
-            endDate: new Date(y, m - 1, d, 23, 59),
-            timeZone: 'Europe/Rome',
-          });
-          saved++;
-        }
-      }
+      const saved = await replaceShiftsForRange({
+        calendarId,
+        shifts: selectedEmployee.shifts.map(shift => ({
+          date: shift.date,
+          type: shift.type,
+          startTime: shift.start,
+          endTime: shift.end,
+        })),
+      });
 
       setImportStep('done');
       setTimeout(() => {
@@ -437,7 +422,7 @@ export default function CalendarScreen() {
               <View style={s.weatherBadge}>
                 <Text style={s.weatherIcon}>{stats.weatherIcon}</Text>
                 <View>
-                  <Text style={s.weatherPlace}>Pisa</Text>
+                  <Text style={s.weatherPlace}>Meteo locale</Text>
                   <Text style={s.weatherText}>{stats.weatherText}</Text>
                 </View>
               </View>

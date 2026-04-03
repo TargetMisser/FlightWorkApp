@@ -1,9 +1,19 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, ActivityIndicator, Alert } from 'react-native';
+import React, { useState } from 'react';
+import {
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, ActivityIndicator,
+  Alert, Modal, KeyboardAvoidingView, Platform, TextInput,
+} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAppTheme, ThemeMode } from '../context/ThemeContext';
+import { useAirport } from '../context/AirportContext';
 import * as Notifications from 'expo-notifications';
+import {
+  AIRPORT_PRESETS,
+  formatAirportSettingLabel,
+  normalizeAirportCode,
+  isValidAirportCode,
+} from '../utils/airportSettings';
 
 // ─── Tema picker ──────────────────────────────────────────────────────────────
 type ThemeOption = {
@@ -106,7 +116,7 @@ function ThemeCard({ option, selected, onSelect }: {
 
 // ─── Riga impostazione generica ───────────────────────────────────────────────
 function SettingRow({
-  icon, label, sublabel, type, value, onToggle, disabled,
+  icon, label, sublabel, type, value, onToggle, onPress, disabled,
 }: {
   icon: keyof typeof MaterialIcons.glyphMap;
   label: string;
@@ -114,11 +124,13 @@ function SettingRow({
   type: 'arrow' | 'toggle' | 'info';
   value?: boolean;
   onToggle?: (v: boolean) => void;
+  onPress?: () => void;
   disabled?: boolean;
 }) {
   const { colors } = useAppTheme();
-  return (
-    <View style={[styles.row, disabled && { opacity: 0.45 }]}>
+  const isPressable = type === 'arrow' && !!onPress && !disabled;
+  const content = (
+    <>
       <View style={[styles.iconWrap, { backgroundColor: colors.primaryLight }]}>
         <MaterialIcons name={icon} size={20} color={disabled ? colors.textMuted : colors.primary} />
       </View>
@@ -126,8 +138,22 @@ function SettingRow({
         <Text style={[styles.rowLabel, { color: colors.text }]}>{label}</Text>
         {sublabel && <Text style={[styles.rowSub, { color: colors.textMuted }]}>{sublabel}</Text>}
       </View>
-      {type === 'arrow'  && <MaterialIcons name="chevron-right" size={20} color={colors.border} />}
+      {type === 'arrow' && <MaterialIcons name="chevron-right" size={20} color={colors.border} />}
       {type === 'toggle' && <Switch value={value ?? false} onValueChange={onToggle} disabled={disabled} trackColor={{ true: colors.primary }} thumbColor="#fff" />}
+    </>
+  );
+
+  if (isPressable) {
+    return (
+      <TouchableOpacity style={styles.row} onPress={onPress} activeOpacity={0.8}>
+        {content}
+      </TouchableOpacity>
+    );
+  }
+
+  return (
+    <View style={[styles.row, disabled && { opacity: 0.45 }]}>
+      {content}
     </View>
   );
 }
@@ -135,13 +161,46 @@ function SettingRow({
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export default function SettingsScreen() {
   const { colors, mode, setMode, isLoading } = useAppTheme();
+  const { airport, airportCode, setAirportCode, isLoading: airportLoading } = useAirport();
+  const [airportModalOpen, setAirportModalOpen] = useState(false);
+  const [airportInput, setAirportInput] = useState(airportCode);
+
+  const openAirportModal = () => {
+    setAirportInput(airportCode);
+    setAirportModalOpen(true);
+  };
+
+  const closeAirportModal = () => {
+    setAirportModalOpen(false);
+    setAirportInput(airportCode);
+  };
+
+  const saveAirport = async () => {
+    const normalized = normalizeAirportCode(airportInput);
+    if (!isValidAirportCode(normalized)) {
+      Alert.alert('Codice non valido', 'Inserisci un codice IATA di 3 lettere, per esempio PSA o FCO.');
+      return;
+    }
+
+    try {
+      await setAirportCode(normalized);
+      setAirportModalOpen(false);
+      Alert.alert(
+        'Aeroporto aggiornato',
+        'Voli, timeline, widget e notifiche useranno il nuovo aeroporto.',
+      );
+    } catch {
+      Alert.alert('Errore', 'Non sono riuscito a salvare il nuovo aeroporto.');
+    }
+  };
 
   return (
-    <ScrollView
-      style={[styles.root, { backgroundColor: colors.bg }]}
-      contentContainerStyle={styles.content}
-      showsVerticalScrollIndicator={false}
-    >
+    <>
+      <ScrollView
+        style={[styles.root, { backgroundColor: colors.bg }]}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
       {/* Header */}
       <View style={[styles.banner, { backgroundColor: colors.card, borderColor: colors.border }, colors.isDark ? { shadowOpacity: 0, elevation: 0, borderWidth: 1 } : { shadowColor: colors.primary }]}>
         <View style={[styles.bannerIcon, { backgroundColor: colors.primaryLight }]}>
@@ -187,7 +246,14 @@ export default function SettingsScreen() {
       {/* ── Sezione Aeroporto ── */}
       <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>AEROPORTO</Text>
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }, colors.isDark && { elevation: 0, shadowOpacity: 0, borderWidth: 1 }]}>
-        <SettingRow icon="flight-land"     label="Aeroporto base"      sublabel="PSA — Pisa International"    type="arrow" disabled />
+        <SettingRow
+          icon="flight-land"
+          label="Aeroporto base"
+          sublabel={airportLoading ? 'Caricamento aeroporto...' : formatAirportSettingLabel(airport.code)}
+          type="arrow"
+          onPress={airportLoading ? undefined : openAirportModal}
+          disabled={airportLoading}
+        />
         <View style={[styles.divider, { backgroundColor: colors.border }]} />
         <SettingRow icon="airlines"        label="Compagnie monitorate" sublabel="Wizz, easyJet, Ryanair…"     type="arrow" disabled />
       </View>
@@ -222,8 +288,86 @@ export default function SettingsScreen() {
         <Text style={styles.testBtnTxt}>🔔 Invia notifica test</Text>
       </TouchableOpacity>
 
-      <View style={{ height: 32 }} />
-    </ScrollView>
+        <View style={{ height: 32 }} />
+      </ScrollView>
+
+      <Modal
+        visible={airportModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={closeAirportModal}
+      >
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={closeAirportModal} />
+          <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[styles.modalTitle, { color: colors.primaryDark }]}>Cambia aeroporto</Text>
+            <Text style={[styles.modalCopy, { color: colors.textMuted }]}>
+              Inserisci un codice IATA di 3 lettere. Il cambio aggiorna voli, timeline, widget e notifiche.
+            </Text>
+
+            <Text style={[styles.modalLabel, { color: colors.textMuted }]}>Codice aeroporto</Text>
+            <TextInput
+              value={airportInput}
+              onChangeText={text => setAirportInput(normalizeAirportCode(text))}
+              placeholder="PSA"
+              placeholderTextColor={colors.textMuted}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              maxLength={3}
+              style={[styles.modalInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.bg }]}
+            />
+
+            <Text style={[styles.modalLabel, { color: colors.textMuted }]}>Scelta rapida</Text>
+            <View style={styles.airportChipWrap}>
+              {AIRPORT_PRESETS.map(item => {
+                const selected = airportInput === item.code;
+                return (
+                  <TouchableOpacity
+                    key={item.code}
+                    style={[
+                      styles.airportChip,
+                      {
+                        backgroundColor: selected ? colors.primary : colors.cardSecondary,
+                        borderColor: selected ? colors.primary : colors.border,
+                      },
+                    ]}
+                    onPress={() => setAirportInput(item.code)}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={[styles.airportChipCode, { color: selected ? '#fff' : colors.text }]}>
+                      {item.code}
+                    </Text>
+                    <Text style={[styles.airportChipName, { color: selected ? 'rgba(255,255,255,0.82)' : colors.textMuted }]}>
+                      {item.city}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.modalBtn, { backgroundColor: colors.cardSecondary, borderColor: colors.border, borderWidth: 1 }]}
+                onPress={closeAirportModal}
+                activeOpacity={0.85}
+              >
+                <Text style={[styles.modalBtnTxt, { color: colors.text }]}>Annulla</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalBtn, { backgroundColor: colors.primary }]}
+                onPress={saveAirport}
+                activeOpacity={0.85}
+              >
+                <Text style={[styles.modalBtnTxt, { color: '#fff' }]}>Salva</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+    </>
   );
 }
 
@@ -276,6 +420,41 @@ const styles = StyleSheet.create({
   rowText: { flex: 1 },
   rowLabel:{ fontSize: 14, fontWeight: '600' },
   rowSub:  { fontSize: 12, marginTop: 1 },
+  modalOverlay: { flex: 1, justifyContent: 'center', padding: 20, backgroundColor: 'rgba(15,23,42,0.48)' },
+  modalCard: {
+    borderRadius: 20,
+    padding: 20,
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOpacity: 0.16,
+    shadowRadius: 16,
+    elevation: 12,
+  },
+  modalTitle: { fontSize: 18, fontWeight: '800', marginBottom: 8 },
+  modalCopy: { fontSize: 13, lineHeight: 20, marginBottom: 16 },
+  modalLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, marginBottom: 8 },
+  modalInput: {
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 16,
+  },
+  airportChipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 18 },
+  airportChip: {
+    minWidth: 88,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+  },
+  airportChipCode: { fontSize: 14, fontWeight: '800' },
+  airportChipName: { fontSize: 11, marginTop: 2 },
+  modalActions: { flexDirection: 'row', gap: 10 },
+  modalBtn: { flex: 1, borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
+  modalBtnTxt: { fontSize: 14, fontWeight: '700' },
   testBtn: { borderRadius: 14, padding: 16, alignItems: 'center', marginBottom: 12 },
   testBtnTxt: { fontSize: 15, fontWeight: '700', color: '#fff' },
 });

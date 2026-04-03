@@ -14,6 +14,11 @@ import { useAppTheme } from '../context/ThemeContext';
 import ShiftTimeline from '../components/ShiftTimeline';
 
 import { getAirlineOps, getAirlineColor } from '../utils/airlineOps';
+import {
+  getWritableCalendarId,
+  replaceShiftForDate,
+  replaceShiftsForRange,
+} from '../utils/shiftCalendar';
 
 const PRIMARY = '#2563EB';
 const DARK_BLUE = '#1E3A8A';
@@ -25,6 +30,8 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 }
 
 const PINNED_FLIGHT_KEY = 'pinned_flight_v1';
+const HOME_SHIFT_TITLES = { work: 'Turno Lavoro ✈️', rest: '🌴 Riposo' };
+const HOME_REST_TIMING = { startHour: 12, startMinute: 0, endHour: 14, endMinute: 0, allDay: true };
 
 const weatherMap: Record<number, { text: string; icon: string }> = {
   0: { text: 'Sereno', icon: '☀️' }, 1: { text: 'Poco Nuvoloso', icon: '🌤️' },
@@ -211,27 +218,25 @@ export default function HomeScreen() {
     const { status } = await Calendar.requestCalendarPermissionsAsync();
     if (status !== 'granted') { Alert.alert('Permesso negato', 'Autorizza il calendario.'); return; }
     try {
-      const cals = await Calendar.getCalendarsAsync(Calendar.EntityTypes.EVENT);
-      const cal = cals.find(c => c.allowsModifications && c.isPrimary) || cals.find(c => c.allowsModifications);
-      if (!cal) { Alert.alert('Errore', 'Nessun calendario scrivibile.'); return; }
+      const calendarId = await getWritableCalendarId();
+      if (!calendarId) { Alert.alert('Errore', 'Nessun calendario scrivibile.'); return; }
 
       const todayDate = new Date();
-      const y = todayDate.getFullYear(), m = todayDate.getMonth() + 1, d = todayDate.getDate();
-      
-      if (shiftEvent) {
-          await Calendar.deleteEventAsync(shiftEvent.id);
-      }
+      const y = todayDate.getFullYear();
+      const m = todayDate.getMonth() + 1;
+      const d = todayDate.getDate();
+      const date = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 
-      if (newShiftType === 'Riposo') {
-        const ds = new Date(y, m - 1, d, 12, 0, 0);
-        const de = new Date(y, m - 1, d, 14, 0, 0);
-        await Calendar.createEventAsync(cal.id, { title: '🌴 Riposo', startDate: ds, endDate: de, allDay: true, timeZone: 'Europe/Rome' });
-      } else {
-        const start = new Date(y, m - 1, d, +newStartH, +newStartM);
-        const end = new Date(y, m - 1, d, +newEndH, +newEndM);
-        if (end <= start) end.setDate(end.getDate() + 1);
-        await Calendar.createEventAsync(cal.id, { title: 'Turno Lavoro ✈️', startDate: start, endDate: end, timeZone: 'Europe/Rome' });
-      }
+      await replaceShiftForDate({
+        calendarId,
+        date,
+        type: newShiftType === 'Riposo' ? 'rest' : 'work',
+        startTime: newShiftType === 'Lavoro' ? `${newStartH.padStart(2, '0')}:${newStartM.padStart(2, '0')}` : undefined,
+        endTime: newShiftType === 'Lavoro' ? `${newEndH.padStart(2, '0')}:${newEndM.padStart(2, '0')}` : undefined,
+        titles: HOME_SHIFT_TITLES,
+        restTiming: HOME_REST_TIMING,
+      });
+
       setShiftModalOpen(false);
       fetchShift();
     } catch (e: any) { Alert.alert('Errore', e.message); }
@@ -296,9 +301,8 @@ export default function HomeScreen() {
     const { status } = await Calendar.requestCalendarPermissionsAsync();
     if (status !== 'granted') { Alert.alert('Permesso negato', 'Autorizza il calendario.'); return; }
     try {
-      const cals = await Calendar.getCalendarsAsync(Calendar.EntityTypes.EVENT);
-      const cal = cals.find(c => c.allowsModifications && c.isPrimary) || cals.find(c => c.allowsModifications);
-      if (!cal) { Alert.alert('Errore', 'Nessun calendario scrivibile.'); return; }
+      const calendarId = await getWritableCalendarId();
+      if (!calendarId) { Alert.alert('Errore', 'Nessun calendario scrivibile.'); return; }
       const norText = ocrText.replace(/[OoQ]/g, '0').replace(/[Il|]/g, '1');
       const dateRegex = /\b(\d{2})[\/\-](\d{2})[\/\-](\d{4})\b/g;
       const dates: any[] = []; let m;
@@ -310,24 +314,32 @@ export default function HomeScreen() {
         if (m[5]) shifts.push({ isRest: true, raw: m[0] });
         else shifts.push({ isRest: false, startH: +m[1], startM: +m[2], endH: +m[3], endM: +m[4], raw: m[0] });
       }
-      let saved = 0;
+
+      const parsedShifts = [];
       for (let i = 0; i < Math.min(dates.length, shifts.length); i++) {
-        const d = dates[i], s = shifts[i];
-        const ds = new Date(d.year, d.month, d.day, 0, 0, 0);
-        const de = new Date(d.year, d.month, d.day, 23, 59, 59);
-        const existing = await Calendar.getEventsAsync([cal.id], ds, de);
-        const dup = existing.some(e => s.isRest ? e.title.includes('Riposo') : (e.title.includes('Lavoro') && new Date(e.startDate).getHours() === s.startH));
-        if (dup) continue;
+        const d = dates[i];
+        const s = shifts[i];
+        const date = `${d.year}-${String(d.month + 1).padStart(2, '0')}-${String(d.day).padStart(2, '0')}`;
+
         if (s.isRest) {
-          await Calendar.createEventAsync(cal.id, { title: '🌴 Riposo', startDate: new Date(d.year, d.month, d.day, 12, 0, 0), endDate: new Date(d.year, d.month, d.day, 14, 0, 0), allDay: true, timeZone: 'Europe/Rome' });
+          parsedShifts.push({ date, type: 'rest' as const });
         } else {
-          const start = new Date(d.year, d.month, d.day); start.setHours(s.startH, s.startM, 0, 0);
-          const end = new Date(d.year, d.month, d.day); end.setHours(s.endH, s.endM, 0, 0);
-          if (end <= start) end.setDate(end.getDate() + 1);
-          await Calendar.createEventAsync(cal.id, { title: 'Turno Lavoro ✈️', startDate: start, endDate: end, timeZone: 'Europe/Rome' });
+          parsedShifts.push({
+            date,
+            type: 'work' as const,
+            startTime: `${String(s.startH).padStart(2, '0')}:${String(s.startM).padStart(2, '0')}`,
+            endTime: `${String(s.endH).padStart(2, '0')}:${String(s.endM).padStart(2, '0')}`,
+          });
         }
-        saved++;
       }
+
+      const saved = await replaceShiftsForRange({
+        calendarId,
+        shifts: parsedShifts,
+        titles: HOME_SHIFT_TITLES,
+        restTiming: HOME_REST_TIMING,
+      });
+
       Alert.alert(saved > 0 ? '✅ Turni Sincronizzati!' : 'Nessun orario trovato', saved > 0 ? `${saved} turni salvati.` : `Date: ${dates.length}, Orari: ${shifts.length}`);
       if (saved > 0) fetchShift();
     } catch (e: any) { Alert.alert('Errore Calendario', e.message); }
@@ -351,7 +363,7 @@ export default function HomeScreen() {
             <>
               <Text style={s.weatherEmoji}>{weather.icon}</Text>
               <Text style={s.weatherTemp}>{weather.temp}°</Text>
-              <Text style={s.weatherDesc}>Pisa • {weather.text}</Text>
+              <Text style={s.weatherDesc}>Meteo locale • {weather.text}</Text>
             </>
           ) : (
             <ActivityIndicator color={colors.primary} />
@@ -461,5 +473,3 @@ function makeStyles(c: any) {
     modeBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
   });
 }
-
-
