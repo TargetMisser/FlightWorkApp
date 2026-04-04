@@ -4,12 +4,26 @@ import {
   Modal, TextInput, Alert, KeyboardAvoidingView, Platform, ScrollView,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAppTheme } from '../context/ThemeContext';
 
 const PASSWORDS_KEY = 'aerostaff_passwords_v1';
 const PIN_KEY       = 'aerostaff_pin_v1';
 const PIN_ENABLED_KEY = 'aerostaff_pin_enabled_v1';
+
+// Secure helpers — PIN is stored in the OS keychain, not plain AsyncStorage.
+async function getSecurePin(): Promise<string | null> {
+  try { return await SecureStore.getItemAsync(PIN_KEY); }
+  catch { return AsyncStorage.getItem(PIN_KEY); } // fallback for older installs
+}
+async function setSecurePin(pin: string): Promise<void> {
+  await SecureStore.setItemAsync(PIN_KEY, pin);
+}
+async function deleteSecurePin(): Promise<void> {
+  await SecureStore.deleteItemAsync(PIN_KEY).catch(() => {});
+  await AsyncStorage.removeItem(PIN_KEY).catch(() => {}); // clean up legacy
+}
 
 type PasswordEntry = {
   id: string;
@@ -149,9 +163,11 @@ export default function PasswordScreen() {
       Alert.alert('Disattiva PIN', 'Vuoi rimuovere la protezione PIN?', [
         { text: 'Annulla', style: 'cancel' },
         { text: 'Disattiva', style: 'destructive', onPress: async () => {
-          setPinEnabled(false);
-          await AsyncStorage.setItem(PIN_ENABLED_KEY, 'false');
-          await AsyncStorage.removeItem(PIN_KEY);
+          try {
+            setPinEnabled(false);
+            await AsyncStorage.setItem(PIN_ENABLED_KEY, 'false');
+            await deleteSecurePin();
+          } catch (e) { console.error('[pin] disable error', e); }
         }},
       ]);
     } else {
@@ -160,19 +176,29 @@ export default function PasswordScreen() {
   }, [pinEnabled]);
 
   const handlePinSetup = useCallback(async (pin: string) => {
-    await AsyncStorage.setItem(PIN_KEY, pin);
-    await AsyncStorage.setItem(PIN_ENABLED_KEY, 'true');
-    setPinEnabled(true);
-    setPinMode(null);
-    Alert.alert('PIN impostato', 'La schermata password è ora protetta.');
+    try {
+      await setSecurePin(pin);
+      await AsyncStorage.setItem(PIN_ENABLED_KEY, 'true');
+      setPinEnabled(true);
+      setPinMode(null);
+      Alert.alert('PIN impostato', 'La schermata password è ora protetta.');
+    } catch (e) {
+      console.error('[pin] setup error', e);
+      Alert.alert('Errore', 'Impossibile impostare il PIN. Riprova.');
+    }
   }, []);
 
   const handlePinUnlock = useCallback(async (pin: string) => {
-    const stored = await AsyncStorage.getItem(PIN_KEY);
-    if (pin === stored) {
-      setPinMode(null);
-    } else {
-      Alert.alert('PIN errato', 'Riprova.');
+    try {
+      const stored = await getSecurePin();
+      if (pin === stored) {
+        setPinMode(null);
+      } else {
+        Alert.alert('PIN errato', 'Riprova.');
+      }
+    } catch (e) {
+      console.error('[pin] unlock error', e);
+      Alert.alert('Errore', 'Impossibile verificare il PIN. Riprova.');
     }
   }, []);
 
@@ -232,7 +258,13 @@ export default function PasswordScreen() {
           <Text style={s.title}>Password</Text>
         </View>
         <View style={s.toolbarActions}>
-          <TouchableOpacity onPress={togglePin} style={[s.iconBtn, pinEnabled && s.iconBtnActive]}>
+          <TouchableOpacity
+            onPress={togglePin}
+            style={[s.iconBtn, pinEnabled && s.iconBtnActive]}
+            accessible
+            accessibilityLabel={pinEnabled ? 'Disattiva protezione PIN' : 'Attiva protezione PIN'}
+            accessibilityRole="button"
+          >
             <MaterialIcons name={pinEnabled ? 'lock' : 'lock-open'} size={20} color={pinEnabled ? '#fff' : colors.textSub} />
           </TouchableOpacity>
           <TouchableOpacity onPress={openAdd} style={s.addBtn}>

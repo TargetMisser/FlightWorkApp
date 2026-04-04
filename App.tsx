@@ -5,6 +5,7 @@ import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { MaterialIcons } from '@expo/vector-icons';
 import { ThemeProvider, useAppTheme } from './src/context/ThemeContext';
+import { AirportProvider } from './src/context/AirportContext';
 import HomeScreen from './src/screens/HomeScreen';
 import TraveldocScreen from './src/screens/TraveldocScreen';
 import FlightScreen from './src/screens/FlightScreen';
@@ -263,7 +264,9 @@ function AppInner() {
 export default function App() {
   return (
     <ThemeProvider>
-      <AppInner />
+      <AirportProvider>
+        <AppInner />
+      </AirportProvider>
     </ThemeProvider>
   );
 }

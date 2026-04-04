@@ -1,30 +1,57 @@
 import { ALLOWED_AIRLINES } from './airlineOps';
+import {
+  buildFr24ScheduleUrl,
+  getAirportInfo,
+  getStoredAirportCode,
+  isValidAirportCode,
+  normalizeAirportCode,
+  type AirportInfo,
+} from './airportSettings';
 
-const FR24_URL = 'https://api.flightradar24.com/common/v1/airport.json?code=psa&plugin[]=schedule&page=1&limit=100';
 const FETCH_TIMEOUT = 10000; // 10 seconds
 
 export type FR24Schedule = {
   arrivals: any[];
   departures: any[];
+  airportCode: string;
+  airport: AirportInfo;
 };
 
+export type FR24ScheduleRaw = {
+  allArrivals: any[];
+  allDepartures: any[];
+  arrivals: any[];
+  departures: any[];
+  airportCode: string;
+  airport: AirportInfo;
+};
+
+function filterAirlines(data: any[]) {
+  return data.filter(item =>
+    ALLOWED_AIRLINES.some(key => (item.flight?.airline?.name || '').toLowerCase().includes(key)),
+  );
+}
+
+async function resolveAirportCode(code?: string): Promise<string> {
+  const normalized = normalizeAirportCode(code);
+  return isValidAirportCode(normalized) ? normalized : getStoredAirportCode();
+}
+
 /**
- * Fetch PSA airport schedule from FlightRadar24, filtered by allowed airlines.
+ * Fetch airport schedule from FlightRadar24, filtered by allowed airlines.
  * Includes a 10s timeout to prevent UI blocking.
  */
-export async function fetchPSASchedule(): Promise<FR24Schedule> {
+export async function fetchAirportSchedule(code?: string): Promise<FR24Schedule> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
 
   try {
-    const res = await fetch(FR24_URL, {
+    const airportCode = await resolveAirportCode(code);
+    const res = await fetch(buildFr24ScheduleUrl(airportCode), {
       headers: { 'User-Agent': 'Mozilla/5.0' },
       signal: controller.signal,
     });
     const json = await res.json();
-
-    const filterAirlines = (data: any[]) =>
-      data.filter(i => ALLOWED_AIRLINES.some(k => (i.flight?.airline?.name || '').toLowerCase().includes(k)));
 
     const allArrivals = json.result?.response?.airport?.pluginData?.schedule?.arrivals?.data || [];
     const allDepartures = json.result?.response?.airport?.pluginData?.schedule?.departures?.data || [];
@@ -32,6 +59,8 @@ export async function fetchPSASchedule(): Promise<FR24Schedule> {
     return {
       arrivals: filterAirlines(allArrivals),
       departures: filterAirlines(allDepartures),
+      airportCode,
+      airport: getAirportInfo(airportCode),
     };
   } finally {
     clearTimeout(timer);
@@ -42,19 +71,17 @@ export async function fetchPSASchedule(): Promise<FR24Schedule> {
  * Fetch raw (unfiltered) schedule — needed when callers also use non-allowed airline data
  * (e.g. inbound arrival map by registration).
  */
-export async function fetchPSAScheduleRaw(): Promise<{ allArrivals: any[]; allDepartures: any[]; arrivals: any[]; departures: any[] }> {
+export async function fetchAirportScheduleRaw(code?: string): Promise<FR24ScheduleRaw> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
 
   try {
-    const res = await fetch(FR24_URL, {
+    const airportCode = await resolveAirportCode(code);
+    const res = await fetch(buildFr24ScheduleUrl(airportCode), {
       headers: { 'User-Agent': 'Mozilla/5.0' },
       signal: controller.signal,
     });
     const json = await res.json();
-
-    const filterAirlines = (data: any[]) =>
-      data.filter(i => ALLOWED_AIRLINES.some(k => (i.flight?.airline?.name || '').toLowerCase().includes(k)));
 
     const allArrivals = json.result?.response?.airport?.pluginData?.schedule?.arrivals?.data || [];
     const allDepartures = json.result?.response?.airport?.pluginData?.schedule?.departures?.data || [];
@@ -64,8 +91,14 @@ export async function fetchPSAScheduleRaw(): Promise<{ allArrivals: any[]; allDe
       allDepartures,
       arrivals: filterAirlines(allArrivals),
       departures: filterAirlines(allDepartures),
+      airportCode,
+      airport: getAirportInfo(airportCode),
     };
   } finally {
     clearTimeout(timer);
   }
 }
+
+// Legacy aliases kept to avoid breaking older imports.
+export const fetchPSASchedule = fetchAirportSchedule;
+export const fetchPSAScheduleRaw = fetchAirportScheduleRaw;

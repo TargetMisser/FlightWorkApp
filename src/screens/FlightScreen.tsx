@@ -9,8 +9,10 @@ import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAppTheme } from '../context/ThemeContext';
-import { getAirlineOps, getAirlineColor, ALLOWED_AIRLINES } from '../utils/airlineOps';
-import { fetchPSAScheduleRaw } from '../utils/fr24api';
+import { useAirport } from '../context/AirportContext';
+import { getAirlineOps, getAirlineColor } from '../utils/airlineOps';
+import { fetchAirportScheduleRaw } from '../utils/fr24api';
+import { formatAirportHeader } from '../utils/airportSettings';
 import { requestWidgetUpdate } from 'react-native-android-widget';
 import { WIDGET_CACHE_KEY } from '../widgets/widgetTaskHandler';
 import type { WidgetData, WidgetFlight } from '../widgets/widgetTaskHandler';
@@ -32,12 +34,8 @@ try { Notifications.setNotificationHandler({
     shouldShowBanner: true,
     shouldShowList: true,
   }),
-}); } catch {}
+}); } catch (e) { console.warn('[notifHandler]', e); }
 
-const PRIMARY = '#2563EB';
-const DARK_BLUE = '#1E3A8A';
-const GOLD = '#F59E0B';
-const BG = '#F3F4F6';
 
 function LogoPill({ iataCode, airlineName, color }: { iataCode: string; airlineName: string; color: string }) {
   const [err, setErr] = useState(false);
@@ -234,6 +232,7 @@ async function schedulePinnedNotifications(item: any, tab: 'arrivals' | 'departu
 // ─── Screen ────────────────────────────────────────────────────────────────────
 export default function FlightScreen() {
   const { colors } = useAppTheme();
+  const { airport, airportCode, isLoading: airportLoading } = useAirport();
   const s = useMemo(() => makeStyles(colors), [colors]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -252,17 +251,15 @@ export default function FlightScreen() {
     AsyncStorage.getItem(NOTIF_ENABLED_KEY).then(v => setNotifsEnabled(v === 'true'));
   }, []);
 
-  const fetchAll = async () => {
+  const fetchAll = useCallback(async () => {
+    if (airportLoading) return;
+
     try {
-      const res = await fetch('https://api.flightradar24.com/common/v1/airport.json?code=psa&plugin[]=schedule&page=1&limit=100', {
-        headers: { 'User-Agent': 'Mozilla/5.0' },
-      });
-      const json = await res.json();
-      const filter = (data: any[]) => data.filter(i => ALLOWED_AIRLINES.some(k => (i.flight?.airline?.name || '').toLowerCase().includes(k)));
-      const allArrivals   = json.result?.response?.airport?.pluginData?.schedule?.arrivals?.data || [];
-      const allDepartures = json.result?.response?.airport?.pluginData?.schedule?.departures?.data || [];
-      const fetchedArrivals   = filter(allArrivals);
-      const fetchedDepartures = filter(allDepartures);
+      const {
+        allArrivals,
+        departures: fetchedDepartures,
+        arrivals: fetchedArrivals,
+      } = await fetchAirportScheduleRaw(airportCode);
 
       // Build inbound arrival map: registration → best known arrival timestamp
       const inboundMap: Record<string, number> = {};
@@ -279,7 +276,7 @@ export default function FlightScreen() {
       setArrivals(fetchedArrivals);
       setDepartures(fetchedDepartures);
 
-      // Auto-clear expired pinned flight
+      // Auto-clear expired pinned flight or stale data from another airport
       const pinnedRaw = await AsyncStorage.getItem(PINNED_FLIGHT_KEY);
       if (pinnedRaw) {
         try {
@@ -288,7 +285,10 @@ export default function FlightScreen() {
           const pinTs = pinTab === 'arrivals'
             ? pinned.flight?.time?.scheduled?.arrival
             : pinned.flight?.time?.scheduled?.departure;
-          if (pinTs && pinTs < Date.now() / 1000) {
+          const pinId = pinned.flight?.identification?.number?.default;
+          const pool = pinTab === 'arrivals' ? fetchedArrivals : fetchedDepartures;
+          const stillPresent = !!pinId && pool.some(item => item.flight?.identification?.number?.default === pinId);
+          if ((pinTs && pinTs < Date.now() / 1000) || !stillPresent) {
             await AsyncStorage.removeItem(PINNED_FLIGHT_KEY);
             await cancelPinnedNotifications();
             setPinnedFlightId(null);
@@ -396,10 +396,14 @@ export default function FlightScreen() {
         await cancelPreviousNotifications();
         setScheduledCount(0);
       }
-    } catch (e) { console.error(e); } finally { setLoading(false); setRefreshing(false); }
-  };
+    } catch (e) { console.error('[fetchAll]', e); } finally { setLoading(false); setRefreshing(false); }
+  }, [airportCode, airportLoading]);
 
-  useEffect(() => { fetchAll(); }, []);
+  useEffect(() => {
+    if (airportLoading) return;
+    setLoading(true);
+    fetchAll();
+  }, [airportLoading, fetchAll]);
 
   useEffect(() => {
     AsyncStorage.getItem(PINNED_FLIGHT_KEY).then(raw => {
@@ -457,7 +461,7 @@ export default function FlightScreen() {
       const tab = activeTab;
       await AsyncStorage.setItem(PINNED_FLIGHT_KEY, JSON.stringify({ ...item, _pinTab: tab, _pinnedAt: Date.now() }));
       setPinnedFlightId(id);
-      try { await schedulePinnedNotifications(item, tab); } catch {}
+      try { await schedulePinnedNotifications(item, tab); } catch (e) { console.warn('[pinnedNotif]', e); }
       // Send to watch
       if (WearDataSender) {
         const payload = JSON.stringify({
@@ -484,10 +488,10 @@ export default function FlightScreen() {
   const unpinFlight = useCallback(async () => {
     try {
       await AsyncStorage.removeItem(PINNED_FLIGHT_KEY);
-      try { await cancelPinnedNotifications(); } catch {}
+      try { await cancelPinnedNotifications(); } catch (e) { console.warn('[cancelPinNotif]', e); }
       setPinnedFlightId(null);
       if (WearDataSender) WearDataSender.clearPinnedFlight();
-    } catch {}
+    } catch (e) { console.error('[unpin]', e); }
   }, []);
 
   const userShift = activeDay === 'today' ? shifts.today : shifts.tomorrow;
@@ -660,12 +664,15 @@ export default function FlightScreen() {
       <View style={s.pageHeader}>
         <View style={{ flex: 1 }}>
           <Text style={s.pageTitle}>Voli in tempo reale</Text>
-          <Text style={s.pageSub}>Pisa International · PSA / LIRP</Text>
+          <Text style={s.pageSub}>{formatAirportHeader(airport.code)}</Text>
         </View>
         <TouchableOpacity
           style={[s.notifBtn, notifsEnabled && s.notifBtnActive]}
           onPress={toggleNotifications}
           activeOpacity={0.8}
+          accessible
+          accessibilityLabel={notifsEnabled ? 'Disattiva notifiche voli' : 'Attiva notifiche voli'}
+          accessibilityRole="button"
         >
           <MaterialIcons
             name={notifsEnabled ? 'notifications-active' : 'notifications-none'}

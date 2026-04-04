@@ -1,5 +1,5 @@
 // src/screens/TraveldocScreen.tsx
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { StyleSheet, View, Text, ActivityIndicator } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { useAppTheme } from '../context/ThemeContext';
@@ -7,6 +7,14 @@ import { useAppTheme } from '../context/ThemeContext';
 export default function TraveldocScreen() {
   const { colors } = useAppTheme();
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+
+  // Timeout: hide spinner after 15s even if WebView never fires onLoadEnd
+  useEffect(() => {
+    if (!loading) return;
+    const timer = setTimeout(() => { setLoading(false); setLoadError(true); }, 15_000);
+    return () => clearTimeout(timer);
+  }, [loading]);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
@@ -23,10 +31,18 @@ export default function TraveldocScreen() {
           <Text style={[styles.loadingText, { color: colors.textSub }]}>Caricamento TravelDoc…</Text>
         </View>
       )}
+      {loadError && !loading && (
+        <View style={[styles.loadingWrap, { backgroundColor: colors.bg }]}>
+          <Text style={[styles.loadingText, { color: colors.textSub }]}>
+            Caricamento lento. Verifica la connessione internet.
+          </Text>
+        </View>
+      )}
       <WebView
         source={{ uri: 'https://legacy.traveldoc.aero/' }}
         style={{ flex: 1 }}
-        onLoadEnd={() => setLoading(false)}
+        onLoadEnd={() => { setLoading(false); setLoadError(false); }}
+        onError={() => { setLoading(false); setLoadError(true); }}
         javaScriptEnabled
         domStorageEnabled
       />

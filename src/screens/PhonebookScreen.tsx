@@ -262,12 +262,12 @@ function ContactRow({ contact, onEdit, onDelete }: ContactRowProps) {
       <View style={[rowStyles.dot, { backgroundColor: color }]} />
       <View style={rowStyles.info}>
         <View style={rowStyles.topRow}>
-          <Text style={rowStyles.name}>{contact.name}</Text>
+          <Text style={rowStyles.name} numberOfLines={1}>{contact.name}</Text>
           <View style={[rowStyles.badge, { backgroundColor: color + '20' }]}>
             <Text style={[rowStyles.badgeTxt, { color }]}>{contact.category}</Text>
           </View>
         </View>
-        <Text style={rowStyles.number}>{contact.number}</Text>
+        <Text style={rowStyles.number} numberOfLines={1}>{contact.number}</Text>
         {!!contact.note && <Text style={rowStyles.note}>{contact.note}</Text>}
       </View>
       <TouchableOpacity style={[rowStyles.callBtn, { backgroundColor: color }]} onPress={call}>

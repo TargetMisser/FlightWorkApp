@@ -1,7 +1,8 @@
 import * as Calendar from 'expo-calendar';
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { ALLOWED_AIRLINES, getAirlineOps } from './airlineOps';
+import { getAirlineOps } from './airlineOps';
+import { fetchAirportScheduleRaw } from './fr24api';
 
 const NOTIF_IDS_KEY = 'aerostaff_notif_ids_v1';
 const LAST_SCHEDULE_KEY = 'aerostaff_notif_last_schedule';
@@ -47,14 +48,8 @@ export async function autoScheduleNotifications(): Promise<number> {
     const shiftStart = new Date(shiftEvent.startDate).getTime() / 1000;
     const shiftEnd = new Date(shiftEvent.endDate).getTime() / 1000;
 
-    // Fetch departures and arrivals from FR24
-    const res = await fetch('https://api.flightradar24.com/common/v1/airport.json?code=psa&plugin[]=schedule&page=1&limit=100', {
-      headers: { 'User-Agent': 'Mozilla/5.0' },
-    });
-    const json = await res.json();
-    const filterAirlines = (data: any[]) => data.filter((i: any) => ALLOWED_AIRLINES.some(k => (i.flight?.airline?.name || '').toLowerCase().includes(k)));
-    const allDepartures = filterAirlines(json.result?.response?.airport?.pluginData?.schedule?.departures?.data || []);
-    const allArrivals = filterAirlines(json.result?.response?.airport?.pluginData?.schedule?.arrivals?.data || []);
+    // Fetch departures and arrivals from FR24 using the selected airport
+    const { departures: allDepartures, arrivals: allArrivals } = await fetchAirportScheduleRaw();
 
     // Filter departures during shift
     const shiftDepartures = allDepartures.filter((item: any) => {

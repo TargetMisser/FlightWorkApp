@@ -5,7 +5,9 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAppTheme } from '../context/ThemeContext';
-import { getAirlineOps, getAirlineColor, ALLOWED_AIRLINES } from '../utils/airlineOps';
+import { useAirport } from '../context/AirportContext';
+import { getAirlineOps, getAirlineColor } from '../utils/airlineOps';
+import { fetchAirportScheduleRaw } from '../utils/fr24api';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -53,6 +55,7 @@ function parseFlight(item: any): Flight | null {
 
 export default function ShiftTimeline({ visible, onClose, shiftStart, shiftEnd, inline }: Props) {
   const { colors } = useAppTheme();
+  const { airportCode, isLoading: airportLoading } = useAirport();
   const [flights, setFlights] = useState<Flight[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -65,17 +68,12 @@ export default function ShiftTimeline({ visible, onClose, shiftStart, shiftEnd, 
   const SCREEN_H = Dimensions.get('window').height;
 
   const fetchFlights = useCallback(async () => {
+    if (airportLoading) return;
     setLoading(true);
     setError(false);
     try {
-      const res = await fetch(
-        'https://api.flightradar24.com/common/v1/airport.json?code=psa&plugin[]=schedule&page=1&limit=100',
-        { headers: { 'User-Agent': 'Mozilla/5.0' } },
-      );
-      const json = await res.json();
-      const raw: any[] = json.result?.response?.airport?.pluginData?.schedule?.departures?.data || [];
-      const filtered = raw
-        .filter(i => ALLOWED_AIRLINES.some(k => (i.flight?.airline?.name || '').toLowerCase().includes(k)))
+      const { departures } = await fetchAirportScheduleRaw(airportCode);
+      const filtered = departures
         .map(parseFlight)
         .filter((f): f is Flight => f !== null && f.departureTs >= startSec && f.departureTs <= endSec)
         .sort((a, b) => a.departureTs - b.departureTs);
@@ -85,10 +83,11 @@ export default function ShiftTimeline({ visible, onClose, shiftStart, shiftEnd, 
     } finally {
       setLoading(false);
     }
-  }, [startSec, endSec]);
+  }, [airportCode, airportLoading, startSec, endSec]);
 
   // Inline: carica subito; Modal: carica quando visibile
   useEffect(() => {
+    if (airportLoading) return;
     if (inline || visible) {
       fetchFlights();
       setExpandedId(null);
@@ -96,7 +95,7 @@ export default function ShiftTimeline({ visible, onClose, shiftStart, shiftEnd, 
       const interval = setInterval(() => setNowSec(Date.now() / 1000), 60000);
       return () => clearInterval(interval);
     }
-  }, [inline, visible, fetchFlights]);
+  }, [inline, visible, airportLoading, fetchFlights]);
 
   const toggleExpand = (id: string) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ActivityIndicator, ScrollView, TouchableOpacity,
-  PanResponder, Platform, UIManager, Animated, Dimensions, Modal, Alert, FlatList, TextInput, KeyboardAvoidingView,
+  PanResponder, Platform, UIManager, Animated, Dimensions, Modal, Alert, FlatList, TextInput, KeyboardAvoidingView, Keyboard,
 } from 'react-native';
 import * as SystemCalendar from 'expo-calendar';
 import * as Location from 'expo-location';
@@ -11,6 +11,13 @@ import { WebView } from 'react-native-webview';
 import { MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAppTheme } from '../context/ThemeContext';
+import { useAirport } from '../context/AirportContext';
+import { fetchAirportScheduleRaw } from '../utils/fr24api';
+import {
+  getWritableCalendarId,
+  replaceShiftForDate,
+  replaceShiftsForRange,
+} from '../utils/shiftCalendar';
 import {
   getPdfExtractorHtml, parseShiftCells,
   type ParsedSchedule, type ParsedEmployee, type ParsedShift,
@@ -41,7 +48,8 @@ const weatherMap: Record<number, { text: string; icon: string }> = {
   80: { text: 'Rovesci', icon: '🌧️' },
 };
 
-function getMonday(d: Date) {
+function getMonday(d: Date | null | undefined): Date {
+  if (!d || isNaN(d.getTime())) return getMonday(new Date());
   const date = new Date(d);
   const day = date.getDay();
   date.setDate(date.getDate() - day + (day === 0 ? -6 : 1));
@@ -50,6 +58,7 @@ function getMonday(d: Date) {
 
 export default function CalendarScreen() {
   const { colors } = useAppTheme();
+  const { airportCode, isLoading: airportLoading } = useAirport();
   const [currentWeekStart, setCurrentWeekStart] = useState<Date>(getMonday(new Date()));
   const [selectedDay, setSelectedDay] = useState<string>(new Date().toISOString().split('T')[0]);
   const [markedDates, setMarkedDates] = useState<Record<string, string>>({});
@@ -75,6 +84,9 @@ export default function CalendarScreen() {
   const [manualStartM, setManualStartM] = useState('00');
   const [manualEndH, setManualEndH] = useState('16');
   const [manualEndM, setManualEndM] = useState('00');
+  const manualStartMRef = useRef<TextInput>(null);
+  const manualEndHRef = useRef<TextInput>(null);
+  const manualEndMRef = useRef<TextInput>(null);
 
   const openManualEntry = () => {
     setEditMenuOpen(false);
@@ -85,31 +97,27 @@ export default function CalendarScreen() {
     setManualModalOpen(true);
   };
 
+  const sanitizeTimePart = (value: string) => value.replace(/\D/g, '').slice(0, 2);
+
   const saveManualShift = async () => {
-    if (!calId) {
-      const { status } = await SystemCalendar.requestCalendarPermissionsAsync();
-      if (status !== 'granted') { Alert.alert('Permesso negato'); return; }
-      const cals = await SystemCalendar.getCalendarsAsync(SystemCalendar.EntityTypes.EVENT);
-      const cal = cals.find(c => c.allowsModifications && c.isPrimary) || cals.find(c => c.allowsModifications);
-      if (!cal) { Alert.alert('Errore', 'Nessun calendario scrivibile'); return; }
-      setCalId(cal.id);
-    }
+    const { status } = await SystemCalendar.requestCalendarPermissionsAsync();
+    if (status !== 'granted') { Alert.alert('Permesso negato'); return; }
+
     try {
-      const [y, m, d] = manualDate.split('-').map(Number);
-      if (manualType === 'Riposo') {
-        await SystemCalendar.createEventAsync(calId!, {
-          title: 'Riposo', startDate: new Date(y, m - 1, d, 0, 0), endDate: new Date(y, m - 1, d, 23, 59), timeZone: 'Europe/Rome',
-        });
-      } else {
-        const start = new Date(y, m - 1, d, +manualStartH, +manualStartM);
-        const end = new Date(y, m - 1, d, +manualEndH, +manualEndM);
-        if (end <= start) end.setDate(end.getDate() + 1);
-        await SystemCalendar.createEventAsync(calId!, {
-          title: 'Lavoro', startDate: start, endDate: end, timeZone: 'Europe/Rome',
-        });
-      }
+      const calendarId = calId ?? await getWritableCalendarId();
+      if (!calendarId) { Alert.alert('Errore', 'Nessun calendario scrivibile'); return; }
+      if (!calId) setCalId(calendarId);
+
+      await replaceShiftForDate({
+        calendarId,
+        date: manualDate,
+        type: manualType === 'Riposo' ? 'rest' : 'work',
+        startTime: manualType === 'Lavoro' ? `${manualStartH.padStart(2, '0')}:${manualStartM.padStart(2, '0')}` : undefined,
+        endTime: manualType === 'Lavoro' ? `${manualEndH.padStart(2, '0')}:${manualEndM.padStart(2, '0')}` : undefined,
+      });
+
       setManualModalOpen(false);
-      fetchCalendar();
+      fetchCalendar(true);
       Alert.alert('Turno salvato!');
     } catch (e: any) { Alert.alert('Errore', e.message); }
   };
@@ -165,11 +173,13 @@ export default function CalendarScreen() {
       };
     });
 
-  useEffect(() => { fetchCalendar(); }, [currentWeekStart]);
+  useEffect(() => {
+    if (!airportLoading) fetchCalendar();
+  }, [currentWeekStart, airportCode, airportLoading]);
 
-  const fetchCalendar = async () => {
+  const fetchCalendar = async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const { status } = await SystemCalendar.requestCalendarPermissionsAsync();
       if (status !== 'granted') { setLoading(false); return; }
       const calendars = await SystemCalendar.getCalendarsAsync(SystemCalendar.EntityTypes.EVENT);
@@ -214,21 +224,23 @@ export default function CalendarScreen() {
           dict[date] = { weatherText: m.text, weatherIcon: m.icon, flightCount: 0 };
         });
       }
-    } catch (_) {}
+    } catch (e) { console.warn('[calWeather]', e); }
     try {
-      const fr = await fetch('https://api.flightradar24.com/common/v1/airport.json?code=psa&plugin[]=schedule&page=1&limit=100', { headers: { 'User-Agent': 'Mozilla/5.0' } });
-      const fj = await fr.json();
-      const allF = [...(fj.result?.response?.airport?.pluginData?.schedule?.arrivals?.data || []), ...(fj.result?.response?.airport?.pluginData?.schedule?.departures?.data || [])];
-      const allowed = ['wizz', 'aer lingus', 'easyjet', 'british airways', 'sas', 'scandinavian', 'flydubai'];
+      const { arrivals, departures } = await fetchAirportScheduleRaw(airportCode);
+      const allF = [...arrivals, ...departures];
       Object.keys(localData).forEach(iso => {
         const sh = localData[iso].find(e => e.title.includes('Lavoro'));
         if (sh) {
-          const sTS = new Date(sh.startDate).getTime() / 1000, eTS = new Date(sh.endDate).getTime() / 1000;
-          const cnt = allF.filter(f => { const a = (f.flight?.airline?.name || '').toLowerCase(); if (!allowed.some(k => a.includes(k))) return false; const ts = f.flight?.time?.scheduled?.arrival || f.flight?.time?.scheduled?.departure; return ts && ts >= sTS && ts <= eTS; }).length;
+          const sTS = new Date(sh.startDate).getTime() / 1000;
+          const eTS = new Date(sh.endDate).getTime() / 1000;
+          const cnt = allF.filter(f => {
+            const ts = f.flight?.time?.scheduled?.arrival || f.flight?.time?.scheduled?.departure;
+            return ts && ts >= sTS && ts <= eTS;
+          }).length;
           if (dict[iso]) dict[iso].flightCount = cnt; else dict[iso] = { weatherText: 'N/A', weatherIcon: '❓', flightCount: cnt };
         }
       });
-    } catch (_) {}
+    } catch (e) { console.warn('[calFlights]', e); }
     setDailyStats(dict);
   };
 
@@ -315,54 +327,33 @@ export default function CalendarScreen() {
   };
 
   const confirmImport = async () => {
-    if (!selectedEmployee || !calId) return;
+    if (!selectedEmployee) return;
     setImportStep('saving');
 
     try {
-      // Delete existing Lavoro/Riposo events for the imported date range
-      const shiftDates = selectedEmployee.shifts.map(s => s.date).sort();
-      if (shiftDates.length > 0) {
-        const [fy, fm, fd] = shiftDates[0].split('-').map(Number);
-        const [ly, lm, ld] = shiftDates[shiftDates.length - 1].split('-').map(Number);
-        const rangeStart = new Date(fy, fm - 1, fd, 0, 0);
-        const rangeEnd = new Date(ly, lm - 1, ld, 23, 59);
-        const existing = await SystemCalendar.getEventsAsync([calId], rangeStart, rangeEnd);
-        for (const e of existing) {
-          if (e.title.includes('Lavoro') || e.title.includes('Riposo')) {
-            await SystemCalendar.deleteEventAsync(e.id);
-          }
-        }
+      const calendarId = calId ?? await getWritableCalendarId();
+      if (!calendarId) {
+        Alert.alert('Errore', 'Nessun calendario scrivibile');
+        setImportStep('idle');
+        return;
       }
+      if (!calId) setCalId(calendarId);
 
-      let saved = 0;
-      for (const shift of selectedEmployee.shifts) {
-        const [y, m, d] = shift.date.split('-').map(Number);
-        if (shift.type === 'work' && shift.start && shift.end) {
-          const [sh, sm] = shift.start.split(':').map(Number);
-          const [eh, em] = shift.end.split(':').map(Number);
-          await SystemCalendar.createEventAsync(calId, {
-            title: 'Lavoro',
-            startDate: new Date(y, m - 1, d, sh, sm),
-            endDate: new Date(y, m - 1, d, eh, em),
-            timeZone: 'Europe/Rome',
-          });
-          saved++;
-        } else if (shift.type === 'rest') {
-          await SystemCalendar.createEventAsync(calId, {
-            title: 'Riposo',
-            startDate: new Date(y, m - 1, d, 0, 0),
-            endDate: new Date(y, m - 1, d, 23, 59),
-            timeZone: 'Europe/Rome',
-          });
-          saved++;
-        }
-      }
+      const saved = await replaceShiftsForRange({
+        calendarId,
+        shifts: selectedEmployee.shifts.map(shift => ({
+          date: shift.date,
+          type: shift.type,
+          startTime: shift.start,
+          endTime: shift.end,
+        })),
+      });
 
       setImportStep('done');
       setTimeout(() => {
         setImportModalVisible(false);
         setImportStep('idle');
-        fetchCalendar();
+        fetchCalendar(true);
         Alert.alert('Importazione completata', `${saved} turni salvati nel calendario`);
       }, 800);
     } catch (e) {
@@ -437,7 +428,7 @@ export default function CalendarScreen() {
               <View style={s.weatherBadge}>
                 <Text style={s.weatherIcon}>{stats.weatherIcon}</Text>
                 <View>
-                  <Text style={s.weatherPlace}>Pisa</Text>
+                  <Text style={s.weatherPlace}>Meteo locale</Text>
                   <Text style={s.weatherText}>{stats.weatherText}</Text>
                 </View>
               </View>
@@ -504,12 +495,12 @@ export default function CalendarScreen() {
       <Modal visible={manualModalOpen} transparent animationType="slide" statusBarTranslucent onRequestClose={() => setManualModalOpen(false)}>
         <KeyboardAvoidingView
           style={s.modalOverlay}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           keyboardVerticalOffset={Platform.OS === 'ios' ? 24 : 0}
         >
-          <View style={s.modalBg} />
-          <ScrollView contentContainerStyle={s.modalScrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-            <View style={[s.modalContent, { backgroundColor: colors.isDark || colors.card === 'transparent' ? '#1E293B' : '#FFFFFF' }]}>
+          <TouchableOpacity style={s.modalBg} activeOpacity={1} onPress={Keyboard.dismiss} />
+          <View style={s.modalScrollContent}>
+            <View style={[s.manualModalContent, { backgroundColor: colors.isDark || colors.card === 'transparent' ? '#1E293B' : '#FFFFFF' }]}>
             <View style={s.modalHeader}>
               <Text style={[s.modalTitle, { color: colors.text }]}>Aggiungi Turno</Text>
               <TouchableOpacity onPress={() => setManualModalOpen(false)}>
@@ -546,14 +537,64 @@ export default function CalendarScreen() {
             {manualType === 'Lavoro' && (
               <>
                 <Text style={[s.manualLabel, { color: colors.textSub }]}>ORARIO INIZIO</Text>
-                <View style={{ flexDirection: 'row', gap: 10, marginBottom: 14 }}>
-                  <TextInput style={[s.manualInput, { flex: 1, color: colors.text, borderColor: colors.border, backgroundColor: colors.bg }]} placeholder="HH" placeholderTextColor={colors.textMuted} keyboardType="numeric" maxLength={2} value={manualStartH} onChangeText={setManualStartH} />
-                  <TextInput style={[s.manualInput, { flex: 1, color: colors.text, borderColor: colors.border, backgroundColor: colors.bg }]} placeholder="MM" placeholderTextColor={colors.textMuted} keyboardType="numeric" maxLength={2} value={manualStartM} onChangeText={setManualStartM} />
+                <View style={s.manualTimeRow}>
+                  <TextInput
+                    style={[s.manualInput, s.manualTimeInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.bg }]}
+                    placeholder="HH"
+                    placeholderTextColor={colors.textMuted}
+                    keyboardType="number-pad"
+                    maxLength={2}
+                    value={manualStartH}
+                    onChangeText={v => setManualStartH(sanitizeTimePart(v))}
+                    selectTextOnFocus
+                    returnKeyType="next"
+                    blurOnSubmit={false}
+                    onSubmitEditing={() => manualStartMRef.current?.focus()}
+                  />
+                  <TextInput
+                    ref={manualStartMRef}
+                    style={[s.manualInput, s.manualTimeInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.bg }]}
+                    placeholder="MM"
+                    placeholderTextColor={colors.textMuted}
+                    keyboardType="number-pad"
+                    maxLength={2}
+                    value={manualStartM}
+                    onChangeText={v => setManualStartM(sanitizeTimePart(v))}
+                    selectTextOnFocus
+                    returnKeyType="next"
+                    blurOnSubmit={false}
+                    onSubmitEditing={() => manualEndHRef.current?.focus()}
+                  />
                 </View>
                 <Text style={[s.manualLabel, { color: colors.textSub }]}>ORARIO FINE</Text>
-                <View style={{ flexDirection: 'row', gap: 10, marginBottom: 14 }}>
-                  <TextInput style={[s.manualInput, { flex: 1, color: colors.text, borderColor: colors.border, backgroundColor: colors.bg }]} placeholder="HH" placeholderTextColor={colors.textMuted} keyboardType="numeric" maxLength={2} value={manualEndH} onChangeText={setManualEndH} />
-                  <TextInput style={[s.manualInput, { flex: 1, color: colors.text, borderColor: colors.border, backgroundColor: colors.bg }]} placeholder="MM" placeholderTextColor={colors.textMuted} keyboardType="numeric" maxLength={2} value={manualEndM} onChangeText={setManualEndM} />
+                <View style={s.manualTimeRow}>
+                  <TextInput
+                    ref={manualEndHRef}
+                    style={[s.manualInput, s.manualTimeInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.bg }]}
+                    placeholder="HH"
+                    placeholderTextColor={colors.textMuted}
+                    keyboardType="number-pad"
+                    maxLength={2}
+                    value={manualEndH}
+                    onChangeText={v => setManualEndH(sanitizeTimePart(v))}
+                    selectTextOnFocus
+                    returnKeyType="next"
+                    blurOnSubmit={false}
+                    onSubmitEditing={() => manualEndMRef.current?.focus()}
+                  />
+                  <TextInput
+                    ref={manualEndMRef}
+                    style={[s.manualInput, s.manualTimeInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.bg }]}
+                    placeholder="MM"
+                    placeholderTextColor={colors.textMuted}
+                    keyboardType="number-pad"
+                    maxLength={2}
+                    value={manualEndM}
+                    onChangeText={v => setManualEndM(sanitizeTimePart(v))}
+                    selectTextOnFocus
+                    returnKeyType="done"
+                    onSubmitEditing={Keyboard.dismiss}
+                  />
                 </View>
               </>
             )}
@@ -562,7 +603,7 @@ export default function CalendarScreen() {
               <Text style={s.primaryBtnText}>Salva Turno</Text>
             </TouchableOpacity>
             </View>
-          </ScrollView>
+          </View>
         </KeyboardAvoidingView>
       </Modal>
 
@@ -736,8 +777,9 @@ function makeStyles(c: any) {
     // Modal
     modalOverlay: { flex: 1, justifyContent: 'flex-end' },
     modalBg: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)' },
-    modalScrollContent: { flexGrow: 1, justifyContent: 'flex-end' },
+    modalScrollContent: { flex: 1, justifyContent: 'flex-end' },
     modalContent: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 100, maxHeight: '92%' },
+    manualModalContent: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 32, maxHeight: '92%' },
     modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
     modalTitle: { fontSize: 20, fontWeight: 'bold' },
     centerBox: { alignItems: 'center', paddingVertical: 40, gap: 12 },
@@ -761,6 +803,8 @@ function makeStyles(c: any) {
     // Manual entry
     manualLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1, marginBottom: 6 },
     manualInput: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16, marginBottom: 4 },
+    manualTimeRow: { flexDirection: 'row', gap: 10, marginBottom: 14 },
+    manualTimeInput: { flex: 1, textAlign: 'center' },
     manualTypeBtn: { flex: 1, paddingVertical: 12, borderRadius: 10, borderWidth: 1.5, alignItems: 'center' },
   });
 }
