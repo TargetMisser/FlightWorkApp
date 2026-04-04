@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ActivityIndicator, ScrollView, TouchableOpacity,
-  PanResponder, Platform, UIManager, Animated, Dimensions, Modal, Alert, FlatList, TextInput, KeyboardAvoidingView,
+  PanResponder, Platform, UIManager, Animated, Dimensions, Modal, Alert, FlatList, TextInput, KeyboardAvoidingView, Keyboard,
 } from 'react-native';
 import * as SystemCalendar from 'expo-calendar';
 import * as Location from 'expo-location';
@@ -84,6 +84,9 @@ export default function CalendarScreen() {
   const [manualStartM, setManualStartM] = useState('00');
   const [manualEndH, setManualEndH] = useState('16');
   const [manualEndM, setManualEndM] = useState('00');
+  const manualStartMRef = useRef<TextInput>(null);
+  const manualEndHRef = useRef<TextInput>(null);
+  const manualEndMRef = useRef<TextInput>(null);
 
   const openManualEntry = () => {
     setEditMenuOpen(false);
@@ -93,6 +96,8 @@ export default function CalendarScreen() {
     setManualEndH('16'); setManualEndM('00');
     setManualModalOpen(true);
   };
+
+  const sanitizeTimePart = (value: string) => value.replace(/\D/g, '').slice(0, 2);
 
   const saveManualShift = async () => {
     const { status } = await SystemCalendar.requestCalendarPermissionsAsync();
@@ -112,7 +117,7 @@ export default function CalendarScreen() {
       });
 
       setManualModalOpen(false);
-      fetchCalendar();
+      fetchCalendar(true);
       Alert.alert('Turno salvato!');
     } catch (e: any) { Alert.alert('Errore', e.message); }
   };
@@ -172,9 +177,9 @@ export default function CalendarScreen() {
     if (!airportLoading) fetchCalendar();
   }, [currentWeekStart, airportCode, airportLoading]);
 
-  const fetchCalendar = async () => {
+  const fetchCalendar = async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const { status } = await SystemCalendar.requestCalendarPermissionsAsync();
       if (status !== 'granted') { setLoading(false); return; }
       const calendars = await SystemCalendar.getCalendarsAsync(SystemCalendar.EntityTypes.EVENT);
@@ -348,7 +353,7 @@ export default function CalendarScreen() {
       setTimeout(() => {
         setImportModalVisible(false);
         setImportStep('idle');
-        fetchCalendar();
+        fetchCalendar(true);
         Alert.alert('Importazione completata', `${saved} turni salvati nel calendario`);
       }, 800);
     } catch (e) {
@@ -490,12 +495,12 @@ export default function CalendarScreen() {
       <Modal visible={manualModalOpen} transparent animationType="slide" statusBarTranslucent onRequestClose={() => setManualModalOpen(false)}>
         <KeyboardAvoidingView
           style={s.modalOverlay}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           keyboardVerticalOffset={Platform.OS === 'ios' ? 24 : 0}
         >
-          <View style={s.modalBg} />
-          <ScrollView contentContainerStyle={s.modalScrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-            <View style={[s.modalContent, { backgroundColor: colors.isDark || colors.card === 'transparent' ? '#1E293B' : '#FFFFFF' }]}>
+          <TouchableOpacity style={s.modalBg} activeOpacity={1} onPress={Keyboard.dismiss} />
+          <View style={s.modalScrollContent}>
+            <View style={[s.manualModalContent, { backgroundColor: colors.isDark || colors.card === 'transparent' ? '#1E293B' : '#FFFFFF' }]}>
             <View style={s.modalHeader}>
               <Text style={[s.modalTitle, { color: colors.text }]}>Aggiungi Turno</Text>
               <TouchableOpacity onPress={() => setManualModalOpen(false)}>
@@ -532,14 +537,64 @@ export default function CalendarScreen() {
             {manualType === 'Lavoro' && (
               <>
                 <Text style={[s.manualLabel, { color: colors.textSub }]}>ORARIO INIZIO</Text>
-                <View style={{ flexDirection: 'row', gap: 10, marginBottom: 14 }}>
-                  <TextInput style={[s.manualInput, { flex: 1, color: colors.text, borderColor: colors.border, backgroundColor: colors.bg }]} placeholder="HH" placeholderTextColor={colors.textMuted} keyboardType="numeric" maxLength={2} value={manualStartH} onChangeText={setManualStartH} />
-                  <TextInput style={[s.manualInput, { flex: 1, color: colors.text, borderColor: colors.border, backgroundColor: colors.bg }]} placeholder="MM" placeholderTextColor={colors.textMuted} keyboardType="numeric" maxLength={2} value={manualStartM} onChangeText={setManualStartM} />
+                <View style={s.manualTimeRow}>
+                  <TextInput
+                    style={[s.manualInput, s.manualTimeInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.bg }]}
+                    placeholder="HH"
+                    placeholderTextColor={colors.textMuted}
+                    keyboardType="number-pad"
+                    maxLength={2}
+                    value={manualStartH}
+                    onChangeText={v => setManualStartH(sanitizeTimePart(v))}
+                    selectTextOnFocus
+                    returnKeyType="next"
+                    blurOnSubmit={false}
+                    onSubmitEditing={() => manualStartMRef.current?.focus()}
+                  />
+                  <TextInput
+                    ref={manualStartMRef}
+                    style={[s.manualInput, s.manualTimeInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.bg }]}
+                    placeholder="MM"
+                    placeholderTextColor={colors.textMuted}
+                    keyboardType="number-pad"
+                    maxLength={2}
+                    value={manualStartM}
+                    onChangeText={v => setManualStartM(sanitizeTimePart(v))}
+                    selectTextOnFocus
+                    returnKeyType="next"
+                    blurOnSubmit={false}
+                    onSubmitEditing={() => manualEndHRef.current?.focus()}
+                  />
                 </View>
                 <Text style={[s.manualLabel, { color: colors.textSub }]}>ORARIO FINE</Text>
-                <View style={{ flexDirection: 'row', gap: 10, marginBottom: 14 }}>
-                  <TextInput style={[s.manualInput, { flex: 1, color: colors.text, borderColor: colors.border, backgroundColor: colors.bg }]} placeholder="HH" placeholderTextColor={colors.textMuted} keyboardType="numeric" maxLength={2} value={manualEndH} onChangeText={setManualEndH} />
-                  <TextInput style={[s.manualInput, { flex: 1, color: colors.text, borderColor: colors.border, backgroundColor: colors.bg }]} placeholder="MM" placeholderTextColor={colors.textMuted} keyboardType="numeric" maxLength={2} value={manualEndM} onChangeText={setManualEndM} />
+                <View style={s.manualTimeRow}>
+                  <TextInput
+                    ref={manualEndHRef}
+                    style={[s.manualInput, s.manualTimeInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.bg }]}
+                    placeholder="HH"
+                    placeholderTextColor={colors.textMuted}
+                    keyboardType="number-pad"
+                    maxLength={2}
+                    value={manualEndH}
+                    onChangeText={v => setManualEndH(sanitizeTimePart(v))}
+                    selectTextOnFocus
+                    returnKeyType="next"
+                    blurOnSubmit={false}
+                    onSubmitEditing={() => manualEndMRef.current?.focus()}
+                  />
+                  <TextInput
+                    ref={manualEndMRef}
+                    style={[s.manualInput, s.manualTimeInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.bg }]}
+                    placeholder="MM"
+                    placeholderTextColor={colors.textMuted}
+                    keyboardType="number-pad"
+                    maxLength={2}
+                    value={manualEndM}
+                    onChangeText={v => setManualEndM(sanitizeTimePart(v))}
+                    selectTextOnFocus
+                    returnKeyType="done"
+                    onSubmitEditing={Keyboard.dismiss}
+                  />
                 </View>
               </>
             )}
@@ -548,7 +603,7 @@ export default function CalendarScreen() {
               <Text style={s.primaryBtnText}>Salva Turno</Text>
             </TouchableOpacity>
             </View>
-          </ScrollView>
+          </View>
         </KeyboardAvoidingView>
       </Modal>
 
@@ -722,8 +777,9 @@ function makeStyles(c: any) {
     // Modal
     modalOverlay: { flex: 1, justifyContent: 'flex-end' },
     modalBg: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)' },
-    modalScrollContent: { flexGrow: 1, justifyContent: 'flex-end' },
+    modalScrollContent: { flex: 1, justifyContent: 'flex-end' },
     modalContent: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 100, maxHeight: '92%' },
+    manualModalContent: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 32, maxHeight: '92%' },
     modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
     modalTitle: { fontSize: 20, fontWeight: 'bold' },
     centerBox: { alignItems: 'center', paddingVertical: 40, gap: 12 },
@@ -747,6 +803,8 @@ function makeStyles(c: any) {
     // Manual entry
     manualLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1, marginBottom: 6 },
     manualInput: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16, marginBottom: 4 },
+    manualTimeRow: { flexDirection: 'row', gap: 10, marginBottom: 14 },
+    manualTimeInput: { flex: 1, textAlign: 'center' },
     manualTypeBtn: { flex: 1, paddingVertical: 12, borderRadius: 10, borderWidth: 1.5, alignItems: 'center' },
   });
 }

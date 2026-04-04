@@ -235,12 +235,12 @@ export default function HomeScreen() {
       });
 
       setShiftModalOpen(false);
-      fetchShift();
+      fetchShift(true);
     } catch (e: any) { Alert.alert('Errore', e.message); }
   };
 
-  const fetchShift = async () => {
-    setLoadingShift(true);
+  const fetchShift = async (silent = false) => {
+    if (!silent) setLoadingShift(true);
     try {
       const { status } = await Calendar.requestCalendarPermissionsAsync();
       if (status !== 'granted') { setLoadingShift(false); return; }
@@ -346,7 +346,7 @@ export default function HomeScreen() {
       });
 
       Alert.alert(saved > 0 ? '✅ Turni Sincronizzati!' : 'Nessun orario trovato', saved > 0 ? `${saved} turni salvati.` : `Date: ${dates.length}, Orari: ${shifts.length}`);
-      if (saved > 0) fetchShift();
+      if (saved > 0) fetchShift(true);
     } catch (e: any) { Alert.alert('Errore Calendario', e.message); }
   };
 
