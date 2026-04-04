@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   ActivityIndicator, Alert, Image, Modal, TextInput,
-  Platform, UIManager, Dimensions
+  Platform, UIManager
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -20,10 +20,7 @@ import {
   replaceShiftsForRange,
 } from '../utils/shiftCalendar';
 
-const PRIMARY = '#2563EB';
-const DARK_BLUE = '#1E3A8A';
 const GOLD = '#F59E0B';
-const BG = '#F3F4F6';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -194,7 +191,7 @@ export default function HomeScreen() {
     };
     loadPinned();
 
-    const interval = setInterval(loadPinned, 2000);
+    const interval = setInterval(loadPinned, 30_000);
     return () => clearInterval(interval);
   }, []);
 
@@ -256,7 +253,7 @@ export default function HomeScreen() {
       const events = await Calendar.getEventsAsync([cal.id], d, dEnd);
       const shift = events.find(e => e.title.includes('Lavoro') || e.title.includes('Riposo'));
       setShiftEvent(shift || null);
-    } catch (_) {} finally { setLoadingShift(false); }
+    } catch (e) { console.error('[shift]', e); } finally { setLoadingShift(false); }
   };
 
   const fetchWeather = async () => {
@@ -270,7 +267,7 @@ export default function HomeScreen() {
       const temp = Math.round(json.current?.temperature_2m ?? 0);
       const w = weatherMap[code] || { text: 'Sereno', icon: '☀️' };
       setWeather({ ...w, temp });
-    } catch (_) {}
+    } catch (e) { console.warn('[weather]', e); }
   };
 
   const pickImage = async () => {
@@ -283,18 +280,26 @@ export default function HomeScreen() {
         setImageList(result.assets.map(a => a.uri));
         setProcessing(true); setOcrText('');
         const base64List = result.assets.map(a => `data:image/jpeg;base64,${a.base64}`);
-        const base64Json = JSON.stringify(base64List).replace(/'/g, "\\'");
-        webViewRef.current?.injectJavaScript(`if(window.runTesseract){window.runTesseract('${base64Json}');}else{window.ReactNativeWebView.postMessage(JSON.stringify({success:false,error:'OCR non pronto'}));}true;`);
+        const base64Json = JSON.stringify(base64List);
+        // Use postMessage pattern to avoid script-injection risks with injectJavaScript
+        webViewRef.current?.injectJavaScript(`
+          if(window.runTesseract){
+            window.runTesseract(${JSON.stringify(base64Json)});
+          } else {
+            window.ReactNativeWebView.postMessage(JSON.stringify({success:false,error:'OCR non pronto'}));
+          }
+          true;
+        `);
       }
-    } catch (_) { setProcessing(false); }
+    } catch (e) { console.error('[imagePicker]', e); setProcessing(false); }
   };
 
   const handleWebViewMessage = (event: any) => {
     try {
       const r = JSON.parse(event.nativeEvent.data);
       if (r.success) setOcrText(r.text);
-      else Alert.alert('Errore OCR', r.error);
-    } catch (_) {} finally { setProcessing(false); }
+      else Alert.alert('Errore riconoscimento testo', r.error || 'Prova con un\'immagine più nitida o meglio illuminata.');
+    } catch (e) { console.error('[ocrMessage]', e); } finally { setProcessing(false); }
   };
 
   const parseAndSave = async () => {

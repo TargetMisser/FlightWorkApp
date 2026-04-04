@@ -7,7 +7,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAppTheme, ThemeMode } from '../context/ThemeContext';
 import { useAirport } from '../context/AirportContext';
-import * as Notifications from 'expo-notifications';
 import {
   AIRPORT_PRESETS,
   formatAirportSettingLabel,
@@ -208,7 +207,7 @@ export default function SettingsScreen() {
         </View>
         <View>
           <Text style={[styles.bannerTitle, { color: colors.primaryDark }]}>Impostazioni</Text>
-          <Text style={[styles.bannerSub, { color: colors.textMuted }]}>AeroStaff Pro · v1.0</Text>
+          <Text style={[styles.bannerSub, { color: colors.textMuted }]}>AeroStaff Pro · v1.1.0</Text>
         </View>
       </View>
 
@@ -269,24 +268,8 @@ export default function SettingsScreen() {
       {/* ── Info app ── */}
       <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>APP</Text>
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }, colors.isDark && { elevation: 0, shadowOpacity: 0, borderWidth: 1 }]}>
-        <SettingRow icon="info-outline"    label="Versione"         sublabel="1.0.0"                    type="info" />
+        <SettingRow icon="info-outline"    label="Versione"         sublabel="1.1.0"                    type="info" />
       </View>
-
-      {/* ── TEST NOTIFICA (rimuovere dopo test) ── */}
-      <TouchableOpacity
-        style={[styles.testBtn, { backgroundColor: colors.primary }]}
-        onPress={async () => {
-          const { status } = await Notifications.requestPermissionsAsync();
-          if (status !== 'granted') { Alert.alert('Permesso negato'); return; }
-          await Notifications.scheduleNotificationAsync({
-            content: { title: '✈️ Test AeroStaff', body: 'Notifica funzionante!', sound: true },
-            trigger: null,
-          });
-          Alert.alert('Inviata!', 'Controlla la barra delle notifiche');
-        }}
-      >
-        <Text style={styles.testBtnTxt}>🔔 Invia notifica test</Text>
-      </TouchableOpacity>
 
         <View style={{ height: 32 }} />
       </ScrollView>
@@ -455,6 +438,4 @@ const styles = StyleSheet.create({
   modalActions: { flexDirection: 'row', gap: 10 },
   modalBtn: { flex: 1, borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
   modalBtnTxt: { fontSize: 14, fontWeight: '700' },
-  testBtn: { borderRadius: 14, padding: 16, alignItems: 'center', marginBottom: 12 },
-  testBtnTxt: { fontSize: 15, fontWeight: '700', color: '#fff' },
 });

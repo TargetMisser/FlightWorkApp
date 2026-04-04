@@ -48,7 +48,8 @@ const weatherMap: Record<number, { text: string; icon: string }> = {
   80: { text: 'Rovesci', icon: '🌧️' },
 };
 
-function getMonday(d: Date) {
+function getMonday(d: Date | null | undefined): Date {
+  if (!d || isNaN(d.getTime())) return getMonday(new Date());
   const date = new Date(d);
   const day = date.getDay();
   date.setDate(date.getDate() - day + (day === 0 ? -6 : 1));
@@ -218,7 +219,7 @@ export default function CalendarScreen() {
           dict[date] = { weatherText: m.text, weatherIcon: m.icon, flightCount: 0 };
         });
       }
-    } catch (_) {}
+    } catch (e) { console.warn('[calWeather]', e); }
     try {
       const { arrivals, departures } = await fetchAirportScheduleRaw(airportCode);
       const allF = [...arrivals, ...departures];
@@ -234,7 +235,7 @@ export default function CalendarScreen() {
           if (dict[iso]) dict[iso].flightCount = cnt; else dict[iso] = { weatherText: 'N/A', weatherIcon: '❓', flightCount: cnt };
         }
       });
-    } catch (_) {}
+    } catch (e) { console.warn('[calFlights]', e); }
     setDailyStats(dict);
   };
 

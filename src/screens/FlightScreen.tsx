@@ -34,12 +34,8 @@ try { Notifications.setNotificationHandler({
     shouldShowBanner: true,
     shouldShowList: true,
   }),
-}); } catch {}
+}); } catch (e) { console.warn('[notifHandler]', e); }
 
-const PRIMARY = '#2563EB';
-const DARK_BLUE = '#1E3A8A';
-const GOLD = '#F59E0B';
-const BG = '#F3F4F6';
 
 function LogoPill({ iataCode, airlineName, color }: { iataCode: string; airlineName: string; color: string }) {
   const [err, setErr] = useState(false);
@@ -400,7 +396,7 @@ export default function FlightScreen() {
         await cancelPreviousNotifications();
         setScheduledCount(0);
       }
-    } catch (e) { console.error(e); } finally { setLoading(false); setRefreshing(false); }
+    } catch (e) { console.error('[fetchAll]', e); } finally { setLoading(false); setRefreshing(false); }
   }, [airportCode, airportLoading]);
 
   useEffect(() => {
@@ -465,7 +461,7 @@ export default function FlightScreen() {
       const tab = activeTab;
       await AsyncStorage.setItem(PINNED_FLIGHT_KEY, JSON.stringify({ ...item, _pinTab: tab, _pinnedAt: Date.now() }));
       setPinnedFlightId(id);
-      try { await schedulePinnedNotifications(item, tab); } catch {}
+      try { await schedulePinnedNotifications(item, tab); } catch (e) { console.warn('[pinnedNotif]', e); }
       // Send to watch
       if (WearDataSender) {
         const payload = JSON.stringify({
@@ -492,10 +488,10 @@ export default function FlightScreen() {
   const unpinFlight = useCallback(async () => {
     try {
       await AsyncStorage.removeItem(PINNED_FLIGHT_KEY);
-      try { await cancelPinnedNotifications(); } catch {}
+      try { await cancelPinnedNotifications(); } catch (e) { console.warn('[cancelPinNotif]', e); }
       setPinnedFlightId(null);
       if (WearDataSender) WearDataSender.clearPinnedFlight();
-    } catch {}
+    } catch (e) { console.error('[unpin]', e); }
   }, []);
 
   const userShift = activeDay === 'today' ? shifts.today : shifts.tomorrow;
@@ -674,6 +670,9 @@ export default function FlightScreen() {
           style={[s.notifBtn, notifsEnabled && s.notifBtnActive]}
           onPress={toggleNotifications}
           activeOpacity={0.8}
+          accessible
+          accessibilityLabel={notifsEnabled ? 'Disattiva notifiche voli' : 'Attiva notifiche voli'}
+          accessibilityRole="button"
         >
           <MaterialIcons
             name={notifsEnabled ? 'notifications-active' : 'notifications-none'}
