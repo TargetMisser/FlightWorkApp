@@ -493,13 +493,13 @@ export default function CalendarScreen() {
 
       {/* ─── Manual Entry Modal ─── */}
       <Modal visible={manualModalOpen} transparent animationType="slide" statusBarTranslucent onRequestClose={() => setManualModalOpen(false)}>
-        <KeyboardAvoidingView
-          style={s.modalOverlay}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 24 : 0}
-        >
+<KeyboardAvoidingView
+  style={s.modalOverlay}
+  behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+  keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+  >
           <TouchableOpacity style={s.modalBg} activeOpacity={1} onPress={Keyboard.dismiss} />
-          <View style={s.modalScrollContent}>
+          <ScrollView contentContainerStyle={s.modalScrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
             <View style={[s.manualModalContent, { backgroundColor: colors.isDark || colors.card === 'transparent' ? '#1E293B' : '#FFFFFF' }]}>
             <View style={s.modalHeader}>
               <Text style={[s.modalTitle, { color: colors.text }]}>Aggiungi Turno</Text>
@@ -603,7 +603,7 @@ export default function CalendarScreen() {
               <Text style={s.primaryBtnText}>Salva Turno</Text>
             </TouchableOpacity>
             </View>
-          </View>
+          </ScrollView>
         </KeyboardAvoidingView>
       </Modal>
 

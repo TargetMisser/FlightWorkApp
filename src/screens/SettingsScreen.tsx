@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, ActivityIndicator,
-  Alert, Modal, KeyboardAvoidingView, Platform, TextInput,
+  Alert, Modal, KeyboardAvoidingView, Platform, TextInput, Keyboard, TouchableWithoutFeedback,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -282,10 +282,19 @@ export default function SettingsScreen() {
       >
         <KeyboardAvoidingView
           style={styles.modalOverlay}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
         >
-          <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={closeAirportModal} />
-          <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <View style={StyleSheet.absoluteFill} />
+          </TouchableWithoutFeedback>
+          <ScrollView
+            contentContainerStyle={styles.modalScrollContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+          <TouchableOpacity activeOpacity={1} onPress={closeAirportModal}>
+          <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]} onStartShouldSetResponder={() => true}>
             <Text style={[styles.modalTitle, { color: colors.primaryDark }]}>Cambia aeroporto</Text>
             <Text style={[styles.modalCopy, { color: colors.textMuted }]}>
               Inserisci un codice IATA di 3 lettere. Il cambio aggiorna voli, timeline, widget e notifiche.
@@ -348,6 +357,8 @@ export default function SettingsScreen() {
               </TouchableOpacity>
             </View>
           </View>
+          </TouchableOpacity>
+          </ScrollView>
         </KeyboardAvoidingView>
       </Modal>
     </>
@@ -403,7 +414,8 @@ const styles = StyleSheet.create({
   rowText: { flex: 1 },
   rowLabel:{ fontSize: 14, fontWeight: '600' },
   rowSub:  { fontSize: 12, marginTop: 1 },
-  modalOverlay: { flex: 1, justifyContent: 'center', padding: 20, backgroundColor: 'rgba(15,23,42,0.48)' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(15,23,42,0.48)' },
+  modalScrollContent: { flexGrow: 1, justifyContent: 'center', padding: 20 },
   modalCard: {
     borderRadius: 20,
     padding: 20,

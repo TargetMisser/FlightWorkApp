@@ -124,7 +124,7 @@ function EditModal({ visible, contact, onSave, onClose }: EditModalProps) {
       <KeyboardAvoidingView
         style={modalStyles.overlay}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 24 : 0}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
         <ScrollView contentContainerStyle={modalStyles.scrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <View style={modalStyles.sheet}>

@@ -96,7 +96,7 @@ export default function NotepadScreen() {
     <KeyboardAvoidingView
       style={s.root}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 24 : 0}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 20}
     >
       {/* Toolbar */}
       <View style={s.toolbar}>
