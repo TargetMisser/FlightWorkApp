@@ -69,13 +69,22 @@ jobs:
           ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
           GRADLE_OPTS: "-Xmx4g -XX:MaxMetaspaceSize=512m"
 
-      - name: Find APK
-        if: always()
-        run: find android -name "*.apk" -type f 2>/dev/null || echo "No APK found"
+      - name: Find and rename APK
+        run: |
+          APK=$(find android/app/build/outputs/apk -name "*.apk" -type f | head -1)
+          echo "Found APK: $APK"
+          if [ -n "$APK" ]; then
+            mkdir -p artifacts
+            cp "$APK" "artifacts/AeroStaffPro-debug.apk"
+            ls -lh artifacts/
+          else
+            echo "ERROR: No APK found"
+            find android/app/build -type f | head -20
+            exit 1
+          fi
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: AeroStaffPro-debug
-          path: android/app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
+          path: artifacts/AeroStaffPro-debug.apk
