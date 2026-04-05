@@ -1,0 +1,66 @@
+name: Build APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - claude/build-aerostaffpro-apk-R00yT
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install NDK
+        run: |
+          echo "y" | sdkmanager "ndk;27.1.12297006" "build-tools;36.0.0" "platforms;android-36"
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Fix expo-modules-core shouldIncludeCompose bug
+        run: |
+          # The buildscript.ext properties are not accessible in the android {} block
+          # in newer Gradle versions. Re-declare at project level after the buildscript block.
+          sed -i "s|apply plugin: 'com.android.library'|// Fix: re-evaluate at project level so android {} block can access it\ndef _coreFeatures = project.findProperty(\"coreFeatures\") ?: []\next.shouldIncludeCompose = _coreFeatures.contains(\"compose\")\n\napply plugin: 'com.android.library'|" \
+            node_modules/expo-modules-core/android/build.gradle
+          # Also change 'compose shouldIncludeCompose' to 'compose = shouldIncludeCompose' (property setter syntax)
+          sed -i 's/^    compose shouldIncludeCompose$/    compose = shouldIncludeCompose/' \
+            node_modules/expo-modules-core/android/build.gradle
+
+      - name: Build debug APK
+        run: |
+          cd android
+          export ANDROID_HOME=$ANDROID_SDK_ROOT
+          ./gradlew :app:assembleDebug --no-daemon --stacktrace 2>&1
+        env:
+          ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
+          GRADLE_OPTS: -Xmx4g -XX:MaxMetaspaceSize=512m
+
+      - name: Find APK
+        run: find android -name "*.apk" -type f
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AeroStaffPro-debug
+          path: android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
