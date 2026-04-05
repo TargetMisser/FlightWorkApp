@@ -29,34 +29,49 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install NDK
+      - name: Install SDK components
         run: |
-          echo "y" | sdkmanager "ndk;27.1.12297006" "build-tools;36.0.0" "platforms;android-36"
+          echo "y" | sdkmanager \
+            "ndk;27.1.12297006" \
+            "build-tools;36.0.0" \
+            "platforms;android-36" \
+            "cmake;3.22.1"
 
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
 
-      - name: Fix expo-modules-core shouldIncludeCompose bug
+      - name: Fix expo-modules-core Gradle bugs
         run: |
-          # The buildscript.ext properties are not accessible in the android {} block
-          # in newer Gradle versions. Re-declare at project level after the buildscript block.
-          sed -i "s|apply plugin: 'com.android.library'|// Fix: re-evaluate at project level so android {} block can access it\ndef _coreFeatures = project.findProperty(\"coreFeatures\") ?: []\next.shouldIncludeCompose = _coreFeatures.contains(\"compose\")\n\napply plugin: 'com.android.library'|" \
-            node_modules/expo-modules-core/android/build.gradle
-          # Also change 'compose shouldIncludeCompose' to 'compose = shouldIncludeCompose' (property setter syntax)
-          sed -i 's/^    compose shouldIncludeCompose$/    compose = shouldIncludeCompose/' \
-            node_modules/expo-modules-core/android/build.gradle
+          FILE="node_modules/expo-modules-core/android/build.gradle"
+
+          # 1. Re-declare shouldIncludeCompose at project level (buildscript.ext not
+          #    accessible in android {} block with newer Gradle/AGP versions)
+          sed -i "s|apply plugin: 'com.android.library'|// Fix: project-level re-declaration\ndef _coreFeatures = project.findProperty(\"coreFeatures\") ?: []\next.shouldIncludeCompose = _coreFeatures.contains(\"compose\")\n\napply plugin: 'com.android.library'|" \
+            "$FILE"
+
+          # 2. Use property assignment syntax instead of method call
+          #    'compose shouldIncludeCompose' -> 'compose = shouldIncludeCompose'
+          sed -i 's/^\s*compose shouldIncludeCompose\s*$/    compose = shouldIncludeCompose/' \
+            "$FILE"
+
+          echo "=== Patched lines around the fix ==="
+          grep -n "shouldIncludeCompose\|apply plugin" "$FILE" | head -20
 
       - name: Build debug APK
         run: |
           cd android
-          export ANDROID_HOME=$ANDROID_SDK_ROOT
-          ./gradlew :app:assembleDebug --no-daemon --stacktrace 2>&1
+          ./gradlew :app:assembleDebug \
+            --no-daemon \
+            --info \
+            -Pandroid.overridePathCheck=true \
+            2>&1 | tail -200
         env:
-          ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
-          GRADLE_OPTS: -Xmx4g -XX:MaxMetaspaceSize=512m
+          ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
+          GRADLE_OPTS: "-Xmx4g -XX:MaxMetaspaceSize=512m"
 
       - name: Find APK
-        run: find android -name "*.apk" -type f
+        if: always()
+        run: find android -name "*.apk" -type f 2>/dev/null || echo "No APK found"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
