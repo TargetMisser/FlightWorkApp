@@ -1,0 +1,90 @@
+name: Build APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - claude/build-aerostaffpro-apk-R00yT
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install SDK components
+        run: |
+          echo "y" | sdkmanager \
+            "ndk;27.1.12297006" \
+            "build-tools;36.0.0" \
+            "platforms;android-36" \
+            "cmake;3.22.1"
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Fix expo-modules-core Gradle bugs
+        run: |
+          FILE="node_modules/expo-modules-core/android/build.gradle"
+
+          # 1. Re-declare shouldIncludeCompose at project level (buildscript.ext not
+          #    accessible in android {} block with newer Gradle/AGP versions)
+          sed -i "s|apply plugin: 'com.android.library'|// Fix: project-level re-declaration\ndef _coreFeatures = project.findProperty(\"coreFeatures\") ?: []\next.shouldIncludeCompose = _coreFeatures.contains(\"compose\")\n\napply plugin: 'com.android.library'|" \
+            "$FILE"
+
+          # 2. Use property assignment syntax instead of method call
+          #    'compose shouldIncludeCompose' -> 'compose = shouldIncludeCompose'
+          sed -i 's/^\s*compose shouldIncludeCompose\s*$/    compose = shouldIncludeCompose/' \
+            "$FILE"
+
+          echo "=== Patched lines around the fix ==="
+          grep -n "shouldIncludeCompose\|apply plugin" "$FILE" | head -20
+
+      - name: Build debug APK
+        run: |
+          cd android
+          ./gradlew :app:assembleDebug \
+            --no-daemon \
+            --info \
+            -Pandroid.overridePathCheck=true \
+            2>&1 | tail -200
+        env:
+          ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
+          GRADLE_OPTS: "-Xmx4g -XX:MaxMetaspaceSize=512m"
+
+      - name: Find and rename APK
+        run: |
+          APK=$(find android/app/build/outputs/apk -name "*.apk" -type f | head -1)
+          echo "Found APK: $APK"
+          if [ -n "$APK" ]; then
+            mkdir -p artifacts
+            cp "$APK" "artifacts/AeroStaffPro-debug.apk"
+            ls -lh artifacts/
+          else
+            echo "ERROR: No APK found"
+            find android/app/build -type f | head -20
+            exit 1
+          fi
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AeroStaffPro-debug
+          path: artifacts/AeroStaffPro-debug.apk
