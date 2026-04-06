@@ -15,6 +15,7 @@ import ShiftTimeline from '../components/ShiftTimeline';
 
 import { getAirlineOps, getAirlineColor } from '../utils/airlineOps';
 import {
+import { useLanguage } from '../context/LanguageContext';
   getWritableCalendarId,
   replaceShiftForDate,
   replaceShiftsForRange,
@@ -27,7 +28,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 }
 
 const PINNED_FLIGHT_KEY = 'pinned_flight_v1';
-const HOME_SHIFT_TITLES = { work: 'Turno Lavoro ✈️', rest: '🌴 Riposo' };
+const HOME_SHIFT_TITLES = { work: t('homeShiftWork'), rest: '🌴 Riposo' };
 const HOME_REST_TIMING = { startHour: 12, startMinute: 0, endHour: 14, endMinute: 0, allDay: true };
 
 const weatherMap: Record<number, { text: string; icon: string }> = {
@@ -37,7 +38,7 @@ const weatherMap: Record<number, { text: string; icon: string }> = {
   63: { text: 'Pioggia', icon: '🌧️' }, 80: { text: 'Rovesci', icon: '🌧️' },
 };
 
-const MONTHS_IT = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+// months comes from useLanguage() context
 
 const engineHtml = `<!DOCTYPE html><html lang="it"><head>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script></head>
@@ -72,11 +73,11 @@ function PinnedFlightCard({ item, colors }: { item: any; colors: any }) {
   const ts = tab === 'arrivals'
     ? item.flight?.time?.scheduled?.arrival
     : item.flight?.time?.scheduled?.departure;
-  const depTime = ts ? new Date(ts * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : 'N/A';
+  const depTime = ts ? new Date(ts * 1000).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }) : 'N/A';
 
   const ops = getAirlineOps(airline);
   const fmt = (offsetMin: number) =>
-    ts ? new Date((ts - offsetMin * 60) * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : '';
+    ts ? new Date((ts - offsetMin * 60) * 1000).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }) : '';
 
   return (
     <View style={{
@@ -98,7 +99,7 @@ function PinnedFlightCard({ item, colors }: { item: any; colors: any }) {
           </View>
           <View>
             <Text style={{ color: '#fff', fontWeight: '600', fontSize: 12 }}>{airline}</Text>
-            <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10 }}>{tab === 'arrivals' ? 'Arrivo' : 'Partenza'}</Text>
+            <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10 }}>{tab === 'arrivals' ? t('homeArrival') : t('homeDeparture')}</Text>
           </View>
         </View>
         <View style={{ alignItems: 'flex-end' }}>
@@ -138,7 +139,7 @@ function PinnedFlightCard({ item, colors }: { item: any; colors: any }) {
           </View>
           <View style={{ backgroundColor: '#F59E0B22', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
             <MaterialIcons name="push-pin" size={12} color="#F59E0B" />
-            <Text style={{ fontSize: 10, fontWeight: '700', color: '#F59E0B' }}>Pinnato</Text>
+            <Text style={{ fontSize: 10, fontWeight: '700', color: '#F59E0B' }}>{t('homePinned')}</Text>
           </View>
         </View>
       </View>
@@ -148,6 +149,7 @@ function PinnedFlightCard({ item, colors }: { item: any; colors: any }) {
 
 export default function HomeScreen() {
   const { colors } = useAppTheme();
+  const { t, months, locale, weatherMap } = useLanguage();
   const today = new Date();
   const [shiftEvent, setShiftEvent] = useState<any>(null);
   const [weather, setWeather] = useState<{ text: string; icon: string; temp: number } | null>(null);
@@ -213,10 +215,10 @@ export default function HomeScreen() {
 
   const saveManualShift = async () => {
     const { status } = await Calendar.requestCalendarPermissionsAsync();
-    if (status !== 'granted') { Alert.alert('Permesso negato', 'Autorizza il calendario.'); return; }
+    if (status !== 'granted') { Alert.alert(t('homePermDenied'), t('homeCalendarAuth')); return; }
     try {
       const calendarId = await getWritableCalendarId();
-      if (!calendarId) { Alert.alert('Errore', 'Nessun calendario scrivibile.'); return; }
+      if (!calendarId) { Alert.alert('Errore', t('homeNoWritableCalendar')); return; }
 
       const todayDate = new Date();
       const y = todayDate.getFullYear();
@@ -345,9 +347,9 @@ export default function HomeScreen() {
         restTiming: HOME_REST_TIMING,
       });
 
-      Alert.alert(saved > 0 ? '✅ Turni Sincronizzati!' : 'Nessun orario trovato', saved > 0 ? `${saved} turni salvati.` : `Date: ${dates.length}, Orari: ${shifts.length}`);
+      Alert.alert(saved > 0 ? t('homeShiftSynced') : t('homeNoSchedule'), saved > 0 ? `${saved} turni salvati.` : `Date: ${dates.length}, Orari: ${shifts.length}`);
       if (saved > 0) fetchShift(true);
-    } catch (e: any) { Alert.alert('Errore Calendario', e.message); }
+    } catch (e: any) { Alert.alert(t('homeCalErr'), e.message); }
   };
 
   const isRest = shiftEvent?.title?.includes('Riposo');
@@ -368,16 +370,16 @@ export default function HomeScreen() {
             <>
               <Text style={s.weatherEmoji}>{weather.icon}</Text>
               <Text style={s.weatherTemp}>{weather.temp}°</Text>
-              <Text style={s.weatherDesc}>Meteo locale • {weather.text}</Text>
+              <Text style={s.weatherDesc}>{t('homeWeatherLocal')} • {weather.text}</Text>
             </>
           ) : (
             <ActivityIndicator color={colors.primary} />
           )}
         </View>
         <View style={s.dateCard}>
-          <Text style={s.dateToday}>OGGI</Text>
+          <Text style={s.dateToday}>{t('homeToday')}</Text>
           <Text style={s.dateNum}>{today.getDate()}</Text>
-          <Text style={s.dateMonth}>{MONTHS_IT[today.getMonth()]}</Text>
+          <Text style={s.dateMonth}>{months[today.getMonth()]}</Text>
         </View>
       </View>
 
@@ -385,7 +387,7 @@ export default function HomeScreen() {
       {pinnedFlight && <PinnedFlightCard item={pinnedFlight} colors={colors} />}
 
       {/* Turno Attuale */}
-      <Text style={s.sectionTitle}>Turno Attuale</Text>
+      <Text style={s.sectionTitle}>{t('homeCurrentShift')}</Text>
 
       <View style={s.shiftCard}>
         {loadingShift ? (
@@ -395,21 +397,21 @@ export default function HomeScreen() {
             <View style={s.shiftStrip} />
             <View style={{ flex: 1 }}>
               <View style={s.shiftBadgeRow}>
-                <View style={s.inProgressBadge}><Text style={s.inProgressText}>IN CORSO</Text></View>
+                <View style={s.inProgressBadge}><Text style={s.inProgressText}>{t('homeInProgress')}</Text></View>
               </View>
-              <Text style={s.shiftTitle}>Turno Lavoro ✈️</Text>
+              <Text style={s.shiftTitle}>{t('homeShiftWork')}</Text>
               <Text style={s.shiftTime}>
-                {new Date(shiftEvent.startDate).toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})} – {new Date(shiftEvent.endDate).toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})}
+                {new Date(shiftEvent.startDate).toLocaleTimeString(locale,{hour:'2-digit',minute:'2-digit'})} – {new Date(shiftEvent.endDate).toLocaleTimeString(locale,{hour:'2-digit',minute:'2-digit'})}
               </Text>
             </View>
           </>
         ) : isRest ? (
           <View style={s.restRow}>
             <Text style={{ fontSize: 28, marginRight: 12 }}>🌴</Text>
-            <Text style={s.restText}>Giorno di Riposo</Text>
+            <Text style={s.restText}>{t('homeRestDay')}</Text>
           </View>
         ) : (
-          <Text style={s.emptyShift}>Nessun turno per oggi</Text>
+          <Text style={s.emptyShift}>{t('homeNoShift')}</Text>
         )}
       </View>
 
