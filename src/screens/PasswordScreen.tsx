@@ -6,7 +6,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useAppTheme } from '../context/ThemeContext';
+import { useAppTheme, ThemeColors } from '../context/ThemeContext';
 
 const PASSWORDS_KEY = 'aerostaff_passwords_v1';
 const PIN_KEY       = 'aerostaff_pin_v1';
@@ -380,7 +380,7 @@ function makeRowStyles(c: any) {
   });
 }
 
-function makeStyles(c: any) {
+function makeStyles(c: ThemeColors) {
   return StyleSheet.create({
     root:         { flex: 1, backgroundColor: c.bg },
     toolbar:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: c.card, borderBottomWidth: 1, borderBottomColor: c.border },

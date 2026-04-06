@@ -10,7 +10,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { WebView } from 'react-native-webview';
 import { MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useAppTheme } from '../context/ThemeContext';
+import { useAppTheme, ThemeColors } from '../context/ThemeContext';
 import { useAirport } from '../context/AirportContext';
 import { fetchAirportScheduleRaw } from '../utils/fr24api';
 import {
@@ -730,7 +730,7 @@ export default function CalendarScreen() {
   );
 }
 
-function makeStyles(c: any) {
+function makeStyles(c: ThemeColors) {
   return StyleSheet.create({
     pageHeader: { backgroundColor: c.card, paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: c.border },
     pageTitle: { fontSize: 22, fontWeight: 'bold', color: c.primaryDark },

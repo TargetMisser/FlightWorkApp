@@ -5,7 +5,7 @@ import {
   LayoutAnimation, Platform, UIManager, TextInput, Modal, Alert, KeyboardAvoidingView,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useAppTheme } from '../context/ThemeContext';
+import { useAppTheme, ThemeColors } from '../context/ThemeContext';
 
 const STORAGE_KEY = 'manuals_data_v2';
 
@@ -583,7 +583,7 @@ const modalStyles = StyleSheet.create({
 });
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
-function makeStyles(c: any) {
+function makeStyles(c: ThemeColors) {
   return StyleSheet.create({
     root: { flex: 1, backgroundColor: c.bg },
     header: {
