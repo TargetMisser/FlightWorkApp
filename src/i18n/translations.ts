@@ -26,7 +26,7 @@ const it = {
   notifReminder: 'Promemoria turno', notifReminderSub: 'Prossimamente',
   sectionApp: 'APP', appVersion: 'Versione', sectionLanguage: 'LINGUA',
   airportModalTitle: 'Cambia aeroporto',
-  airportModalCopy: 'Inserisci un codice IATA di 3 lettere...',
+  airportModalCopy: 'Inserisci un codice IATA di 3 lettere. Il cambio aggiorna voli, timeline e notifiche.',
   airportModalLabel: 'Codice aeroporto', airportModalQuickPick: 'Scelta rapida',
   airportModalSave: 'Salva',
   airportAlertInvalidTitle: 'Codice non valido',
@@ -135,7 +135,7 @@ const it = {
   pinDisableBtn: 'Disattiva', pinErrMsg: 'Impossibile impostare il PIN. Riprova.',
   pinVerifyErr: 'Impossibile verificare il PIN. Riprova.',
   pinAccessEnable: 'Attiva protezione PIN', pinAccessDisable: 'Disattiva protezione PIN',
-} as const;
+};
 
 const en: typeof it = {
   // Navigation
@@ -163,7 +163,7 @@ const en: typeof it = {
   notifReminder: 'Shift reminder', notifReminderSub: 'Coming soon',
   sectionApp: 'APP', appVersion: 'Version', sectionLanguage: 'LANGUAGE',
   airportModalTitle: 'Change airport',
-  airportModalCopy: 'Enter a 3-letter IATA code...',
+  airportModalCopy: 'Enter a 3-letter IATA code. This updates flights, timeline and notifications.',
   airportModalLabel: 'Airport code', airportModalQuickPick: 'Quick pick',
   airportModalSave: 'Save',
   airportAlertInvalidTitle: 'Invalid code',
