@@ -17,6 +17,7 @@ import { requestWidgetUpdate } from 'react-native-android-widget';
 import { WIDGET_CACHE_KEY } from '../widgets/widgetTaskHandler';
 import type { WidgetData, WidgetFlight } from '../widgets/widgetTaskHandler';
 import { ShiftWidget } from '../widgets/ShiftWidget';
+import { useLanguage } from '../context/LanguageContext';
 
 const WearDataSender = Platform.OS === 'android' ? NativeModules.WearDataSender : null;
 
@@ -126,7 +127,7 @@ async function scheduleShiftNotifications(
     const origin       = item.flight?.airport?.origin?.name
                       || item.flight?.airport?.origin?.code?.iata
                       || 'N/A';
-    const arrivalTime  = new Date(ts * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+    const arrivalTime  = new Date(ts * 1000).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
 
     const id = await Notifications.scheduleNotificationAsync({
       content: {
@@ -143,7 +144,7 @@ async function scheduleShiftNotifications(
   // Notifica fine turno
   const secondsUntilEnd = shiftEnd - now;
   if (secondsUntilEnd > 0) {
-    const endTime = new Date(shiftEnd * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+    const endTime = new Date(shiftEnd * 1000).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
     const endId = await Notifications.scheduleNotificationAsync({
       content: {
         title: '🏁 Turno terminato',
@@ -180,7 +181,7 @@ async function schedulePinnedNotifications(item: any, tab: 'arrivals' | 'departu
     const ts = item.flight?.time?.scheduled?.arrival;
     if (!ts) return;
     const origin = item.flight?.airport?.origin?.name || item.flight?.airport?.origin?.code?.iata || 'N/A';
-    const arrTime = new Date(ts * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+    const arrTime = new Date(ts * 1000).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
     const secsUntil = ts - 15 * 60 - now;
     if (secsUntil > 0) {
       const id = await Notifications.scheduleNotificationAsync({
@@ -198,7 +199,7 @@ async function schedulePinnedNotifications(item: any, tab: 'arrivals' | 'departu
     const ts = item.flight?.time?.scheduled?.departure;
     if (!ts) return;
     const dest = item.flight?.airport?.destination?.name || item.flight?.airport?.destination?.code?.iata || 'N/A';
-    const depTime = new Date(ts * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+    const depTime = new Date(ts * 1000).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
     const ops = getAirlineOps(airline);
 
     const phases: Array<{ offset: number; title: string; body: string }> = [
@@ -232,6 +233,7 @@ async function schedulePinnedNotifications(item: any, tab: 'arrivals' | 'departu
 // ─── Screen ────────────────────────────────────────────────────────────────────
 export default function FlightScreen() {
   const { colors } = useAppTheme();
+  const { t, locale } = useLanguage();
   const { airport, airportCode, isLoading: airportLoading } = useAirport();
   const s = useMemo(() => makeStyles(colors), [colors]);
   const [loading, setLoading] = useState(true);
@@ -329,7 +331,7 @@ export default function FlightScreen() {
 
       // ── Push data to widget cache ──
       try {
-        const fmtT = (ts: number) => new Date(ts * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+        const fmtT = (ts: number) => new Date(ts * 1000).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
         const fmtOff = (dep: number, off: number) => fmtT(dep - off * 60);
         const nowHH = fmtT(Date.now() / 1000);
 
@@ -420,7 +422,7 @@ export default function FlightScreen() {
   const toggleNotifications = useCallback(async () => {
     const { status } = await Notifications.requestPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permesso negato', 'Abilita le notifiche nelle impostazioni del telefono per usare questa funzione.');
+      Alert.alert(t('flightNotifPermDenied'), t('flightNotifPermMsg'));
       return;
     }
     const next = !notifsEnabled;
@@ -442,13 +444,13 @@ export default function FlightScreen() {
       const count = await scheduleShiftNotifications(shiftFlights, shifts.today!.end);
       setScheduledCount(count);
       Alert.alert(
-        'Notifiche attivate',
+        t('flightNotifEnabled'),
         count > 0
-          ? `Programmate ${count} notifiche: arrivi voli (15 min prima) + fine turno.`
-          : 'Nessun volo futuro trovato, ma riceverai la notifica di fine turno.',
+          ? `${t('flightNotifMsg1').replace('{count}', String(count))}`
+          : t('flightNotifMsg0'),
       );
     } else {
-      Alert.alert('Nessun turno trovato', 'Non ho trovato un turno "Lavoro" per oggi nel calendario.');
+      Alert.alert(t('flightNoShift'), t('flightNoShiftMsg'));
       setNotifsEnabled(false);
       await AsyncStorage.setItem(NOTIF_ENABLED_KEY, 'false');
     }
@@ -515,7 +517,7 @@ export default function FlightScreen() {
       ? (item.flight?.airport?.origin?.name || item.flight?.airport?.origin?.code?.iata || 'N/A')
       : (item.flight?.airport?.destination?.name || item.flight?.airport?.destination?.code?.iata || 'N/A');
     const ts = activeTab === 'arrivals' ? item.flight?.time?.scheduled?.arrival : item.flight?.time?.scheduled?.departure;
-    const time = ts ? new Date(ts * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : 'N/A';
+    const time = ts ? new Date(ts * 1000).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }) : 'N/A';
     const duringShift = userShift && ts && (() => {
       if (activeTab === 'arrivals') return ts >= userShift.start && ts <= userShift.end;
       // Departures: CI or Gate window overlaps with shift (even 1 min)
@@ -532,9 +534,9 @@ export default function FlightScreen() {
     // ops is null when ts is falsy — fmt is only called when ops is truthy
     const ops = activeTab === 'departures' && ts ? getAirlineOps(airline) : null;
     const fmt = (offsetMin: number) =>
-      ts ? new Date((ts - offsetMin * 60) * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : '';
+      ts ? new Date((ts - offsetMin * 60) * 1000).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }) : '';
     const fmtTs = (t: number) =>
-      new Date(t * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+      new Date(t * 1000).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
 
     // Gate open = inbound aircraft arrival time (if available)
     const reg = item.flight?.aircraft?.registration;
@@ -550,7 +552,7 @@ export default function FlightScreen() {
         onToggle={() => isPinned ? unpinFlight() : pinFlight(item)}
       >
         <View style={[s.card, isPinned && s.cardPinned, { marginBottom: 0 }]}>
-          {isPinned && <View style={s.pinBanner}><Text style={s.pinBannerText}>PINNATO</Text></View>}
+          {isPinned && <View style={s.pinBanner}><Text style={s.pinBannerText}>{t('flightPinned')}</Text></View>}
           {/* Header */}
           <View style={[s.cardHeader, { backgroundColor: color }]}>
             <View style={s.headerLeft}>
@@ -572,14 +574,14 @@ export default function FlightScreen() {
               <View style={s.opsBadge}>
                 <MaterialIcons name="desktop-windows" size={16} color={colors.primary} />
                 <View>
-                  <Text style={s.opsLabel}>Check-in</Text>
+                  <Text style={s.opsLabel}>{t('flightCheckin')}</Text>
                   <Text style={s.opsTime}>{fmt(ops.checkInOpen)} – {fmt(ops.checkInClose)}</Text>
                 </View>
               </View>
               <View style={s.opsBadge}>
                 <MaterialIcons name="meeting-room" size={16} color={colors.primary} />
                 <View>
-                  <Text style={s.opsLabel}>Gate</Text>
+                  <Text style={s.opsLabel}>{t('flightGate')}</Text>
                   <Text style={s.opsTime}>
                     {gateOpenFromInbound ? fmtTs(gateOpenFromInbound) : fmt(ops.gateOpen)} – {fmt(ops.gateClose)}
                   </Text>
@@ -600,12 +602,12 @@ export default function FlightScreen() {
               : delayMin > 20 ? '#EF4444'
               : delayMin > 5 ? '#F59E0B'
               : colors.primary;
-            const landLabel = landed ? 'Atterrato' : 'Stimato';
+            const landLabel = landed ? t('flightLanded') : t('flightEstimated');
 
             // Delay pill
             const delayText = landed ? 'Atterrato'
               : delayMin > 0 ? `+${delayMin} min`
-              : 'In orario';
+              : t('flightOnTime');
             const delayColor = landed ? '#10B981'
               : delayMin > 20 ? '#EF4444'
               : delayMin > 5 ? '#F59E0B'
@@ -616,7 +618,7 @@ export default function FlightScreen() {
                 <View style={s.opsBadge}>
                   <MaterialIcons name="flight-takeoff" size={16} color={departed ? colors.primary : '#6B7280'} />
                   <View>
-                    <Text style={s.opsLabel}>Partito</Text>
+                    <Text style={s.opsLabel}>{t('flightDeparted')}</Text>
                     <Text style={[s.opsTime, !departed && { color: '#6B7280' }]}>
                       {departed ? fmtTs(realDep) : '--:--'}
                     </Text>
@@ -663,7 +665,7 @@ export default function FlightScreen() {
       {/* Page header */}
       <View style={s.pageHeader}>
         <View style={{ flex: 1 }}>
-          <Text style={s.pageTitle}>Voli in tempo reale</Text>
+          <Text style={s.pageTitle}>{t('flightTitle')}</Text>
           <Text style={s.pageSub}>{formatAirportHeader(airport.code)}</Text>
         </View>
         <TouchableOpacity
@@ -693,7 +695,7 @@ export default function FlightScreen() {
         <View style={s.segment}>
           {(['arrivals', 'departures'] as const).map(t => (
             <TouchableOpacity key={t} style={[s.segBtn, activeTab === t && s.segBtnActive]} onPress={() => setActiveTab(t)}>
-              <Text style={[s.segBtnText, activeTab === t && s.segBtnTextActive]}>{t === 'arrivals' ? 'Arrivi' : 'Partenze'}</Text>
+              <Text style={[s.segBtnText, activeTab === t && s.segBtnTextActive]}>{t === 'arrivals' ? t('flightArrivals') : t('flightDepartures')}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -701,7 +703,7 @@ export default function FlightScreen() {
         <View style={s.segment}>
           {(['today', 'tomorrow'] as const).map(d => (
             <TouchableOpacity key={d} style={[s.segBtn, activeDay === d && s.segBtnActive]} onPress={() => setActiveDay(d)}>
-              <Text style={[s.segBtnText, activeDay === d && s.segBtnTextActive]}>{d === 'today' ? 'Oggi' : 'Domani'}</Text>
+              <Text style={[s.segBtnText, activeDay === d && s.segBtnTextActive]}>{d === 'today' ? t('flightToday') : t('flightTomorrow')}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -718,7 +720,7 @@ export default function FlightScreen() {
           renderItem={renderFlight}
           contentContainerStyle={{ padding: 16, paddingBottom: 96 }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchAll(); }} tintColor={colors.primary} />}
-          ListEmptyComponent={<Text style={{ textAlign: 'center', marginTop: 40, color: '#9CA3AF', fontSize: 15 }}>Nessun volo per questo giorno.</Text>}
+          ListEmptyComponent={<Text style={{ textAlign: 'center', marginTop: 40, color: '#9CA3AF', fontSize: 15 }}>{t('flightNoFlights')}</Text>}
           showsVerticalScrollIndicator={false}
         />
       )}
