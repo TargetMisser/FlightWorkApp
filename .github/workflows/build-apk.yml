@@ -65,7 +65,7 @@ jobs:
             "cmake;3.22.1"
 
       - name: Install dependencies
-        run: npm ci --legacy-peer-deps
+        run: npm install --legacy-peer-deps
 
       - name: Fix expo-modules-core Gradle bugs
         run: |
