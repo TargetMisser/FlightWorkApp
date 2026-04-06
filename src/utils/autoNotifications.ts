@@ -1,6 +1,7 @@
 import * as Calendar from 'expo-calendar';
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { SHIFT_TITLE_WORK } from '../constants/shifts';
 import { getAirlineOps } from './airlineOps';
 import { fetchAirportScheduleRaw } from './fr24api';
 
@@ -42,7 +43,7 @@ export async function autoScheduleNotifications(): Promise<number> {
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const endOfDay = new Date(today); endOfDay.setHours(23, 59, 59, 999);
     const events = await Calendar.getEventsAsync([cal.id], today, endOfDay);
-    const shiftEvent = events.find(e => e.title.includes('Lavoro'));
+    const shiftEvent = events.find(e => e.title.includes(SHIFT_TITLE_WORK));
     if (!shiftEvent) return 0;
 
     const shiftStart = new Date(shiftEvent.startDate).getTime() / 1000;

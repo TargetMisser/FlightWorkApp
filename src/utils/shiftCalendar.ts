@@ -33,9 +33,11 @@ type ReplaceShiftsForRangeArgs = {
   restTiming?: RestEventTiming;
 };
 
+import { SHIFT_TITLE_REST, SHIFT_TITLE_WORK } from '../constants/shifts';
+
 const DEFAULT_TITLES: ShiftEventTitles = {
-  work: 'Lavoro',
-  rest: 'Riposo',
+  work: SHIFT_TITLE_WORK,
+  rest: SHIFT_TITLE_REST,
 };
 
 const DEFAULT_REST_TIMING: RestEventTiming = {
@@ -57,7 +59,7 @@ function parseTime(time: string): { hour: number; minute: number } {
 }
 
 function isShiftEventTitle(title?: string | null) {
-  return (title || '').includes('Lavoro') || (title || '').includes('Riposo');
+  return (title || '').includes(SHIFT_TITLE_WORK) || (title || '').includes(SHIFT_TITLE_REST);
 }
 
 async function createShiftEvent(
