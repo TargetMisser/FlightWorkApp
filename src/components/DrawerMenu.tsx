@@ -1,3 +1,4 @@
+import { version } from '../../package.json';
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import {
   Animated, Modal, StyleSheet, Text, TouchableOpacity, View,
@@ -103,7 +104,7 @@ export default function DrawerMenu({ visible, onClose, onSelect }: Props) {
           {/* Divider */}
           <View style={styles.divider} />
 
-          <Text style={styles.version}>AeroStaff Pro · v1.1.0</Text>
+          <Text style={styles.version}>AeroStaff Pro · v{version}</Text>
         </Animated.View>
       </View>
     </Modal>

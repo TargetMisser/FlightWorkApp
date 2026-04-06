@@ -27,6 +27,8 @@ function makeStyles(c: ThemeColors) {
       backgroundColor: c.primary, borderRadius: 10,
       paddingHorizontal: 14, paddingVertical: 8,
     },
+    // Dims the entire save button (background + icon + label) when content is
+    // already saved — intentional: the full-button fade signals an inactive state.
     saveBtnDim: { opacity: 0.55 },
     saveTxt: { color: '#fff', fontWeight: '600', fontSize: 13 },
     statusBar: {
