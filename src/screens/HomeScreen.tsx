@@ -45,11 +45,8 @@ const engineHtml = `<!DOCTYPE html><html lang="it"><head>
 window.runTesseract = async function(base64JsonStr) {
   try {
     const images = JSON.parse(base64JsonStr);
-    let combinedText = '';
-    for (let i = 0; i < images.length; i++) {
-      const ret = await Tesseract.recognize(images[i], 'ita+eng');
-      combinedText += ret.data.text + '\\n\\n';
-    }
+    const results = await Promise.all(images.map(img => Tesseract.recognize(img, 'ita+eng')));
+    const combinedText = results.map(ret => ret.data.text + '\\n\\n').join('');
     window.ReactNativeWebView.postMessage(JSON.stringify({ success: true, text: combinedText }));
   } catch (e) {
     window.ReactNativeWebView.postMessage(JSON.stringify({ success: false, error: e.message || e.toString() }));
