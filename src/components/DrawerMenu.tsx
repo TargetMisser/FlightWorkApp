@@ -8,6 +8,7 @@ import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme, type ThemeColors } from '../context/ThemeContext';
 import AeroStaffLogo from './AeroStaffLogo';
+import { useLanguage } from '../context/LanguageContext';
 
 type DrawerItem = {
   id: string;
@@ -17,11 +18,11 @@ type DrawerItem = {
 };
 
 const ITEMS: DrawerItem[] = [
-  { id: 'Notepad',   icon: 'edit-note',  label: 'Blocco Note',  sublabel: 'Note personali' },
-  { id: 'Phonebook', icon: 'contacts',   label: 'Rubrica',      sublabel: 'Numeri utili' },
-  { id: 'Passwords', icon: 'lock',       label: 'Password',     sublabel: 'Credenziali salvate' },
-  { id: 'Manuals',   icon: 'menu-book',  label: 'Manuali DCS',  sublabel: 'Easyjet, Wizz, Ryanair…' },
-  { id: 'Settings',  icon: 'settings',   label: 'Impostazioni', sublabel: 'Preferenze app' },
+  { id: 'Notepad',   icon: 'edit-note',  label: t('drawerNotepadTitle'),  sublabel: t('drawerNotepadSub') },
+  { id: 'Phonebook', icon: 'contacts',   label: t('drawerPhonebookTitle'),      sublabel: t('drawerPhonebookSub') },
+  { id: 'Passwords', icon: 'lock',       label: t('drawerPasswordTitle'),     sublabel: t('drawerPasswordSub') },
+  { id: 'Manuals',   icon: 'menu-book',  label: t('drawerManualsTitle'),  sublabel: 'Easyjet, Wizz, Ryanair…' },
+  { id: 'Settings',  icon: 'settings',   label: t('drawerSettingsTitle'), sublabel: t('drawerSettingsSub') },
 ];
 
 interface Props {
@@ -34,6 +35,7 @@ const DRAWER_WIDTH = 285;
 
 export default function DrawerMenu({ visible, onClose, onSelect }: Props) {
   const { colors } = useAppTheme();
+  const { t } = useLanguage();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const slideAnim = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
   const fadeAnim  = useRef(new Animated.Value(0)).current;
