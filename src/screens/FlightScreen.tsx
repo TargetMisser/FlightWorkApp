@@ -543,13 +543,15 @@ export default function FlightScreen() {
 
     const flightId = item.flight?.identification?.number?.default || null;
     const isPinned = flightId !== null && flightId === pinnedFlightId;
+    const showShiftIndicator = !!duringShift && !isPinned;
 
     return (
       <SwipeableFlightCard
         isPinned={isPinned}
         onToggle={() => isPinned ? unpinFlight() : pinFlight(item)}
       >
-        <View style={[s.card, isPinned && s.cardPinned, { marginBottom: 0 }]}>
+        <View style={[s.card, isPinned && s.cardPinned, showShiftIndicator && s.cardShift, { marginBottom: 0 }]}>
+          {showShiftIndicator && <View style={s.shiftBanner}><Text style={s.shiftBannerText}>⭐ DURANTE IL TUO TURNO</Text></View>}
           {isPinned && <View style={s.pinBanner}><Text style={s.pinBannerText}>PINNATO</Text></View>}
           {/* Header */}
           <View style={[s.cardHeader, { backgroundColor: color }]}>
