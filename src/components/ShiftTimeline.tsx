@@ -8,6 +8,7 @@ import { useAppTheme } from '../context/ThemeContext';
 import { useAirport } from '../context/AirportContext';
 import { getAirlineOps, getAirlineColor } from '../utils/airlineOps';
 import { fetchAirportScheduleRaw } from '../utils/fr24api';
+import type { FR24Flight } from '../types/flight';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -35,7 +36,7 @@ type Flight = {
   ops: { checkInOpen: number; checkInClose: number; gateOpen: number; gateClose: number };
 };
 
-function parseFlight(item: any): Flight | null {
+function parseFlight(item: FR24Flight): Flight | null {
   const f = item.flight;
   if (!f) return null;
   const ts = f.time?.scheduled?.departure;
