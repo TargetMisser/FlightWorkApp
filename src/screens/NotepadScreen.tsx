@@ -6,6 +6,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../context/ThemeContext';
+import { useLanguage } from '../context/LanguageContext';
 
 const STORAGE_KEY = 'aerostaff_notepad_v1';
 
@@ -50,6 +51,7 @@ function makeStyles(c: ThemeColors) {
 
 export default function NotepadScreen() {
   const { colors } = useAppTheme();
+  const { t } = useLanguage();
   const s = useMemo(() => makeStyles(colors), [colors]);
   const [text, setText] = useState('');
   const [saved, setSaved] = useState(true);
@@ -77,12 +79,12 @@ export default function NotepadScreen() {
 
   const clear = useCallback(() => {
     Alert.alert(
-      'Cancella note',
-      'Sei sicuro di voler cancellare tutte le note?',
+      t('notepadClearTitle'),
+      t('notepadClearMsg'),
       [
         { text: 'Annulla', style: 'cancel' },
         {
-          text: 'Cancella',
+          text: t('notepadClearConfirm'),
           style: 'destructive',
           onPress: () => {
             setText('');
@@ -104,7 +106,7 @@ export default function NotepadScreen() {
       <View style={s.toolbar}>
         <View style={s.titleRow}>
           <MaterialIcons name="edit-note" size={22} color={colors.primary} />
-          <Text style={s.title}>Blocco Note</Text>
+          <Text style={s.title}>{t('notepadTitle')}</Text>
         </View>
         <View style={s.actions}>
           <TouchableOpacity onPress={clear} style={s.iconBtn}>
@@ -115,7 +117,7 @@ export default function NotepadScreen() {
             style={[s.saveBtn, saved && s.saveBtnDim]}
           >
             <MaterialIcons name="save" size={18} color="#fff" />
-            <Text style={s.saveTxt}>{saved ? 'Salvato' : 'Salva'}</Text>
+            <Text style={s.saveTxt}>{saved ? t('notepadSaved') : t('notepadSave')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -124,7 +126,7 @@ export default function NotepadScreen() {
       <View style={s.statusBar}>
         <View style={[s.dot, { backgroundColor: saved ? '#22C55E' : '#F59E0B' }]} />
         <Text style={s.statusTxt}>
-          {saved ? 'Salvato' : 'Modifiche non salvate'}
+          {saved ? 'Salvato' : t('notepadUnsaved')}
         </Text>
         <Text style={s.charCount}>{charCount} caratteri</Text>
       </View>
