@@ -85,19 +85,23 @@ npm run typecheck
 
 ## Build and Releases
 
-APK files are also published in GitHub Releases when available.
+APK files are published in [GitHub Releases](https://github.com/TargetMisser/FlightWorkApp/releases).
 
-Expected assets:
+Latest stable: **v1.3.2**
 
-- `FlightWorkApp-v1.1.0-release.apk`: main Android app
-- `FlightWorkApp-Wear-v1.1.0.apk`: Wear OS companion
+To install:
 
-To install a release:
+1. Open the Releases section and download `FlightWorkApp-vX.X.X.apk`.
+2. Transfer to your Android device and install (enable "Unknown sources" if needed).
+3. For Wear OS, pair the phone app — the watch companion installs automatically.
 
-1. Open the repository Releases section.
-2. Download the APK you need.
-3. Install the APK on your Android device.
-4. For Wear OS, use the watch-specific APK.
+To build locally:
+
+```bash
+cd android
+.\gradlew.bat assembleRelease
+# Output: android/app/build/outputs/apk/release/app-release.apk
+```
 
 ## Branch Structure
 
@@ -121,15 +125,6 @@ git add .
 git commit -m "Describe your change"
 git push
 ```
-
-## GitHub Actions
-
-The repository includes workflows for:
-
-- basic CI
-- snapshot releases on `main`
-
-Note: execution depends on GitHub Actions being available for the account/repository.
 
 ## Notes
 
