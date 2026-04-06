@@ -100,7 +100,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs
 
 async function extract() {
   try {
-    const raw = atob('${base64Data}');
+    const raw = atob(${JSON.stringify(base64Data)});
     const uint8 = new Uint8Array(raw.length);
     for (let i = 0; i < raw.length; i++) uint8[i] = raw.charCodeAt(i);
 
