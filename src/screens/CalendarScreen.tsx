@@ -356,7 +356,7 @@ export default function CalendarScreen() {
   };
 
   const weekDays = getWeekDays(currentWeekStart);
-  const monthLabel = currentWeekStart.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
+  const monthLabel = currentWeekStart.toLocaleDateString(locale, { month: 'long', year: 'numeric' });
   const selectedEvents = eventsData[selectedDay] || [];
   const workEvent = selectedEvents.find(e => e.title.includes('Lavoro'));
   const restEvent = selectedEvents.find(e => e.title.includes('Riposo'));
