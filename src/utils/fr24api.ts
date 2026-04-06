@@ -7,26 +7,27 @@ import {
   normalizeAirportCode,
   type AirportInfo,
 } from './airportSettings';
+import type { FR24Flight } from '../types/flight';
 
 const FETCH_TIMEOUT = 10000; // 10 seconds
 
 export type FR24Schedule = {
-  arrivals: any[];
-  departures: any[];
+  arrivals: FR24Flight[];
+  departures: FR24Flight[];
   airportCode: string;
   airport: AirportInfo;
 };
 
 export type FR24ScheduleRaw = {
-  allArrivals: any[];
-  allDepartures: any[];
-  arrivals: any[];
-  departures: any[];
+  allArrivals: FR24Flight[];
+  allDepartures: FR24Flight[];
+  arrivals: FR24Flight[];
+  departures: FR24Flight[];
   airportCode: string;
   airport: AirportInfo;
 };
 
-function filterAirlines(data: any[]) {
+function filterAirlines(data: FR24Flight[]) {
   return data.filter(item =>
     ALLOWED_AIRLINES.some(key => (item.flight?.airline?.name || '').toLowerCase().includes(key)),
   );

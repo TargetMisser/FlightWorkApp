@@ -12,13 +12,14 @@ import { useAppTheme } from '../context/ThemeContext';
 import { useAirport } from '../context/AirportContext';
 import { getAirlineOps, getAirlineColor } from '../utils/airlineOps';
 import { fetchAirportScheduleRaw } from '../utils/fr24api';
+import type { FR24Flight, PinnedFlightItem } from '../types/flight';
+import * as WearDataSenderModule from '../modules/WearDataSender';
 import { formatAirportHeader } from '../utils/airportSettings';
 import { requestWidgetUpdate } from 'react-native-android-widget';
 import { WIDGET_CACHE_KEY } from '../widgets/widgetTaskHandler';
 import type { WidgetData, WidgetFlight } from '../widgets/widgetTaskHandler';
 import { ShiftWidget } from '../widgets/ShiftWidget';
 
-const WearDataSender = Platform.OS === 'android' ? NativeModules.WearDataSender : null;
 
 const NOTIF_IDS_KEY = 'aerostaff_notif_ids_v1';
 const NOTIF_ENABLED_KEY = 'aerostaff_notif_enabled';
@@ -108,7 +109,7 @@ async function cancelPreviousNotifications() {
 }
 
 async function scheduleShiftNotifications(
-  shiftFlights: any[],
+  shiftFlights: FR24Flight[],
   shiftEnd: number,
 ): Promise<number> {
   await cancelPreviousNotifications();
@@ -168,7 +169,7 @@ async function cancelPinnedNotifications() {
   await AsyncStorage.removeItem(PINNED_NOTIF_IDS_KEY);
 }
 
-async function schedulePinnedNotifications(item: any, tab: 'arrivals' | 'departures'): Promise<void> {
+async function schedulePinnedNotifications(item: PinnedFlightItem, tab: 'arrivals' | 'departures'): Promise<void> {
   await cancelPinnedNotifications();
   const now = Date.now() / 1000;
   const ids: string[] = [];
@@ -238,8 +239,8 @@ export default function FlightScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<'arrivals' | 'departures'>('departures');
   const [activeDay, setActiveDay] = useState<'today' | 'tomorrow'>('today');
-  const [arrivals, setArrivals] = useState<any[]>([]);
-  const [departures, setDepartures] = useState<any[]>([]);
+  const [arrivals, setArrivals] = useState<FR24Flight[]>([]);
+  const [departures, setDepartures] = useState<FR24Flight[]>([]);
   const [shifts, setShifts] = useState<{ today: { start: number; end: number } | null; tomorrow: { start: number; end: number } | null }>({ today: null, tomorrow: null });
   const [notifsEnabled, setNotifsEnabled] = useState(false);
   const [scheduledCount, setScheduledCount] = useState(0);
@@ -454,34 +455,22 @@ export default function FlightScreen() {
     }
   }, [notifsEnabled, shifts, arrivals]);
 
-  const pinFlight = useCallback(async (item: any) => {
+  const pinFlight = useCallback(async (item: FR24Flight) => {
     try {
       const id = item.flight?.identification?.number?.default;
       if (!id) return;
       const tab = activeTab;
-      await AsyncStorage.setItem(PINNED_FLIGHT_KEY, JSON.stringify({ ...item, _pinTab: tab, _pinnedAt: Date.now() }));
+      const pinnedItem: PinnedFlightItem = {
+        ...item,
+        _pinTab: tab,
+        _pinnedAt: Date.now(),
+        _inboundArrival: tab === 'departures' && item.flight?.aircraft?.registration ? inboundArrivals[item.flight.aircraft.registration] : undefined,
+      };
+      await AsyncStorage.setItem(PINNED_FLIGHT_KEY, JSON.stringify(pinnedItem));
       setPinnedFlightId(id);
-      try { await schedulePinnedNotifications(item, tab); } catch (e) { console.warn('[pinnedNotif]', e); }
+      try { await schedulePinnedNotifications(pinnedItem, tab); } catch (e) { console.warn('[pinnedNotif]', e); }
       // Send to watch
-      if (WearDataSender) {
-        const payload = JSON.stringify({
-          flightNumber: item.flight?.identification?.number?.default || '',
-          airline: item.flight?.airline?.name || '',
-          airlineColor: getAirlineColor(item.flight?.airline?.name || ''),
-          iataCode: item.flight?.airline?.code?.iata || '',
-          tab,
-          destination: item.flight?.airport?.destination?.name || item.flight?.airport?.destination?.code?.iata || '',
-          origin: item.flight?.airport?.origin?.name || item.flight?.airport?.origin?.code?.iata || '',
-          scheduledTime: tab === 'departures' ? item.flight?.time?.scheduled?.departure : item.flight?.time?.scheduled?.arrival,
-          estimatedTime: tab === 'departures' ? item.flight?.time?.estimated?.departure : item.flight?.time?.estimated?.arrival,
-          realDeparture: item.flight?.time?.real?.departure || null,
-          realArrival: item.flight?.time?.real?.arrival || null,
-          ops: tab === 'departures' ? getAirlineOps(item.flight?.airline?.name || '') : null,
-          inboundArrival: tab === 'departures' && item.flight?.aircraft?.registration ? inboundArrivals[item.flight.aircraft.registration] || null : null,
-          pinnedAt: Math.floor(Date.now() / 1000),
-        });
-        WearDataSender.sendPinnedFlight(payload);
-      }
+      await WearDataSenderModule.sendPinnedFlightToWatch(pinnedItem);
     } catch {}
   }, [activeTab, inboundArrivals]);
 
@@ -490,7 +479,7 @@ export default function FlightScreen() {
       await AsyncStorage.removeItem(PINNED_FLIGHT_KEY);
       try { await cancelPinnedNotifications(); } catch (e) { console.warn('[cancelPinNotif]', e); }
       setPinnedFlightId(null);
-      if (WearDataSender) WearDataSender.clearPinnedFlight();
+      await WearDataSenderModule.clearPinnedFlightOnWatch();
     } catch (e) { console.error('[unpin]', e); }
   }, []);
 
@@ -504,7 +493,7 @@ export default function FlightScreen() {
     return ts && isSameDay(new Date(ts * 1000), selectedDate);
   });
 
-  const renderFlight = useCallback(({ item }: { item: any }) => {
+  const renderFlight = useCallback(({ item }: { item: FR24Flight }) => {
     const flightNumber = item.flight?.identification?.number?.default || 'N/A';
     const airline = item.flight?.airline?.name || 'Sconosciuta';
     const iataCode = item.flight?.airline?.code?.iata || '';
