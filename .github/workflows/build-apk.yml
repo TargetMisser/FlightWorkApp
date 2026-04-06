@@ -85,6 +85,9 @@ jobs:
           echo "tag=$TAG"         >> "$GITHUB_OUTPUT"
           echo "Building AeroStaff Pro $VERSION (tag: $TAG)"
 
+      - name: Make gradlew executable
+        run: chmod +x android/gradlew
+
       - name: Build debug APK
         run: |
           cd android
