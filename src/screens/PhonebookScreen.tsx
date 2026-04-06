@@ -20,7 +20,7 @@ type Contact = {
 const CATEGORIES = ['Ops', 'Handling', 'Compagnia', 'Aeroporto', 'Hotel', 'Altro'];
 
 const CATEGORY_COLORS: Record<string, string> = {
-  'Ops':        '#2563EB',
+  'Ops':        '#F47B16',
   'Handling':   '#16A34A',
   'Compagnia':  '#FF6600',
   'Aeroporto':  '#7C3AED',

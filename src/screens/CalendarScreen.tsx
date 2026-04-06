@@ -751,7 +751,7 @@ function makeStyles(c: ThemeColors) {
       backgroundColor: c.card, borderRadius: 14,
       marginHorizontal: 16, marginTop: 16,
       padding: 20,
-      shadowColor: '#000', shadowOpacity: c.isDark ? 0 : 0.07, shadowRadius: 10, elevation: c.isDark ? 0 : 4, borderWidth: c.isDark ? 1 : 0, borderColor: c.border,
+      shadowColor: c.primary, shadowOpacity: c.isDark ? 0 : 0.08, shadowRadius: 10, elevation: c.isDark ? 0 : 4, borderWidth: c.isDark ? 1 : 0, borderColor: c.glassBorder,
       minHeight: 160,
     },
     weatherBadge: {

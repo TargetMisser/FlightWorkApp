@@ -83,7 +83,7 @@ function PinnedFlightCard({ item, colors }: { item: any; colors: any }) {
       marginHorizontal: 16, marginTop: 16,
       borderRadius: 16, overflow: 'hidden',
       backgroundColor: colors.card,
-      shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 12, elevation: 6,
+      shadowColor: colors.primary, shadowOpacity: 0.15, shadowRadius: 12, elevation: 6,
       borderWidth: colors.isDark ? 1 : 0, borderColor: colors.border,
     }}>
       {/* Compact header: airline color bar + flight info */}
@@ -111,14 +111,14 @@ function PinnedFlightCard({ item, colors }: { item: any; colors: any }) {
       <View style={{ padding: 12 }}>
         {tab === 'departures' ? (
           <View style={{ flexDirection: 'row', gap: 8 }}>
-            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.isDark ? 'rgba(37,99,235,0.12)' : colors.primaryLight, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8 }}>
+            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.primaryLight, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8 }}>
               <MaterialIcons name="desktop-windows" size={15} color={colors.primary} />
               <View>
                 <Text style={{ fontSize: 9, fontWeight: '600', color: colors.textSub, letterSpacing: 0.3 }}>CHECK-IN</Text>
                 <Text style={{ fontSize: 13, fontWeight: '800', color: colors.primaryDark }}>{fmt(ops.checkInOpen)} – {fmt(ops.checkInClose)}</Text>
               </View>
             </View>
-            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.isDark ? 'rgba(37,99,235,0.12)' : colors.primaryLight, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8 }}>
+            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.primaryLight, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8 }}>
               <MaterialIcons name="meeting-room" size={15} color={colors.primary} />
               <View>
                 <Text style={{ fontSize: 9, fontWeight: '600', color: colors.textSub, letterSpacing: 0.3 }}>GATE</Text>
@@ -433,48 +433,48 @@ function makeStyles(c: ThemeColors) {
   return StyleSheet.create({
     hiddenWV: { height: 1, width: 1, opacity: 0, position: 'absolute', top: -100 },
     topRow: { flexDirection: 'row', gap: 12, padding: 16, paddingBottom: 8 },
-    weatherCard: { flex: 1, backgroundColor: c.card, borderRadius: 14, padding: 16, alignItems: 'center', shadowColor: '#000', shadowOpacity: c.isDark ? 0 : 0.06, shadowRadius: 8, elevation: c.isDark ? 0 : 3, borderWidth: c.isDark ? 1 : 0, borderColor: c.border },
+    weatherCard: { flex: 1, backgroundColor: c.card, borderRadius: 18, padding: 16, alignItems: 'center', shadowColor: c.primary, shadowOpacity: 0.12, shadowRadius: 12, elevation: 4, borderWidth: 1, borderColor: c.glassBorder },
     weatherEmoji: { fontSize: 28, marginBottom: 4 },
-    weatherTemp: { fontSize: 28, fontWeight: 'bold', color: c.primaryDark },
+    weatherTemp: { fontSize: 28, fontWeight: '700', color: c.primaryDark },
     weatherDesc: { fontSize: 11, color: c.textSub, textAlign: 'center', marginTop: 2 },
-    dateCard: { width: 90, backgroundColor: c.primaryDark, borderRadius: 14, padding: 14, alignItems: 'center', justifyContent: 'center' },
+    dateCard: { width: 90, backgroundColor: c.primaryDark, borderRadius: 18, padding: 14, alignItems: 'center', justifyContent: 'center', shadowColor: c.primary, shadowOpacity: 0.30, shadowRadius: 12, elevation: 6 },
     dateToday: { fontSize: 10, color: 'rgba(255,255,255,0.6)', letterSpacing: 1.5, fontWeight: '700' },
-    dateNum: { fontSize: 36, fontWeight: 'bold', color: '#fff', lineHeight: 40 },
+    dateNum: { fontSize: 36, fontWeight: '700', color: '#fff', lineHeight: 40 },
     dateMonth: { fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 2 },
     sectionTitle: { fontSize: 13, fontWeight: '700', color: c.textSub, letterSpacing: 0.5, marginHorizontal: 16, marginTop: 16, marginBottom: 8 },
-    shiftCard: { backgroundColor: c.card, borderRadius: 14, marginHorizontal: 16, padding: 16, flexDirection: 'row', gap: 14, shadowColor: '#000', shadowOpacity: c.isDark ? 0 : 0.06, shadowRadius: 8, elevation: c.isDark ? 0 : 3, minHeight: 90, borderWidth: c.isDark ? 1 : 0, borderColor: c.border },
-    shiftStrip: { width: 4, borderRadius: 2, backgroundColor: GOLD, marginRight: 2 },
+    shiftCard: { backgroundColor: c.card, borderRadius: 18, marginHorizontal: 16, padding: 16, flexDirection: 'row', gap: 14, shadowColor: c.primary, shadowOpacity: 0.10, shadowRadius: 12, elevation: 4, minHeight: 90, borderWidth: 1, borderColor: c.glassBorder },
+    shiftStrip: { width: 4, borderRadius: 2, backgroundColor: c.primary, marginRight: 2 },
     shiftBadgeRow: { flexDirection: 'row', marginBottom: 8 },
     inProgressBadge: { backgroundColor: '#D1FAE5', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 20 },
     inProgressText: { fontSize: 10, fontWeight: '700', color: '#059669' },
-    shiftTitle: { fontSize: 17, fontWeight: 'bold', color: c.primaryDark, marginBottom: 4 },
-    shiftTime: { fontSize: 22, fontWeight: 'bold', color: c.primary, marginBottom: 4 },
-    timelineCard: { backgroundColor: c.card, borderRadius: 14, marginHorizontal: 16, marginTop: 12, padding: 16, shadowColor: '#000', shadowOpacity: c.isDark ? 0 : 0.06, shadowRadius: 8, elevation: c.isDark ? 0 : 3, borderWidth: c.isDark ? 1 : 0, borderColor: c.border },
+    shiftTitle: { fontSize: 17, fontWeight: '700', color: c.primaryDark, marginBottom: 4 },
+    shiftTime: { fontSize: 22, fontWeight: '700', color: c.primary, marginBottom: 4 },
+    timelineCard: { backgroundColor: c.card, borderRadius: 18, marginHorizontal: 16, marginTop: 12, padding: 16, shadowColor: c.primary, shadowOpacity: 0.08, shadowRadius: 10, elevation: 3, borderWidth: 1, borderColor: c.glassBorder },
     restRow: { flexDirection: 'row', alignItems: 'center' },
-    restText: { fontSize: 18, fontWeight: 'bold', color: '#10b981' },
+    restText: { fontSize: 18, fontWeight: '700', color: '#10b981' },
     emptyShift: { color: c.textSub, fontSize: 15, lineHeight: 24, textAlign: 'center', flex: 1 },
-    uploadToggle: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 16, marginTop: 16, backgroundColor: c.card, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14, shadowColor: '#000', shadowOpacity: c.isDark ? 0 : 0.05, shadowRadius: 6, elevation: c.isDark ? 0 : 2, borderWidth: c.isDark ? 1 : 0, borderColor: c.border },
+    uploadToggle: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 16, marginTop: 16, backgroundColor: c.card, borderRadius: 18, paddingHorizontal: 16, paddingVertical: 14, shadowColor: c.primary, shadowOpacity: 0.08, shadowRadius: 8, elevation: 3, borderWidth: 1, borderColor: c.glassBorder },
     uploadToggleText: { flex: 1, fontSize: 15, fontWeight: '600', color: c.primaryDark },
-    uploadSection: { marginHorizontal: 16, backgroundColor: c.card, borderRadius: 14, padding: 16, marginTop: 2, shadowColor: '#000', shadowOpacity: c.isDark ? 0 : 0.04, shadowRadius: 4, elevation: c.isDark ? 0 : 1, borderWidth: c.isDark ? 1 : 0, borderColor: c.border },
+    uploadSection: { marginHorizontal: 16, backgroundColor: c.card, borderRadius: 18, padding: 16, marginTop: 2, shadowColor: c.primary, shadowOpacity: 0.06, shadowRadius: 6, elevation: 2, borderWidth: 1, borderColor: c.glassBorder },
     uploadDesc: { fontSize: 13, color: c.textSub, lineHeight: 19, marginBottom: 14 },
     scanBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: c.primaryDark, borderRadius: 12, paddingVertical: 13, paddingHorizontal: 20 },
-    scanBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
+    scanBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
     imagesRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
     thumb: { width: '47%', height: 120, borderRadius: 10, resizeMode: 'cover' },
-    ocrResult: { backgroundColor: c.cardSecondary, borderRadius: 10, padding: 12, marginTop: 12 },
+    ocrResult: { backgroundColor: c.cardSecondary, borderRadius: 12, padding: 12, marginTop: 12 },
     ocrTitle: { fontSize: 12, fontWeight: '700', color: c.textSub, marginBottom: 6 },
     ocrText: { fontSize: 12, color: c.text, lineHeight: 18 },
     syncBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: c.primary, borderRadius: 12, paddingVertical: 13, marginTop: 12 },
-    syncBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
-    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 },
-    modalContent: { backgroundColor: c.isDark ? c.bg : c.card, width: '100%', borderRadius: 16, padding: 20, shadowColor: '#000', shadowOpacity: c.isDark ? 0 : 0.1, shadowRadius: 10, elevation: c.isDark ? 0 : 5, borderWidth: c.isDark ? 1 : 0, borderColor: c.border },
-    modalTitle: { fontSize: 17, fontWeight: 'bold', color: c.primaryDark, marginBottom: 14 },
+    syncBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+    modalContent: { backgroundColor: c.isDark ? c.bg : c.card, width: '100%', borderRadius: 20, padding: 20, shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 14, elevation: 8, borderWidth: 1, borderColor: c.glassBorder },
+    modalTitle: { fontSize: 17, fontWeight: '700', color: c.primaryDark, marginBottom: 14 },
     modalLabel: { fontSize: 12, fontWeight: '700', color: c.textSub, marginBottom: 8 },
     modalInput: { borderWidth: 1, borderColor: c.border, borderRadius: 10, padding: 12, marginBottom: 10, fontSize: 14, color: c.text },
     modalBtn: { flex: 1, padding: 14, borderRadius: 10, alignItems: 'center' },
     typeBtn: { flex: 1, padding: 12, borderRadius: 10, backgroundColor: c.bg, alignItems: 'center' },
     inputLabel: { fontSize: 11, color: c.textSub, fontWeight: '700', marginBottom: 4, letterSpacing: 0.5 },
-    modeBtn: { flex: 1, backgroundColor: c.primary, borderRadius: 12, paddingVertical: 20, alignItems: 'center', justifyContent: 'center', gap: 8, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 1 },
+    modeBtn: { flex: 1, backgroundColor: c.primary, borderRadius: 14, paddingVertical: 20, alignItems: 'center', justifyContent: 'center', gap: 8, shadowColor: c.primary, shadowOpacity: 0.25, shadowRadius: 8, elevation: 4 },
     modeBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
   });
 }

@@ -366,7 +366,7 @@ function makePinStyles(c: ThemeColors) {
 
 function makeRowStyles(c: ThemeColors) {
   return StyleSheet.create({
-    card:    { backgroundColor: c.card, borderRadius: 14, padding: 14, marginBottom: 10, flexDirection: 'row', alignItems: 'flex-start', borderWidth: 1, borderColor: c.border, shadowColor: '#000', shadowOpacity: c.isDark ? 0 : 0.05, shadowRadius: 6, elevation: c.isDark ? 0 : 2 },
+    card:    { backgroundColor: c.card, borderRadius: 16, padding: 14, marginBottom: 10, flexDirection: 'row', alignItems: 'flex-start', borderWidth: 1, borderColor: c.glassBorder, shadowColor: c.primary, shadowOpacity: c.isDark ? 0 : 0.08, shadowRadius: 8, elevation: c.isDark ? 0 : 3 },
     cardLeft:{ flex: 1 },
     name:    { fontSize: 15, fontWeight: '700', color: c.primaryDark, marginBottom: 2 },
     username:{ fontSize: 12, color: c.textSub, marginBottom: 4 },

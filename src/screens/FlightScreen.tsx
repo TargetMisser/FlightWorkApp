@@ -741,7 +741,7 @@ function makeStyles(c: ThemeColors) {
     segBtnActive: { backgroundColor: c.card, borderWidth: 1, borderColor: c.primaryLight },
     segBtnText: { fontSize: 12, fontWeight: '500', color: c.textSub },
     segBtnTextActive: { color: c.primary, fontWeight: '700' },
-    card: { backgroundColor: c.card, borderRadius: 14, marginBottom: 10, overflow: 'hidden', shadowColor: '#000', shadowOpacity: c.isDark ? 0 : 0.06, shadowRadius: 8, elevation: c.isDark ? 0 : 3, borderWidth: c.isDark ? 1 : 0, borderColor: c.border },
+    card: { backgroundColor: c.card, borderRadius: 16, marginBottom: 10, overflow: 'hidden', shadowColor: c.primary, shadowOpacity: c.isDark ? 0 : 0.08, shadowRadius: 10, elevation: c.isDark ? 0 : 3, borderWidth: c.isDark ? 1 : 0, borderColor: c.glassBorder },
     cardShift: { borderWidth: 1.5, borderColor: '#F59E0B' },
     shiftBanner: { backgroundColor: '#F59E0B', paddingVertical: 5, paddingHorizontal: 12 },
     shiftBannerText: { color: '#fff', fontWeight: 'bold', fontSize: 11, letterSpacing: 0.5 },
