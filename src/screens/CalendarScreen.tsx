@@ -20,6 +20,7 @@ import {
   replaceShiftsForRange,
 } from '../utils/shiftCalendar';
 import {
+import { useLanguage } from '../context/LanguageContext';
   getPdfExtractorHtml, parseShiftCells,
   type ParsedSchedule, type ParsedEmployee, type ParsedShift,
 } from '../utils/pdfShiftParser';
@@ -58,6 +59,7 @@ function getMonday(d: Date | null | undefined): Date {
 
 export default function CalendarScreen() {
   const { colors } = useAppTheme();
+  const { t, months, weekDaysShort, locale, weatherMap } = useLanguage();
   const { airportCode, isLoading: airportLoading } = useAirport();
   const [currentWeekStart, setCurrentWeekStart] = useState<Date>(getMonday(new Date()));
   const [selectedDay, setSelectedDay] = useState<string>(new Date().toISOString().split('T')[0]);
@@ -80,7 +82,7 @@ export default function CalendarScreen() {
   const [manualModalOpen, setManualModalOpen] = useState(false);
   const [pickerKey, setPickerKey] = useState(0);
   const [manualDate, setManualDate] = useState(selectedDay);
-  const [manualType, setManualType] = useState<'Lavoro' | 'Riposo'>('Lavoro');
+  const [manualType, setManualType] = useState<'Lavoro' | t('calRestPill')>('Lavoro');
   const [manualStartH, setManualStartH] = useState(8);
   const [manualStartM, setManualStartM] = useState(0);
   const [manualEndH, setManualEndH] = useState(16);
@@ -99,11 +101,11 @@ export default function CalendarScreen() {
 
   const saveManualShift = async () => {
     const { status } = await SystemCalendar.requestCalendarPermissionsAsync();
-    if (status !== 'granted') { Alert.alert('Permesso negato'); return; }
+    if (status !== 'granted') { Alert.alert(t('calPermDenied')); return; }
 
     try {
       const calendarId = calId ?? await getWritableCalendarId();
-      if (!calendarId) { Alert.alert('Errore', 'Nessun calendario scrivibile'); return; }
+      if (!calendarId) { Alert.alert('Errore', t('calNoWritableCalendar')); return; }
       if (!calId) setCalId(calendarId);
 
       await replaceShiftForDate({
@@ -116,7 +118,7 @@ export default function CalendarScreen() {
 
       setManualModalOpen(false);
       fetchCalendar(true);
-      Alert.alert('Turno salvato!');
+      Alert.alert(t('calShiftSaved'));
     } catch (e: any) { Alert.alert('Errore', e.message); }
   };
 
@@ -167,7 +169,7 @@ export default function CalendarScreen() {
       return {
         date: d, iso,
         dayNum: d.getDate(),
-        dayName: ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'][d.getDay()],
+        dayName: weekDaysShort[d.getDay()],
       };
     });
 
@@ -279,7 +281,7 @@ export default function CalendarScreen() {
       setPdfHtml(null); // Remove WebView
 
       if (!data.ok) {
-        Alert.alert('Errore', 'Impossibile estrarre il testo dal PDF');
+        Alert.alert('Errore', t('calNoPdfText'));
         setImportModalVisible(false);
         setImportStep('idle');
         return;
@@ -287,7 +289,7 @@ export default function CalendarScreen() {
 
       const schedule = parseShiftCells(data.cells);
       if (schedule.employees.length === 0) {
-        Alert.alert('Errore', 'Nessun dipendente trovato nel PDF');
+        Alert.alert('Errore', t('calNoEmployees'));
         setImportModalVisible(false);
         setImportStep('idle');
         return;
@@ -352,11 +354,11 @@ export default function CalendarScreen() {
         setImportModalVisible(false);
         setImportStep('idle');
         fetchCalendar(true);
-        Alert.alert('Importazione completata', `${saved} turni salvati nel calendario`);
+        Alert.alert(t('calImportComplete'), `${saved} turni salvati nel calendario`);
       }, 800);
     } catch (e) {
       if (__DEV__) console.error(e);
-      Alert.alert('Errore', 'Errore durante il salvataggio');
+      Alert.alert('Errore', t('calImportError'));
       setImportStep('idle');
     }
   };
@@ -383,12 +385,12 @@ export default function CalendarScreen() {
         <View style={s.pageHeader}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
             <View>
-              <Text style={s.pageTitle}>Gestione Turni</Text>
+              <Text style={s.pageTitle}>{t('calTitle')}</Text>
               <Text style={s.pageSub}>{monthLabel.toUpperCase()}</Text>
             </View>
             <TouchableOpacity style={[s.importBtn, { backgroundColor: colors.primary }]} onPress={() => setEditMenuOpen(true)}>
               <MaterialIcons name="edit-calendar" size={20} color="#fff" />
-              <Text style={s.importBtnText}>Modifica Turni</Text>
+              <Text style={s.importBtnText}>{t('calEditBtn')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -426,7 +428,7 @@ export default function CalendarScreen() {
               <View style={s.weatherBadge}>
                 <Text style={s.weatherIcon}>{stats.weatherIcon}</Text>
                 <View>
-                  <Text style={s.weatherPlace}>Meteo locale</Text>
+                  <Text style={s.weatherPlace}>{t('calWeatherLocal')}</Text>
                   <Text style={s.weatherText}>{stats.weatherText}</Text>
                 </View>
               </View>
@@ -436,12 +438,12 @@ export default function CalendarScreen() {
               <>
                 <View style={s.shiftTypeRow}>
                   <View style={s.shiftIconBox}><Text style={{ fontSize: 22 }}>✈️</Text></View>
-                  <Text style={s.shiftTypeName}>Turno Lavoro</Text>
+                  <Text style={s.shiftTypeName}>{t('calShiftWork')}</Text>
                 </View>
                 <View style={s.timeRow}>
                   <Text style={{ fontSize: 18, marginRight: 6 }}>🕒</Text>
                   <Text style={s.timeText}>
-                    {new Date(workEvent.startDate).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })} — {new Date(workEvent.endDate).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
+                    {new Date(workEvent.startDate).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })} — {new Date(workEvent.endDate).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}
                   </Text>
                 </View>
                 {stats?.flightCount > 0 && (
@@ -453,10 +455,10 @@ export default function CalendarScreen() {
             ) : restEvent ? (
               <View style={s.restRow}>
                 <Text style={{ fontSize: 32, marginRight: 12 }}>🌴</Text>
-                <Text style={s.restText}>Giorno di Riposo</Text>
+                <Text style={s.restText}>{t('calRestDay')}</Text>
               </View>
             ) : (
-              <Text style={s.emptyText}>Nessun turno per{'\n'}{selectedDay.split('-').reverse().join('/')}</Text>
+              <Text style={s.emptyText}>{t('calNoShift')}{'\n'}{selectedDay.split('-').reverse().join('/')}</Text>
             )}
           </View>
         )}
@@ -472,16 +474,16 @@ export default function CalendarScreen() {
             <TouchableOpacity style={[s.editMenuOption, { backgroundColor: colors.primaryLight }]} onPress={() => { setEditMenuOpen(false); startImport(); }}>
               <MaterialIcons name="picture-as-pdf" size={24} color={colors.primary} />
               <View style={{ flex: 1 }}>
-                <Text style={[s.editMenuLabel, { color: colors.text }]}>Importa da PDF</Text>
-                <Text style={[s.editMenuSub, { color: colors.textSub }]}>Carica il foglio turni aziendale</Text>
+                <Text style={[s.editMenuLabel, { color: colors.text }]}>{t('calImportPdf')}</Text>
+                <Text style={[s.editMenuSub, { color: colors.textSub }]}>{t('calImportPdfSub')}</Text>
               </View>
               <MaterialIcons name="chevron-right" size={20} color={colors.textSub} />
             </TouchableOpacity>
             <TouchableOpacity style={[s.editMenuOption, { backgroundColor: colors.primaryLight }]} onPress={openManualEntry}>
               <MaterialIcons name="edit" size={24} color={colors.primary} />
               <View style={{ flex: 1 }}>
-                <Text style={[s.editMenuLabel, { color: colors.text }]}>Aggiungi manualmente</Text>
-                <Text style={[s.editMenuSub, { color: colors.textSub }]}>Seleziona giorno e orario</Text>
+                <Text style={[s.editMenuLabel, { color: colors.text }]}>{t('calAddManual')}</Text>
+                <Text style={[s.editMenuSub, { color: colors.textSub }]}>{t('calAddManualSub')}</Text>
               </View>
               <MaterialIcons name="chevron-right" size={20} color={colors.textSub} />
             </TouchableOpacity>
@@ -496,14 +498,14 @@ export default function CalendarScreen() {
           <View style={s.modalScrollContent}>
             <View style={[s.manualModalContent, { backgroundColor: colors.isDark || colors.card === 'transparent' ? '#1E293B' : '#FFFFFF' }]}>
             <View style={s.modalHeader}>
-              <Text style={[s.modalTitle, { color: colors.text }]}>Aggiungi Turno</Text>
+              <Text style={[s.modalTitle, { color: colors.text }]}>{t('calAddShiftTitle')}</Text>
               <TouchableOpacity onPress={() => setManualModalOpen(false)}>
                 <MaterialIcons name="close" size={24} color={colors.textSub} />
               </TouchableOpacity>
             </View>
 
             {/* Data */}
-            <Text style={[s.manualLabel, { color: colors.textSub }]}>DATA</Text>
+            <Text style={[s.manualLabel, { color: colors.textSub }]}>{t('calDataLabel')}</Text>
             <TextInput
               style={[s.manualInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.bg }]}
               value={manualDate.split('-').reverse().join('/')}
@@ -514,7 +516,7 @@ export default function CalendarScreen() {
             </Text>
 
             {/* Tipo */}
-            <Text style={[s.manualLabel, { color: colors.textSub }]}>TIPO</Text>
+            <Text style={[s.manualLabel, { color: colors.textSub }]}>{t('calTypeLabel')}</Text>
             <View style={{ flexDirection: 'row', gap: 10, marginBottom: 16 }}>
               {(['Lavoro', 'Riposo'] as const).map(t => (
                 <TouchableOpacity
@@ -522,7 +524,7 @@ export default function CalendarScreen() {
                   style={[s.manualTypeBtn, { borderColor: colors.border }, manualType === t && { backgroundColor: colors.primary, borderColor: colors.primary }]}
                   onPress={() => setManualType(t)}
                 >
-                  <Text style={{ color: manualType === t ? '#fff' : colors.text, fontWeight: '700' }}>{t === 'Lavoro' ? '✈️ Lavoro' : '🌴 Riposo'}</Text>
+                  <Text style={{ color: manualType === t ? '#fff' : colors.text, fontWeight: '700' }}>{t === 'Lavoro' ? t('calTypeWork') : '🌴 Riposo'}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -530,7 +532,7 @@ export default function CalendarScreen() {
             {/* Orari (solo lavoro) */}
             {manualType === 'Lavoro' && (
               <>
-                <Text style={[s.manualLabel, { color: colors.textSub }]}>ORARIO INIZIO</Text>
+                <Text style={[s.manualLabel, { color: colors.textSub }]}>{t('calStartTime')}</Text>
                 <TimeCarouselPicker
                   key={pickerKey * 2}
                   hour={manualStartH}
@@ -543,7 +545,7 @@ export default function CalendarScreen() {
                   bgColor={colors.card === 'transparent' ? (colors.isDark ? '#1E293B' : '#F3F4F6') : colors.card}
                   borderColor={colors.border}
                 />
-                <Text style={[s.manualLabel, { color: colors.textSub, marginTop: 16 }]}>ORARIO FINE</Text>
+                <Text style={[s.manualLabel, { color: colors.textSub, marginTop: 16 }]}>{t('calEndTime')}</Text>
                 <TimeCarouselPicker
                   key={pickerKey * 2 + 1}
                   hour={manualEndH}
@@ -560,7 +562,7 @@ export default function CalendarScreen() {
             )}
 
             <TouchableOpacity style={[s.primaryBtn, { backgroundColor: colors.primary, marginTop: 16 }]} onPress={saveManualShift}>
-              <Text style={s.primaryBtnText}>Salva Turno</Text>
+              <Text style={s.primaryBtnText}>{t('calSaveShift')}</Text>
             </TouchableOpacity>
             </View>
           </View>
@@ -587,7 +589,7 @@ export default function CalendarScreen() {
           <View style={[s.modalContent, { backgroundColor: colors.isDark || colors.card === 'transparent' ? '#1E293B' : '#FFFFFF' }]}>
             {/* Header */}
             <View style={s.modalHeader}>
-              <Text style={[s.modalTitle, { color: colors.text }]}>Importa Turni</Text>
+              <Text style={[s.modalTitle, { color: colors.text }]}>{t('calImportTitle')}</Text>
               {importStep !== 'saving' && (
                 <TouchableOpacity onPress={() => { setImportModalVisible(false); setImportStep('idle'); }}>
                   <MaterialIcons name="close" size={24} color={colors.textSub} />
@@ -599,7 +601,7 @@ export default function CalendarScreen() {
             {importStep === 'extracting' && (
               <View style={s.centerBox}>
                 <ActivityIndicator size="large" color={colors.primary} />
-                <Text style={[s.stepText, { color: colors.textSub }]}>Estrazione testo dal PDF...</Text>
+                <Text style={[s.stepText, { color: colors.textSub }]}>{t('calExtracting')}</Text>
               </View>
             )}
 
@@ -607,7 +609,7 @@ export default function CalendarScreen() {
             {importStep === 'pickName' && parsedSchedule && (
               <>
                 <Text style={[s.stepLabel, { color: colors.textSub }]}>
-                  Seleziona il tuo nome ({parsedSchedule.employees.length} trovati)
+                  {t('calPickName')} ({parsedSchedule.employees.length} trovati)
                 </Text>
                 <FlatList
                   data={parsedSchedule.employees}
@@ -631,7 +633,7 @@ export default function CalendarScreen() {
             {importStep === 'preview' && selectedEmployee && (
               <>
                 <Text style={[s.stepLabel, { color: colors.textSub }]}>
-                  Turni di {selectedEmployee.name}
+                  {t('calShiftsOf')} {selectedEmployee.name}
                 </Text>
                 <ScrollView style={{ maxHeight: 350 }}>
                   {selectedEmployee.shifts.map((shift, i) => (
@@ -645,7 +647,7 @@ export default function CalendarScreen() {
                         </View>
                       ) : (
                         <View style={[s.previewPill, { backgroundColor: '#D1FAE5' }]}>
-                          <Text style={[s.previewPillText, { color: '#059669' }]}>Riposo</Text>
+                          <Text style={[s.previewPillText, { color: '#059669' }]}>{t('calRestPill')}</Text>
                         </View>
                       )}
                     </View>
@@ -656,13 +658,13 @@ export default function CalendarScreen() {
                     style={[s.secondaryBtn, { borderColor: colors.border }]}
                     onPress={() => setImportStep('pickName')}
                   >
-                    <Text style={[s.secondaryBtnText, { color: colors.textSub }]}>Cambia nome</Text>
+                    <Text style={[s.secondaryBtnText, { color: colors.textSub }]}>{t('calChangeName')}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[s.primaryBtn, { backgroundColor: colors.primary }]}
                     onPress={confirmImport}
                   >
-                    <Text style={s.primaryBtnText}>Salva nel calendario</Text>
+                    <Text style={s.primaryBtnText}>{t('calSaveToCalendar')}</Text>
                   </TouchableOpacity>
                 </View>
               </>
@@ -672,7 +674,7 @@ export default function CalendarScreen() {
             {importStep === 'saving' && (
               <View style={s.centerBox}>
                 <ActivityIndicator size="large" color={colors.primary} />
-                <Text style={[s.stepText, { color: colors.textSub }]}>Salvataggio in corso...</Text>
+                <Text style={[s.stepText, { color: colors.textSub }]}>{t('calSaving')}</Text>
               </View>
             )}
 
@@ -680,7 +682,7 @@ export default function CalendarScreen() {
             {importStep === 'done' && (
               <View style={s.centerBox}>
                 <MaterialIcons name="check-circle" size={48} color="#10b981" />
-                <Text style={[s.stepText, { color: '#10b981' }]}>Turni importati!</Text>
+                <Text style={[s.stepText, { color: '#10b981' }]}>{t('calImportDone')}</Text>
               </View>
             )}
           </View>
