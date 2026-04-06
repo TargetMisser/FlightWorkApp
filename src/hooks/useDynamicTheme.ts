@@ -118,7 +118,7 @@ async function resolveTheme(): Promise<Theme> {
       globalCachedTheme = selected;
       return selected;
     } catch (err) {
-      console.warn('Errore caricamento tema dinamico:', err);
+      if (__DEV__) console.warn('Errore caricamento tema dinamico:', err);
       return themes.default;
     } finally {
       pendingFetch = null;

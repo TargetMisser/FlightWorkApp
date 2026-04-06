@@ -5,11 +5,11 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useAppTheme } from '../context/ThemeContext';
+import { useAppTheme, type ThemeColors } from '../context/ThemeContext';
 
 const STORAGE_KEY = 'aerostaff_notepad_v1';
 
-function makeStyles(c: any) {
+function makeStyles(c: ThemeColors) {
   return StyleSheet.create({
     root: { flex: 1, backgroundColor: c.bg },
     toolbar: {
@@ -27,7 +27,9 @@ function makeStyles(c: any) {
       backgroundColor: c.primary, borderRadius: 10,
       paddingHorizontal: 14, paddingVertical: 8,
     },
-    saveBtnDim: { backgroundColor: '#93C5FD' },
+    // Dims the entire save button (background + icon + label) when content is
+    // already saved — intentional: the full-button fade signals an inactive state.
+    saveBtnDim: { opacity: 0.55 },
     saveTxt: { color: '#fff', fontWeight: '600', fontSize: 13 },
     statusBar: {
       flexDirection: 'row', alignItems: 'center', gap: 6,

@@ -87,7 +87,7 @@ function AppInner() {
   // ─── Auto-schedule flight notifications on startup ─────────────────────────
   useEffect(() => {
     autoScheduleNotifications().then(count => {
-      if (count > 0) console.log(`Auto-scheduled ${count} notifications`);
+      if (count > 0 && __DEV__) console.log(`Auto-scheduled ${count} notifications`);
     }).catch(() => {});
   }, []);
 

@@ -10,7 +10,7 @@ import { WebView } from 'react-native-webview';
 import * as ImagePicker from 'expo-image-picker';
 import * as Calendar from 'expo-calendar';
 import * as Location from 'expo-location';
-import { useAppTheme } from '../context/ThemeContext';
+import { useAppTheme, type ThemeColors } from '../context/ThemeContext';
 import ShiftTimeline from '../components/ShiftTimeline';
 
 import { getAirlineOps, getAirlineColor } from '../utils/airlineOps';
@@ -253,7 +253,7 @@ export default function HomeScreen() {
       const events = await Calendar.getEventsAsync([cal.id], d, dEnd);
       const shift = events.find(e => e.title.includes('Lavoro') || e.title.includes('Riposo'));
       setShiftEvent(shift || null);
-    } catch (e) { console.error('[shift]', e); } finally { setLoadingShift(false); }
+    } catch (e) { if (__DEV__) console.error('[shift]', e); } finally { setLoadingShift(false); }
   };
 
   const fetchWeather = async () => {
@@ -267,7 +267,7 @@ export default function HomeScreen() {
       const temp = Math.round(json.current?.temperature_2m ?? 0);
       const w = weatherMap[code] || { text: 'Sereno', icon: '☀️' };
       setWeather({ ...w, temp });
-    } catch (e) { console.warn('[weather]', e); }
+    } catch (e) { if (__DEV__) console.warn('[weather]', e); }
   };
 
   const pickImage = async () => {
@@ -291,7 +291,7 @@ export default function HomeScreen() {
           true;
         `);
       }
-    } catch (e) { console.error('[imagePicker]', e); setProcessing(false); }
+    } catch (e) { if (__DEV__) console.error('[imagePicker]', e); setProcessing(false); }
   };
 
   const handleWebViewMessage = (event: any) => {
@@ -299,7 +299,7 @@ export default function HomeScreen() {
       const r = JSON.parse(event.nativeEvent.data);
       if (r.success) setOcrText(r.text);
       else Alert.alert('Errore riconoscimento testo', r.error || 'Prova con un\'immagine più nitida o meglio illuminata.');
-    } catch (e) { console.error('[ocrMessage]', e); } finally { setProcessing(false); }
+    } catch (e) { if (__DEV__) console.error('[ocrMessage]', e); } finally { setProcessing(false); }
   };
 
   const parseAndSave = async () => {
@@ -429,7 +429,7 @@ export default function HomeScreen() {
   );
 }
 
-function makeStyles(c: any) {
+function makeStyles(c: ThemeColors) {
   return StyleSheet.create({
     hiddenWV: { height: 1, width: 1, opacity: 0, position: 'absolute', top: -100 },
     topRow: { flexDirection: 'row', gap: 12, padding: 16, paddingBottom: 8 },

@@ -10,7 +10,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { WebView } from 'react-native-webview';
 import { MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useAppTheme } from '../context/ThemeContext';
+import { useAppTheme, type ThemeColors } from '../context/ThemeContext';
 import { useAirport } from '../context/AirportContext';
 import { fetchAirportScheduleRaw } from '../utils/fr24api';
 import {
@@ -23,7 +23,6 @@ import {
   type ParsedSchedule, type ParsedEmployee, type ParsedShift,
 } from '../utils/pdfShiftParser';
 
-const PRIMARY = '#2563EB';
 const STORAGE_KEY = '@shift_import_name';
 
 type ShiftEvent = {
@@ -198,7 +197,7 @@ export default function CalendarScreen() {
           localData[iso].push({ id: e.id, title: e.title, startDate: e.startDate, endDate: e.endDate });
           // Lavoro has priority over Riposo for dot color
           if (e.title.includes('Lavoro') || !dots[iso]) {
-            dots[iso] = e.title.includes('Riposo') ? '#10b981' : PRIMARY;
+            dots[iso] = e.title.includes('Riposo') ? '#10b981' : colors.primary;
           }
         }
       });
@@ -206,7 +205,7 @@ export default function CalendarScreen() {
       setEventsData(localData);
       setLoading(false);
       fetchWeatherAndFlights(start, end, localData);
-    } catch (e) { console.error(e); setLoading(false); }
+    } catch (e) { if (__DEV__) console.error(e); setLoading(false); }
   };
 
   const fetchWeatherAndFlights = async (start: Date, end: Date, localData: Record<string, ShiftEvent[]>) => {
@@ -224,7 +223,7 @@ export default function CalendarScreen() {
           dict[date] = { weatherText: m.text, weatherIcon: m.icon, flightCount: 0 };
         });
       }
-    } catch (e) { console.warn('[calWeather]', e); }
+    } catch (e) { if (__DEV__) console.warn('[calWeather]', e); }
     try {
       const { arrivals, departures } = await fetchAirportScheduleRaw(airportCode);
       const allF = [...arrivals, ...departures];
@@ -240,7 +239,7 @@ export default function CalendarScreen() {
           if (dict[iso]) dict[iso].flightCount = cnt; else dict[iso] = { weatherText: 'N/A', weatherIcon: '❓', flightCount: cnt };
         }
       });
-    } catch (e) { console.warn('[calFlights]', e); }
+    } catch (e) { if (__DEV__) console.warn('[calFlights]', e); }
     setDailyStats(dict);
   };
 
@@ -270,7 +269,7 @@ export default function CalendarScreen() {
       setImportModalVisible(true);
       setPdfHtml(getPdfExtractorHtml(base64));
     } catch (e: any) {
-      console.error(`Import error at step=${step}:`, e);
+      if (__DEV__) console.error(`Import error at step=${step}:`, e);
       Alert.alert('Errore', `Errore (${step}): ${e?.message || e}`);
     }
   };
@@ -311,7 +310,7 @@ export default function CalendarScreen() {
 
       setImportStep('pickName');
     } catch (e) {
-      console.error(e);
+      if (__DEV__) console.error(e);
       Alert.alert('Errore', 'Errore nel parsing del PDF');
       setImportModalVisible(false);
       setImportStep('idle');
@@ -357,7 +356,7 @@ export default function CalendarScreen() {
         Alert.alert('Importazione completata', `${saved} turni salvati nel calendario`);
       }, 800);
     } catch (e) {
-      console.error(e);
+      if (__DEV__) console.error(e);
       Alert.alert('Errore', 'Errore durante il salvataggio');
       setImportStep('idle');
     }
@@ -730,7 +729,7 @@ export default function CalendarScreen() {
   );
 }
 
-function makeStyles(c: any) {
+function makeStyles(c: ThemeColors) {
   return StyleSheet.create({
     pageHeader: { backgroundColor: c.card, paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: c.border },
     pageTitle: { fontSize: 22, fontWeight: 'bold', color: c.primaryDark },
