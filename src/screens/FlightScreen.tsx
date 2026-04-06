@@ -495,14 +495,21 @@ export default function FlightScreen() {
   }, []);
 
   const userShift = activeDay === 'today' ? shifts.today : shifts.tomorrow;
-  const selectedDate = activeDay === 'today' ? new Date() : (() => { const d = new Date(); d.setDate(d.getDate() + 1); return d; })();
-  const isSameDay = (d1: Date, d2: Date) =>
-    d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
 
-  const currentData = (activeTab === 'arrivals' ? arrivals : departures).filter(item => {
-    const ts = activeTab === 'arrivals' ? item.flight?.time?.scheduled?.arrival : item.flight?.time?.scheduled?.departure;
-    return ts && isSameDay(new Date(ts * 1000), selectedDate);
-  });
+  // ⚡ Bolt Optimization: Memoize the flight filtering logic.
+  // Why: Prevents O(N) recalculations on unrelated state updates (e.g. notifications toggle),
+  // which can cause frame drops when the flight lists are large.
+  // Impact: Improves JS thread performance by skipping redundant filtering.
+  const currentData = useMemo(() => {
+    const selectedDate = activeDay === 'today' ? new Date() : (() => { const d = new Date(); d.setDate(d.getDate() + 1); return d; })();
+    const isSameDay = (d1: Date, d2: Date) =>
+      d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
+
+    return (activeTab === 'arrivals' ? arrivals : departures).filter(item => {
+      const ts = activeTab === 'arrivals' ? item.flight?.time?.scheduled?.arrival : item.flight?.time?.scheduled?.departure;
+      return ts && isSameDay(new Date(ts * 1000), selectedDate);
+    });
+  }, [activeTab, activeDay, arrivals, departures]);
 
   const renderFlight = useCallback(({ item }: { item: any }) => {
     const flightNumber = item.flight?.identification?.number?.default || 'N/A';
