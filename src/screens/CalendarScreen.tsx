@@ -119,7 +119,7 @@ export default function CalendarScreen() {
       setManualModalOpen(false);
       fetchCalendar(true);
       Alert.alert('Turno salvato!');
-    } catch (e: any) { Alert.alert('Errore', e.message); }
+    } catch (e: unknown) { Alert.alert('Errore', e instanceof Error ? e.message : String(e)); }
   };
 
   const SCREEN_W = Dimensions.get('window').width;
@@ -269,9 +269,10 @@ export default function CalendarScreen() {
       setImportStep('extracting');
       setImportModalVisible(true);
       setPdfHtml(getPdfExtractorHtml(base64));
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error(`Import error at step=${step}:`, e);
-      Alert.alert('Errore', `Errore (${step}): ${e?.message || e}`);
+      const msg = e instanceof Error ? e.message : String(e);
+      Alert.alert('Errore', `Errore (${step}): ${msg}`);
     }
   };
 
