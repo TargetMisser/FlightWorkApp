@@ -10,12 +10,10 @@ async function setupShiftChannel() {
     await Notifications.setNotificationChannelAsync(ONGOING_CHANNEL, {
       name: 'Turno in corso',
       importance: Notifications.AndroidImportance.HIGH,
-      sound: null,
       vibrationPattern: [],
       enableVibrate: false,
       showBadge: false,
       bypassDnd: false,
-      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
     });
   } catch {}
 }
@@ -36,14 +34,10 @@ export async function showShiftOngoingNotification(
       body: flightInfo,
       data: { type: 'shift_ongoing' },
       sticky: true,
-      android: {
-        channelId: ONGOING_CHANNEL,
-        ongoing: true,
-        sticky: true,
-        color: '#F47B16',
-        priority: Notifications.AndroidNotificationPriority.MAX,
-        vibrationPattern: [],
-      },
+      autoDismiss: false,
+      priority: 'max',
+      color: '#F47B16',
+      vibrate: [],
     },
     trigger: null,
   });
