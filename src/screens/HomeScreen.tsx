@@ -236,7 +236,7 @@ export default function HomeScreen() {
 
       setShiftModalOpen(false);
       fetchShift(true);
-    } catch (e: any) { Alert.alert('Errore', e.message); }
+    } catch (e: unknown) { Alert.alert('Errore', e instanceof Error ? e.message : String(e)); }
   };
 
   const fetchShift = async (silent = false) => {
@@ -347,7 +347,7 @@ export default function HomeScreen() {
 
       Alert.alert(saved > 0 ? '✅ Turni Sincronizzati!' : 'Nessun orario trovato', saved > 0 ? `${saved} turni salvati.` : `Date: ${dates.length}, Orari: ${shifts.length}`);
       if (saved > 0) fetchShift(true);
-    } catch (e: any) { Alert.alert('Errore Calendario', e.message); }
+    } catch (e: unknown) { Alert.alert('Errore Calendario', e instanceof Error ? e.message : String(e)); }
   };
 
   const isRest = shiftEvent?.title?.includes('Riposo');
