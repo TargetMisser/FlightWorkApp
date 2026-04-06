@@ -192,9 +192,9 @@ export default function ShiftScreen() {
         Alert.alert("Nessun orario trovato", `Errore estrazione. Date Trovate: ${dates.length}, Orari Trovati: ${shifts.length}. Assicurati di scansionare bene le colonne.`);
       }
 
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error(e);
-      Alert.alert('Errore Calendario', 'Non è stato possibile salvare: ' + e.message);
+      Alert.alert('Errore Calendario', 'Non è stato possibile salvare: ' + (e instanceof Error ? e.message : String(e)));
     }
   };
 
