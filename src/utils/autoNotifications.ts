@@ -98,6 +98,8 @@ export async function autoScheduleNotifications(): Promise<number> {
     }
 
     // ── Departure notifications: check-in open + gate open ──
+    const airlineOpsCache: Record<string, ReturnType<typeof getAirlineOps>> = {};
+
     for (const item of shiftDepartures) {
       try {
         const depTs: number | undefined = item.flight?.time?.scheduled?.departure;
@@ -109,8 +111,12 @@ export async function autoScheduleNotifications(): Promise<number> {
           || item.flight?.airport?.destination?.code?.iata || 'N/A';
         const depTime = new Date(depTs * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
 
-        // Get airline-specific ops times
-        const ops = getAirlineOps(airline);
+        // Get airline-specific ops times, leveraging a local cache for performance
+        // to avoid repeated find() and toLowerCase() calls for the same airline
+        if (!airlineOpsCache[airline]) {
+          airlineOpsCache[airline] = getAirlineOps(airline);
+        }
+        const ops = airlineOpsCache[airline];
 
         // Notification at check-in open (e.g. 2h before departure)
         const ciOpenTs = depTs - ops.checkInOpen * 60;
