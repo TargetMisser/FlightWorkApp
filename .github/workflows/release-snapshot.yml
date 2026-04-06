@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - dev
 
 permissions:
   contents: write
@@ -17,11 +18,43 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Extract branch name
+        shell: bash
+        run: echo "branch=${GITHUB_REF#refs/heads/}" >> $GITHUB_ENV
+
       - name: Build release metadata
         id: meta
         run: |
-          echo "tag=main-${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
-          echo "name=Main snapshot #${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+          echo "tag=${{ env.branch }}-${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+          echo "name=${{ env.branch }} snapshot #${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Main APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew :app:assembleRelease
+          cp app/build/outputs/apk/release/app-release.apk ../FlightWorkApp-${{ env.branch }}-snapshot.apk
+
+      - name: Build Wear APK
+        run: |
+          cd android
+          ./gradlew :wear:assembleRelease
+          cp wear/build/outputs/apk/release/wear-release.apk ../FlightWorkApp-Wear-${{ env.branch }}-snapshot.apk
 
       - name: Create GitHub prerelease
         uses: softprops/action-gh-release@v2
@@ -31,3 +64,6 @@ jobs:
           target_commitish: ${{ github.sha }}
           generate_release_notes: true
           prerelease: true
+          files: |
+            FlightWorkApp-${{ env.branch }}-snapshot.apk
+            FlightWorkApp-Wear-${{ env.branch }}-snapshot.apk
