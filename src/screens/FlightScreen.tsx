@@ -12,6 +12,7 @@ import { useAppTheme } from '../context/ThemeContext';
 import { useAirport } from '../context/AirportContext';
 import { getAirlineOps, getAirlineColor } from '../utils/airlineOps';
 import { fetchAirportScheduleRaw } from '../utils/fr24api';
+import { fetchStaffMonitorData, type StaffMonitorInfo } from '../utils/staffMonitor';
 import { formatAirportHeader } from '../utils/airportSettings';
 import { requestWidgetUpdate } from 'react-native-android-widget';
 import { WIDGET_CACHE_KEY } from '../widgets/widgetTaskHandler';
@@ -245,6 +246,7 @@ export default function FlightScreen() {
   const [scheduledCount, setScheduledCount] = useState(0);
   const [pinnedFlightId, setPinnedFlightId] = useState<string | null>(null);
   const [inboundArrivals, setInboundArrivals] = useState<Record<string, number>>({});
+  const [staffData, setStaffData] = useState<Map<string, StaffMonitorInfo>>(new Map());
 
   // Carica preferenza notifiche salvata
   useEffect(() => {
@@ -272,6 +274,9 @@ export default function FlightScreen() {
         if (t) inboundMap[reg] = t;
       }
       setInboundArrivals(inboundMap);
+
+      // Fetch dati operativi reali da staffMonitor (stand, banco CI, gate) — fail silenzioso
+      fetchStaffMonitorData().then(sm => setStaffData(sm));
 
       setArrivals(fetchedArrivals);
       setDepartures(fetchedDepartures);
@@ -544,6 +549,10 @@ export default function FlightScreen() {
     const flightId = item.flight?.identification?.number?.default || null;
     const isPinned = flightId !== null && flightId === pinnedFlightId;
 
+    // Dati operativi reali dallo StaffMonitor (stand fisico, banco CI, gate)
+    const smKey = (flightId || '').replace(/\s/g, '');
+    const smInfo = staffData.get(smKey);
+
     return (
       <SwipeableFlightCard
         isPinned={isPinned}
@@ -654,6 +663,32 @@ export default function FlightScreen() {
           )}
         </View>
       </View>
+      {/* StaffMonitor: Stand · Check-in banco · Gate */}
+      {!!smInfo && (!!smInfo.stand || !!smInfo.checkin || !!smInfo.gate) && (
+        <View style={s.staffRow}>
+          {!!smInfo.stand && (
+            <View style={s.staffBadge}>
+              <MaterialIcons name="local-parking" size={11} color={colors.textSub} />
+              <Text style={s.staffLabel}>Stand</Text>
+              <Text style={s.staffValue}>{smInfo.stand}</Text>
+            </View>
+          )}
+          {!!smInfo.checkin && (
+            <View style={s.staffBadge}>
+              <MaterialIcons name="desktop-windows" size={11} color={colors.textSub} />
+              <Text style={s.staffLabel}>CI</Text>
+              <Text style={s.staffValue}>{smInfo.checkin}</Text>
+            </View>
+          )}
+          {!!smInfo.gate && (
+            <View style={s.staffBadge}>
+              <MaterialIcons name="meeting-room" size={11} color={colors.textSub} />
+              <Text style={s.staffLabel}>Gate</Text>
+              <Text style={s.staffValue}>{smInfo.gate}</Text>
+            </View>
+          )}
+        </View>
+      )}
       </SwipeableFlightCard>
     );
   }, [activeTab, userShift, s, pinnedFlightId, pinFlight, unpinFlight, inboundArrivals, colors]);
@@ -766,5 +801,26 @@ function makeStyles(c: any) {
     opsTime: { fontSize: 13, fontWeight: '800', color: c.primaryDark },
     pinBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', alignItems: 'center' },
     pinBtnActive: { backgroundColor: 'rgba(245,158,11,0.25)' },
+    staffRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 6,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderTopWidth: 1,
+      borderTopColor: c.border,
+      backgroundColor: c.cardSecondary ?? c.bg,
+    },
+    staffBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      backgroundColor: c.primaryLight,
+      borderRadius: 8,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+    },
+    staffLabel: { fontSize: 9, fontWeight: '600' as const, color: c.textSub, letterSpacing: 0.5 },
+    staffValue: { fontSize: 12, fontWeight: '800' as const, color: c.primaryDark },
   });
 }
