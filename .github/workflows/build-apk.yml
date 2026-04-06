@@ -88,13 +88,28 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
+      - name: Generate debug keystore
+        run: |
+          mkdir -p android/app
+          keytool -genkey -v \
+            -keystore android/app/debug.keystore \
+            -storepass android \
+            -alias androiddebugkey \
+            -keypass android \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -dname "CN=Android Debug,O=Android,C=US"
+          echo "Keystore generated:"
+          ls -lh android/app/debug.keystore
+
       - name: Build debug APK
         run: |
+          set -o pipefail
           cd android
           ./gradlew :app:assembleDebug \
             --no-daemon \
-            -Pandroid.overridePathCheck=true \
-            2>&1 | tail -200
+            -Pandroid.overridePathCheck=true
         env:
           ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
           GRADLE_OPTS: "-Xmx4g -XX:MaxMetaspaceSize=512m"
