@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ActivityIndicator, ScrollView, TouchableOpacity,
-  PanResponder, Platform, UIManager, Animated, Dimensions, Modal, Alert, FlatList, TextInput, KeyboardAvoidingView, Keyboard,
+  PanResponder, Platform, UIManager, Animated, Dimensions, Modal, Alert, FlatList, TextInput,
 } from 'react-native';
 import * as SystemCalendar from 'expo-calendar';
 import * as Location from 'expo-location';
@@ -11,6 +11,7 @@ import { WebView } from 'react-native-webview';
 import { MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAppTheme, type ThemeColors } from '../context/ThemeContext';
+import TimeCarouselPicker from '../components/TimeCarouselPicker';
 import { useAirport } from '../context/AirportContext';
 import { fetchAirportScheduleRaw } from '../utils/fr24api';
 import {
@@ -77,26 +78,24 @@ export default function CalendarScreen() {
   // ─── Edit menu + manual entry ───────────────────────────────────────────────
   const [editMenuOpen, setEditMenuOpen] = useState(false);
   const [manualModalOpen, setManualModalOpen] = useState(false);
+  const [pickerKey, setPickerKey] = useState(0);
   const [manualDate, setManualDate] = useState(selectedDay);
   const [manualType, setManualType] = useState<'Lavoro' | 'Riposo'>('Lavoro');
-  const [manualStartH, setManualStartH] = useState('08');
-  const [manualStartM, setManualStartM] = useState('00');
-  const [manualEndH, setManualEndH] = useState('16');
-  const [manualEndM, setManualEndM] = useState('00');
-  const manualStartMRef = useRef<TextInput>(null);
-  const manualEndHRef = useRef<TextInput>(null);
-  const manualEndMRef = useRef<TextInput>(null);
+  const [manualStartH, setManualStartH] = useState(8);
+  const [manualStartM, setManualStartM] = useState(0);
+  const [manualEndH, setManualEndH] = useState(16);
+  const [manualEndM, setManualEndM] = useState(0);
 
   const openManualEntry = () => {
     setEditMenuOpen(false);
     setManualDate(selectedDay);
     setManualType('Lavoro');
-    setManualStartH('08'); setManualStartM('00');
-    setManualEndH('16'); setManualEndM('00');
+    setManualStartH(8); setManualStartM(0);
+    setManualEndH(16); setManualEndM(0);
+    setPickerKey(k => k + 1);
     setManualModalOpen(true);
   };
 
-  const sanitizeTimePart = (value: string) => value.replace(/\D/g, '').slice(0, 2);
 
   const saveManualShift = async () => {
     const { status } = await SystemCalendar.requestCalendarPermissionsAsync();
@@ -111,8 +110,8 @@ export default function CalendarScreen() {
         calendarId,
         date: manualDate,
         type: manualType === 'Riposo' ? 'rest' : 'work',
-        startTime: manualType === 'Lavoro' ? `${manualStartH.padStart(2, '0')}:${manualStartM.padStart(2, '0')}` : undefined,
-        endTime: manualType === 'Lavoro' ? `${manualEndH.padStart(2, '0')}:${manualEndM.padStart(2, '0')}` : undefined,
+        startTime: manualType === 'Lavoro' ? `${String(manualStartH).padStart(2, '0')}:${String(manualStartM).padStart(2, '0')}` : undefined,
+        endTime: manualType === 'Lavoro' ? `${String(manualEndH).padStart(2, '0')}:${String(manualEndM).padStart(2, '0')}` : undefined,
       });
 
       setManualModalOpen(false);
@@ -492,12 +491,8 @@ export default function CalendarScreen() {
 
       {/* ─── Manual Entry Modal ─── */}
       <Modal visible={manualModalOpen} transparent animationType="slide" statusBarTranslucent onRequestClose={() => setManualModalOpen(false)}>
-        <KeyboardAvoidingView
-          style={s.modalOverlay}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 24 : 0}
-        >
-          <TouchableOpacity style={s.modalBg} activeOpacity={1} onPress={Keyboard.dismiss} />
+        <View style={s.modalOverlay}>
+          <TouchableOpacity style={s.modalBg} activeOpacity={1} onPress={() => setManualModalOpen(false)} />
           <View style={s.modalScrollContent}>
             <View style={[s.manualModalContent, { backgroundColor: colors.isDark || colors.card === 'transparent' ? '#1E293B' : '#FFFFFF' }]}>
             <View style={s.modalHeader}>
@@ -536,74 +531,40 @@ export default function CalendarScreen() {
             {manualType === 'Lavoro' && (
               <>
                 <Text style={[s.manualLabel, { color: colors.textSub }]}>ORARIO INIZIO</Text>
-                <View style={s.manualTimeRow}>
-                  <TextInput
-                    style={[s.manualInput, s.manualTimeInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.bg }]}
-                    placeholder="HH"
-                    placeholderTextColor={colors.textMuted}
-                    keyboardType="number-pad"
-                    maxLength={2}
-                    value={manualStartH}
-                    onChangeText={v => setManualStartH(sanitizeTimePart(v))}
-                    selectTextOnFocus
-                    returnKeyType="next"
-                    blurOnSubmit={false}
-                    onSubmitEditing={() => manualStartMRef.current?.focus()}
-                  />
-                  <TextInput
-                    ref={manualStartMRef}
-                    style={[s.manualInput, s.manualTimeInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.bg }]}
-                    placeholder="MM"
-                    placeholderTextColor={colors.textMuted}
-                    keyboardType="number-pad"
-                    maxLength={2}
-                    value={manualStartM}
-                    onChangeText={v => setManualStartM(sanitizeTimePart(v))}
-                    selectTextOnFocus
-                    returnKeyType="next"
-                    blurOnSubmit={false}
-                    onSubmitEditing={() => manualEndHRef.current?.focus()}
-                  />
-                </View>
-                <Text style={[s.manualLabel, { color: colors.textSub }]}>ORARIO FINE</Text>
-                <View style={s.manualTimeRow}>
-                  <TextInput
-                    ref={manualEndHRef}
-                    style={[s.manualInput, s.manualTimeInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.bg }]}
-                    placeholder="HH"
-                    placeholderTextColor={colors.textMuted}
-                    keyboardType="number-pad"
-                    maxLength={2}
-                    value={manualEndH}
-                    onChangeText={v => setManualEndH(sanitizeTimePart(v))}
-                    selectTextOnFocus
-                    returnKeyType="next"
-                    blurOnSubmit={false}
-                    onSubmitEditing={() => manualEndMRef.current?.focus()}
-                  />
-                  <TextInput
-                    ref={manualEndMRef}
-                    style={[s.manualInput, s.manualTimeInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.bg }]}
-                    placeholder="MM"
-                    placeholderTextColor={colors.textMuted}
-                    keyboardType="number-pad"
-                    maxLength={2}
-                    value={manualEndM}
-                    onChangeText={v => setManualEndM(sanitizeTimePart(v))}
-                    selectTextOnFocus
-                    returnKeyType="done"
-                    onSubmitEditing={Keyboard.dismiss}
-                  />
-                </View>
+                <TimeCarouselPicker
+                  key={pickerKey * 2}
+                  hour={manualStartH}
+                  minute={manualStartM}
+                  onHourChange={setManualStartH}
+                  onMinuteChange={setManualStartM}
+                  accentColor={colors.primary}
+                  textColor={colors.text}
+                  mutedColor={colors.textMuted}
+                  bgColor={colors.card === 'transparent' ? (colors.isDark ? '#1E293B' : '#F3F4F6') : colors.card}
+                  borderColor={colors.border}
+                />
+                <Text style={[s.manualLabel, { color: colors.textSub, marginTop: 16 }]}>ORARIO FINE</Text>
+                <TimeCarouselPicker
+                  key={pickerKey * 2 + 1}
+                  hour={manualEndH}
+                  minute={manualEndM}
+                  onHourChange={setManualEndH}
+                  onMinuteChange={setManualEndM}
+                  accentColor={colors.primary}
+                  textColor={colors.text}
+                  mutedColor={colors.textMuted}
+                  bgColor={colors.card === 'transparent' ? (colors.isDark ? '#1E293B' : '#F3F4F6') : colors.card}
+                  borderColor={colors.border}
+                />
               </>
             )}
 
-            <TouchableOpacity style={[s.primaryBtn, { backgroundColor: colors.primary, marginTop: 8 }]} onPress={saveManualShift}>
+            <TouchableOpacity style={[s.primaryBtn, { backgroundColor: colors.primary, marginTop: 16 }]} onPress={saveManualShift}>
               <Text style={s.primaryBtnText}>Salva Turno</Text>
             </TouchableOpacity>
             </View>
           </View>
-        </KeyboardAvoidingView>
+        </View>
       </Modal>
 
       {/* Hidden WebView for PDF extraction */}
@@ -807,3 +768,4 @@ function makeStyles(c: ThemeColors) {
     manualTypeBtn: { flex: 1, paddingVertical: 12, borderRadius: 10, borderWidth: 1.5, alignItems: 'center' },
   });
 }
+
