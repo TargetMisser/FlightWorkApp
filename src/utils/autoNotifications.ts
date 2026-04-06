@@ -69,12 +69,12 @@ export async function autoScheduleNotifications(): Promise<number> {
     const newIds: string[] = [];
 
     // ── Arrival notifications: 15 min before landing ──
-    for (const item of shiftArrivals) {
+    const arrivalNotifs = await Promise.all(shiftArrivals.map(async (item) => {
       try {
         const arrTs: number | undefined = item.flight?.time?.scheduled?.arrival;
-        if (!arrTs || isNaN(arrTs)) continue;
+        if (!arrTs || isNaN(arrTs)) return null;
         const secondsUntilNotify = arrTs - 15 * 60 - now;
-        if (secondsUntilNotify <= 0 || isNaN(secondsUntilNotify)) continue;
+        if (secondsUntilNotify <= 0 || isNaN(secondsUntilNotify)) return null;
 
         const flightNumber = item.flight?.identification?.number?.default || 'N/A';
         const airline = item.flight?.airline?.name || 'Sconosciuta';
@@ -82,7 +82,7 @@ export async function autoScheduleNotifications(): Promise<number> {
           || item.flight?.airport?.origin?.code?.iata || 'N/A';
         const arrivalTime = new Date(arrTs * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
 
-        const id = await Notifications.scheduleNotificationAsync({
+        return await Notifications.scheduleNotificationAsync({
           content: {
             title: `✈️ Arrivo tra 15 min — ${flightNumber}`,
             body: `${airline} da ${origin} · arrivo alle ${arrivalTime}`,
@@ -91,17 +91,18 @@ export async function autoScheduleNotifications(): Promise<number> {
           },
           trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: Math.round(secondsUntilNotify), repeats: false },
         });
-        newIds.push(id);
       } catch (err) {
         console.error('Failed to schedule arrival notification:', err);
+        return null;
       }
-    }
+    }));
+    newIds.push(...arrivalNotifs.filter((id): id is string => id !== null));
 
     // ── Departure notifications: check-in open + gate open ──
-    for (const item of shiftDepartures) {
+    const departureNotifs = await Promise.all(shiftDepartures.map(async (item) => {
       try {
         const depTs: number | undefined = item.flight?.time?.scheduled?.departure;
-        if (!depTs || isNaN(depTs)) continue;
+        if (!depTs || isNaN(depTs)) return [];
 
         const airline = item.flight?.airline?.name || 'Sconosciuta';
         const flightNumber = item.flight?.identification?.number?.default || 'N/A';
@@ -111,13 +112,14 @@ export async function autoScheduleNotifications(): Promise<number> {
 
         // Get airline-specific ops times
         const ops = getAirlineOps(airline);
+        const itemIds: string[] = [];
 
         // Notification at check-in open (e.g. 2h before departure)
         const ciOpenTs = depTs - ops.checkInOpen * 60;
         const secondsUntilCI = ciOpenTs - now;
         if (secondsUntilCI > 0 && !isNaN(secondsUntilCI)) {
           const ciTime = new Date(ciOpenTs * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
-          const id = await Notifications.scheduleNotificationAsync({
+          itemIds.push(await Notifications.scheduleNotificationAsync({
             content: {
               title: `📌 Check-in aperto — ${flightNumber}`,
               body: `${airline} per ${destination} · partenza ${depTime} · CI dalle ${ciTime}`,
@@ -125,8 +127,7 @@ export async function autoScheduleNotifications(): Promise<number> {
               data: { flightNumber, depTs, type: 'checkin_open' },
             },
             trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: Math.round(secondsUntilCI), repeats: false },
-          });
-          newIds.push(id);
+          }));
         }
 
         // Notification at gate open
@@ -134,7 +135,7 @@ export async function autoScheduleNotifications(): Promise<number> {
         const secondsUntilGate = gateOpenTs - now;
         if (secondsUntilGate > 0 && !isNaN(secondsUntilGate)) {
           const gateTime = new Date(gateOpenTs * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
-          const id = await Notifications.scheduleNotificationAsync({
+          itemIds.push(await Notifications.scheduleNotificationAsync({
             content: {
               title: `🚪 Gate aperto — ${flightNumber}`,
               body: `${airline} per ${destination} · gate dalle ${gateTime} · partenza ${depTime}`,
@@ -142,13 +143,15 @@ export async function autoScheduleNotifications(): Promise<number> {
               data: { flightNumber, depTs, type: 'gate_open' },
             },
             trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: Math.round(secondsUntilGate), repeats: false },
-          });
-          newIds.push(id);
+          }));
         }
+        return itemIds;
       } catch (err) {
         console.error('Failed to schedule departure notification:', err);
+        return [];
       }
-    }
+    }));
+    departureNotifs.forEach(ids => newIds.push(...ids));
 
     // Shift end notification
     const secondsUntilEnd = shiftEnd - now;

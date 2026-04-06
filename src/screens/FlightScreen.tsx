@@ -115,11 +115,11 @@ async function scheduleShiftNotifications(
   const now = Date.now() / 1000;
   const newIds: string[] = [];
 
-  for (const item of shiftFlights) {
+  const flightNotifs = await Promise.all(shiftFlights.map(async (item) => {
     const ts: number | undefined = item.flight?.time?.scheduled?.arrival;
-    if (!ts) continue;
+    if (!ts) return null;
     const secondsUntilNotify = ts - 15 * 60 - now; // 15 min prima
-    if (secondsUntilNotify <= 0) continue;           // già passato
+    if (secondsUntilNotify <= 0) return null;      // già passato
 
     const flightNumber = item.flight?.identification?.number?.default || 'N/A';
     const airline      = item.flight?.airline?.name || 'Sconosciuta';
@@ -128,7 +128,7 @@ async function scheduleShiftNotifications(
                       || 'N/A';
     const arrivalTime  = new Date(ts * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
 
-    const id = await Notifications.scheduleNotificationAsync({
+    return Notifications.scheduleNotificationAsync({
       content: {
         title: `✈️ Arrivo tra 15 min — ${flightNumber}`,
         body: `${airline} da ${origin} · atterraggio alle ${arrivalTime}`,
@@ -137,8 +137,8 @@ async function scheduleShiftNotifications(
       },
       trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: Math.round(secondsUntilNotify), repeats: false },
     });
-    newIds.push(id);
-  }
+  }));
+  newIds.push(...flightNotifs.filter((id): id is string => id !== null));
 
   // Notifica fine turno
   const secondsUntilEnd = shiftEnd - now;
@@ -208,10 +208,10 @@ async function schedulePinnedNotifications(item: any, tab: 'arrivals' | 'departu
       { offset: 10, title: `📌 Partenza tra 10 min — ${flightNumber}`, body: `${airline} → ${dest} · partenza alle ${depTime}` },
     ];
 
-    for (const phase of phases) {
+    const phaseNotifs = await Promise.all(phases.map(async (phase) => {
       const secsUntil = ts - phase.offset * 60 - now;
-      if (secsUntil <= 0) continue;
-      const id = await Notifications.scheduleNotificationAsync({
+      if (secsUntil <= 0) return null;
+      return Notifications.scheduleNotificationAsync({
         content: {
           title: phase.title,
           body: phase.body,
@@ -220,8 +220,8 @@ async function schedulePinnedNotifications(item: any, tab: 'arrivals' | 'departu
         },
         trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: Math.round(secsUntil), repeats: false },
       });
-      ids.push(id);
-    }
+    }));
+    ids.push(...phaseNotifs.filter((id): id is string => id !== null));
   }
 
   if (ids.length > 0) {
