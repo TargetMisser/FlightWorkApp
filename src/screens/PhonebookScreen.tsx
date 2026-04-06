@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useAppTheme } from '../context/ThemeContext';
+import { useAppTheme, type ThemeColors } from '../context/ThemeContext';
 
 const STORAGE_KEY = 'aerostaff_phonebook_v1';
 
@@ -40,7 +40,7 @@ interface EditModalProps {
   onClose: () => void;
 }
 
-function makeModalStyles(c: any) {
+function makeModalStyles(c: ThemeColors) {
   return StyleSheet.create({
     overlay: {
       flex: 1, justifyContent: 'flex-end',
@@ -205,7 +205,7 @@ function EditModal({ visible, contact, onSave, onClose }: EditModalProps) {
 
 
 // ─── Riga contatto ────────────────────────────────────────────────────────────
-function makeRowStyles(c: any) {
+function makeRowStyles(c: ThemeColors) {
   return StyleSheet.create({
     card: {
       flexDirection: 'row', alignItems: 'center',
@@ -285,7 +285,7 @@ function ContactRow({ contact, onEdit, onDelete }: ContactRowProps) {
 
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
-function makeStyles(c: any) {
+function makeStyles(c: ThemeColors) {
   return StyleSheet.create({
     root: { flex: 1, backgroundColor: c.bg },
     header: {

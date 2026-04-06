@@ -93,7 +93,7 @@ export async function autoScheduleNotifications(): Promise<number> {
         });
         newIds.push(id);
       } catch (err) {
-        console.error('Failed to schedule arrival notification:', err);
+        if (__DEV__) console.error('Failed to schedule arrival notification:', err);
       }
     }
 
@@ -146,7 +146,7 @@ export async function autoScheduleNotifications(): Promise<number> {
           newIds.push(id);
         }
       } catch (err) {
-        console.error('Failed to schedule departure notification:', err);
+        if (__DEV__) console.error('Failed to schedule departure notification:', err);
       }
     }
 
@@ -170,7 +170,7 @@ export async function autoScheduleNotifications(): Promise<number> {
     await AsyncStorage.setItem(LAST_SCHEDULE_KEY, todayKey);
     return newIds.length;
   } catch (e) {
-    console.error('autoScheduleNotifications error:', e);
+    if (__DEV__) console.error('autoScheduleNotifications error:', e);
     return 0;
   }
 }

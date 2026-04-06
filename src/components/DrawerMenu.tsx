@@ -3,7 +3,7 @@ import {
   Animated, Modal, StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useAppTheme } from '../context/ThemeContext';
+import { useAppTheme, type ThemeColors } from '../context/ThemeContext';
 
 type DrawerItem = {
   id: string;
@@ -89,7 +89,7 @@ export default function DrawerMenu({ visible, onClose, onSelect }: Props) {
                 activeOpacity={0.7}
               >
                 <View style={styles.itemIcon}>
-                  <MaterialIcons name={item.icon} size={22} color="#2563EB" />
+                  <MaterialIcons name={item.icon} size={22} color={colors.primary} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.itemLabel}>{item.label}</Text>
@@ -103,14 +103,14 @@ export default function DrawerMenu({ visible, onClose, onSelect }: Props) {
           {/* Divider */}
           <View style={styles.divider} />
 
-          <Text style={styles.version}>AeroStaff Pro · v1.0</Text>
+          <Text style={styles.version}>AeroStaff Pro · v1.1.0</Text>
         </Animated.View>
       </View>
     </Modal>
   );
 }
 
-function makeStyles(c: any) {
+function makeStyles(c: ThemeColors) {
   return StyleSheet.create({
     root: { flex: 1, flexDirection: 'row' },
     overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(15,23,42,0.5)' },

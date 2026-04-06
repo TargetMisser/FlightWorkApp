@@ -8,7 +8,7 @@ import * as Calendar from 'expo-calendar';
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useAppTheme } from '../context/ThemeContext';
+import { useAppTheme, type ThemeColors } from '../context/ThemeContext';
 import { useAirport } from '../context/AirportContext';
 import { getAirlineOps, getAirlineColor } from '../utils/airlineOps';
 import { fetchAirportScheduleRaw } from '../utils/fr24api';
@@ -34,7 +34,7 @@ try { Notifications.setNotificationHandler({
     shouldShowBanner: true,
     shouldShowList: true,
   }),
-}); } catch (e) { console.warn('[notifHandler]', e); }
+}); } catch (e) { if (__DEV__) console.warn('[notifHandler]', e); }
 
 
 function LogoPill({ iataCode, airlineName, color }: { iataCode: string; airlineName: string; color: string }) {
@@ -396,7 +396,7 @@ export default function FlightScreen() {
         await cancelPreviousNotifications();
         setScheduledCount(0);
       }
-    } catch (e) { console.error('[fetchAll]', e); } finally { setLoading(false); setRefreshing(false); }
+    } catch (e) { if (__DEV__) console.error('[fetchAll]', e); } finally { setLoading(false); setRefreshing(false); }
   }, [airportCode, airportLoading]);
 
   useEffect(() => {
@@ -461,7 +461,7 @@ export default function FlightScreen() {
       const tab = activeTab;
       await AsyncStorage.setItem(PINNED_FLIGHT_KEY, JSON.stringify({ ...item, _pinTab: tab, _pinnedAt: Date.now() }));
       setPinnedFlightId(id);
-      try { await schedulePinnedNotifications(item, tab); } catch (e) { console.warn('[pinnedNotif]', e); }
+      try { await schedulePinnedNotifications(item, tab); } catch (e) { if (__DEV__) console.warn('[pinnedNotif]', e); }
       // Send to watch
       if (WearDataSender) {
         const payload = JSON.stringify({
@@ -488,10 +488,10 @@ export default function FlightScreen() {
   const unpinFlight = useCallback(async () => {
     try {
       await AsyncStorage.removeItem(PINNED_FLIGHT_KEY);
-      try { await cancelPinnedNotifications(); } catch (e) { console.warn('[cancelPinNotif]', e); }
+      try { await cancelPinnedNotifications(); } catch (e) { if (__DEV__) console.warn('[cancelPinNotif]', e); }
       setPinnedFlightId(null);
       if (WearDataSender) WearDataSender.clearPinnedFlight();
-    } catch (e) { console.error('[unpin]', e); }
+    } catch (e) { if (__DEV__) console.error('[unpin]', e); }
   }, []);
 
   const userShift = activeDay === 'today' ? shifts.today : shifts.tomorrow;
@@ -726,7 +726,7 @@ export default function FlightScreen() {
   );
 }
 
-function makeStyles(c: any) {
+function makeStyles(c: ThemeColors) {
   return StyleSheet.create({
     pageHeader: { backgroundColor: c.card, paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: c.border, flexDirection: 'row', alignItems: 'center' },
     notifBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: c.cardSecondary, justifyContent: 'center', alignItems: 'center' },
