@@ -74,7 +74,7 @@ export default function CalendarScreen() {
   const [manualModalOpen, setManualModalOpen] = useState(false);
   const [pickerKey, setPickerKey] = useState(0);
   const [manualDate, setManualDate] = useState(selectedDay);
-  const [manualType, setManualType] = useState<'Lavoro' | t('calRestPill')>('Lavoro');
+  const [manualType, setManualType] = useState<'Lavoro' | 'Riposo'>('Lavoro');
   const [manualStartH, setManualStartH] = useState(8);
   const [manualStartM, setManualStartM] = useState(0);
   const [manualEndH, setManualEndH] = useState(16);
@@ -510,13 +510,13 @@ export default function CalendarScreen() {
             {/* Tipo */}
             <Text style={[s.manualLabel, { color: colors.textSub }]}>{t('calTypeLabel')}</Text>
             <View style={{ flexDirection: 'row', gap: 10, marginBottom: 16 }}>
-              {(['Lavoro', 'Riposo'] as const).map(t => (
+              {(['Lavoro', 'Riposo'] as const).map(shiftType => (
                 <TouchableOpacity
-                  key={t}
-                  style={[s.manualTypeBtn, { borderColor: colors.border }, manualType === t && { backgroundColor: colors.primary, borderColor: colors.primary }]}
-                  onPress={() => setManualType(t)}
+                  key={shiftType}
+                  style={[s.manualTypeBtn, { borderColor: colors.border }, manualType === shiftType && { backgroundColor: colors.primary, borderColor: colors.primary }]}
+                  onPress={() => setManualType(shiftType)}
                 >
-                  <Text style={{ color: manualType === t ? '#fff' : colors.text, fontWeight: '700' }}>{t === 'Lavoro' ? t('calTypeWork') : t('calTypeRest')}</Text>
+                  <Text style={{ color: manualType === shiftType ? '#fff' : colors.text, fontWeight: '700' }}>{shiftType === 'Lavoro' ? t('calTypeWork') : t('calTypeRest')}</Text>
                 </TouchableOpacity>
               ))}
             </View>

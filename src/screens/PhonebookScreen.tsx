@@ -242,6 +242,7 @@ interface ContactRowProps {
 
 function ContactRow({ contact, onEdit, onDelete }: ContactRowProps) {
   const { colors } = useAppTheme();
+  const { t } = useLanguage();
   const rowStyles = useMemo(() => makeRowStyles(colors), [colors]);
   const color = CATEGORY_COLORS[contact.category] ?? '#64748B';
 
@@ -341,6 +342,7 @@ function makeStyles(c: ThemeColors) {
 
 export default function PhonebookScreen() {
   const { colors } = useAppTheme();
+  const { t } = useLanguage();
   const s = useMemo(() => makeStyles(colors), [colors]);
   const [contacts, setContacts]       = useState<Contact[]>([]);
   const [search, setSearch]           = useState('');

@@ -134,6 +134,7 @@ function PasswordRow({ item, onEdit, onDelete }: { item: PasswordEntry; onEdit: 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function PasswordScreen() {
   const { colors } = useAppTheme();
+  const { t } = useLanguage();
   const s = useMemo(() => makeStyles(colors), [colors]);
 
   const [entries, setEntries]       = useState<PasswordEntry[]>([]);

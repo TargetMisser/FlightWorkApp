@@ -28,7 +28,6 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 }
 
 const PINNED_FLIGHT_KEY = 'pinned_flight_v1';
-const HOME_SHIFT_TITLES = { work: t('homeShiftWork'), rest: '🌴 Riposo' };
 const HOME_REST_TIMING = { startHour: 12, startMinute: 0, endHour: 14, endMinute: 0, allDay: true };
 
 const weatherMap: Record<number, { text: string; icon: string }> = {
@@ -59,6 +58,7 @@ window.runTesseract = async function(base64JsonStr) {
 </script></body></html>`;
 
 function PinnedFlightCard({ item, colors }: { item: any; colors: any }) {
+  const { t, locale } = useLanguage();
   const tab = item._pinTab || 'departures';
   const flightNumber = item.flight?.identification?.number?.default || 'N/A';
   const airline = item.flight?.airline?.name || 'Sconosciuta';
@@ -150,6 +150,7 @@ function PinnedFlightCard({ item, colors }: { item: any; colors: any }) {
 export default function HomeScreen() {
   const { colors } = useAppTheme();
   const { t, months, locale, weatherMap } = useLanguage();
+  const HOME_SHIFT_TITLES = { work: t('homeShiftWork'), rest: '🌴 Riposo' };
   const today = new Date();
   const [shiftEvent, setShiftEvent] = useState<any>(null);
   const [weather, setWeather] = useState<{ text: string; icon: string; temp: number } | null>(null);

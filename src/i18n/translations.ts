@@ -84,7 +84,7 @@ const it = {
   homeToday: 'OGGI', homeCurrentShift: 'Turno Attuale',
   homeShiftWork: 'Turno Lavoro \u2708\ufe0f', homeInProgress: 'IN CORSO',
   homeRestDay: 'Giorno di Riposo', homeNoShift: 'Nessun turno per oggi',
-  homeArrival: 'Arrivo', homeDeparture: 'Partenza', homePinned: 'Pinnato',
+  homeArrival: 'Arrivo', homeDeparture: 'Partenza', homePinned: 'Pinnato', homeWeatherLocal: 'Locale',
   homePermDenied: 'Permesso negato', homeNoWritableCalendar: 'Nessun calendario scrivibile.',
   homeShiftSynced: '\u2705 Turni Sincronizzati!', homeShiftsSaved: 'turni salvati.',
   homeNoSchedule: 'Nessun orario trovato', homeCalErr: 'Errore Calendario',
@@ -240,7 +240,7 @@ const en: typeof it = {
   homeToday: 'TODAY', homeCurrentShift: 'Current Shift',
   homeShiftWork: 'Work Shift \u2708\ufe0f', homeInProgress: 'IN PROGRESS',
   homeRestDay: 'Rest Day', homeNoShift: 'No shift today',
-  homeArrival: 'Arrival', homeDeparture: 'Departure', homePinned: 'Pinned',
+  homeArrival: 'Arrival', homeDeparture: 'Departure', homePinned: 'Pinned', homeWeatherLocal: 'Local',
   homePermDenied: 'Permission denied', homeNoWritableCalendar: 'No writable calendar.',
   homeShiftSynced: '\u2705 Shifts Synced!', homeShiftsSaved: 'shifts saved.',
   homeNoSchedule: 'No schedule found', homeCalErr: 'Calendar Error',
@@ -291,6 +291,25 @@ const en: typeof it = {
   pinDisableBtn: 'Disable', pinErrMsg: 'Could not set PIN. Try again.',
   pinVerifyErr: 'Could not verify PIN. Try again.',
   pinAccessEnable: 'Enable PIN protection', pinAccessDisable: 'Disable PIN protection',
+  // DrawerMenu
+  drawerNotepadTitle: 'Notepad',
+  drawerNotepadSub: 'Personal notes',
+  drawerPhonebookTitle: 'Phonebook',
+  drawerPhonebookSub: 'Useful numbers',
+  drawerPasswordTitle: 'Passwords',
+  drawerPasswordSub: 'Saved credentials',
+  drawerManualsTitle: 'DCS Manuals',
+  drawerManualsSub: 'Document library',
+  drawerSettingsTitle: 'Settings',
+  drawerSettingsSub: 'App preferences',
+  // ShiftTimeline
+  shiftUnknown: 'Unknown',
+  // FlightScreen filter menu
+  flightFilterTitle: 'Show flights',
+  flightFilterMine: 'My airlines only',
+  flightFilterMineSub: 'Wizz, EasyJet and other configured operators',
+  flightFilterAll: 'All flights',
+  flightFilterAllSub: 'Show all operators at this airport',
 };
 
 export const translations: Record<Lang, typeof it> = { it, en };
@@ -339,23 +358,4 @@ export const WEATHER_MAP: Record<Lang, Record<number, { text: string; icon: stri
     63: { text: 'Rain', icon: '\ud83c\udf27\ufe0f' },
     80: { text: 'Showers', icon: '\ud83c\udf27\ufe0f' },
   },
-  // DrawerMenu
-  drawerNotepadTitle: 'Notepad',
-  drawerNotepadSub: 'Personal notes',
-  drawerPhonebookTitle: 'Phonebook',
-  drawerPhonebookSub: 'Useful numbers',
-  drawerPasswordTitle: 'Passwords',
-  drawerPasswordSub: 'Saved credentials',
-  drawerManualsTitle: 'DCS Manuals',
-  drawerManualsSub: 'Document library',
-  drawerSettingsTitle: 'Settings',
-  drawerSettingsSub: 'App preferences',
-  // ShiftTimeline
-  shiftUnknown: 'Unknown',
-  // FlightScreen filter menu
-  flightFilterTitle: 'Show flights',
-  flightFilterMine: 'My airlines only',
-  flightFilterMineSub: 'Wizz, EasyJet and other configured operators',
-  flightFilterAll: 'All flights',
-  flightFilterAllSub: 'Show all operators at this airport',
 };

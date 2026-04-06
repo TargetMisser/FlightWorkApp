@@ -41,7 +41,7 @@ function parseFlight(item: any): Flight | null {
   if (!f) return null;
   const ts = f.time?.scheduled?.departure;
   if (!ts) return null;
-  const airlineName = f.airline?.name || t('shiftUnknown');
+  const airlineName = f.airline?.name || '—';
   return {
     id: f.identification?.id || `${ts}`,
     flightNumber: f.identification?.number?.default || 'N/A',

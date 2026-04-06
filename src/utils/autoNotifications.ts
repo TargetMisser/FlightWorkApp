@@ -75,6 +75,7 @@ export async function autoScheduleNotifications(): Promise<number> {
     });
 
     // ── Persistent ongoing shift notification ──────────────────────────────────
+    const now = Date.now() / 1000;
     const shiftStartDate = new Date(shiftStart * 1000);
     const shiftEndDate   = new Date(shiftEnd   * 1000);
     const fmt = (d: Date) => d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
@@ -106,7 +107,6 @@ export async function autoScheduleNotifications(): Promise<number> {
 
     // Cancel old and schedule new
     await cancelPrevious();
-    const now = Date.now() / 1000;
     const newIds: string[] = [];
 
     // ── Arrival notifications: 15 min before landing ──

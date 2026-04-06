@@ -112,6 +112,7 @@ async function cancelPreviousNotifications() {
 async function scheduleShiftNotifications(
   shiftFlights: any[],
   shiftEnd: number,
+  locale: string,
 ): Promise<number> {
   await cancelPreviousNotifications();
   const now = Date.now() / 1000;
@@ -170,7 +171,7 @@ async function cancelPinnedNotifications() {
   await AsyncStorage.removeItem(PINNED_NOTIF_IDS_KEY);
 }
 
-async function schedulePinnedNotifications(item: any, tab: 'arrivals' | 'departures'): Promise<void> {
+async function schedulePinnedNotifications(item: any, tab: 'arrivals' | 'departures', locale: string): Promise<void> {
   await cancelPinnedNotifications();
   const now = Date.now() / 1000;
   const ids: string[] = [];
@@ -401,7 +402,7 @@ export default function FlightScreen() {
           const ts = item.flight?.time?.scheduled?.arrival;
           return ts && ts >= shiftToday!.start && ts <= shiftToday!.end;
         });
-        const count = await scheduleShiftNotifications(shiftFlights, shiftToday!.end);
+        const count = await scheduleShiftNotifications(shiftFlights, shiftToday!.end, locale);
         setScheduledCount(count);
       } else {
         await cancelPreviousNotifications();
@@ -450,7 +451,7 @@ export default function FlightScreen() {
         const ts = item.flight?.time?.scheduled?.arrival;
         return ts && ts >= shifts.today!.start && ts <= shifts.today!.end;
       });
-      const count = await scheduleShiftNotifications(shiftFlights, shifts.today!.end);
+      const count = await scheduleShiftNotifications(shiftFlights, shifts.today!.end, locale);
       setScheduledCount(count);
       Alert.alert(
         t('flightNotifEnabled'),
@@ -472,7 +473,7 @@ export default function FlightScreen() {
       const tab = activeTab;
       await AsyncStorage.setItem(PINNED_FLIGHT_KEY, JSON.stringify({ ...item, _pinTab: tab, _pinnedAt: Date.now() }));
       setPinnedFlightId(id);
-      try { await schedulePinnedNotifications(item, tab); } catch (e) { if (__DEV__) console.warn('[pinnedNotif]', e); }
+      try { await schedulePinnedNotifications(item, tab, locale); } catch (e) { if (__DEV__) console.warn('[pinnedNotif]', e); }
       // Send to watch
       if (WearDataSender) {
         const payload = JSON.stringify({
@@ -718,9 +719,9 @@ export default function FlightScreen() {
       <View style={s.controlsRow}>
         {/* Arrivi / Partenze */}
         <View style={s.segment}>
-          {(['arrivals', 'departures'] as const).map(t => (
-            <TouchableOpacity key={t} style={[s.segBtn, activeTab === t && s.segBtnActive]} onPress={() => setActiveTab(t)}>
-              <Text style={[s.segBtnText, activeTab === t && s.segBtnTextActive]}>{t === 'arrivals' ? t('flightArrivals') : t('flightDepartures')}</Text>
+          {(['arrivals', 'departures'] as const).map(tab => (
+            <TouchableOpacity key={tab} style={[s.segBtn, activeTab === tab && s.segBtnActive]} onPress={() => setActiveTab(tab)}>
+              <Text style={[s.segBtnText, activeTab === tab && s.segBtnTextActive]}>{tab === 'arrivals' ? t('flightArrivals') : t('flightDepartures')}</Text>
             </TouchableOpacity>
           ))}
         </View>

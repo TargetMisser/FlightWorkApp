@@ -17,14 +17,6 @@ type DrawerItem = {
   sublabel: string;
 };
 
-const ITEMS: DrawerItem[] = [
-  { id: 'Notepad',   icon: 'edit-note',  label: t('drawerNotepadTitle'),  sublabel: t('drawerNotepadSub') },
-  { id: 'Phonebook', icon: 'contacts',   label: t('drawerPhonebookTitle'),      sublabel: t('drawerPhonebookSub') },
-  { id: 'Passwords', icon: 'lock',       label: t('drawerPasswordTitle'),     sublabel: t('drawerPasswordSub') },
-  { id: 'Manuals',   icon: 'menu-book',  label: t('drawerManualsTitle'),  sublabel: 'Easyjet, Wizz, Ryanair…' },
-  { id: 'Settings',  icon: 'settings',   label: t('drawerSettingsTitle'), sublabel: t('drawerSettingsSub') },
-];
-
 interface Props {
   visible: boolean;
   onClose: () => void;
@@ -36,6 +28,13 @@ const DRAWER_WIDTH = 285;
 export default function DrawerMenu({ visible, onClose, onSelect }: Props) {
   const { colors } = useAppTheme();
   const { t } = useLanguage();
+  const ITEMS: DrawerItem[] = [
+    { id: 'Notepad',   icon: 'edit-note',  label: t('drawerNotepadTitle'),  sublabel: t('drawerNotepadSub') },
+    { id: 'Phonebook', icon: 'contacts',   label: t('drawerPhonebookTitle'), sublabel: t('drawerPhonebookSub') },
+    { id: 'Passwords', icon: 'lock',       label: t('drawerPasswordTitle'),  sublabel: t('drawerPasswordSub') },
+    { id: 'Manuals',   icon: 'menu-book',  label: t('drawerManualsTitle'),   sublabel: 'Easyjet, Wizz, Ryanair…' },
+    { id: 'Settings',  icon: 'settings',   label: t('drawerSettingsTitle'),  sublabel: t('drawerSettingsSub') },
+  ];
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const slideAnim = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
   const fadeAnim  = useRef(new Animated.Value(0)).current;
@@ -84,7 +83,7 @@ export default function DrawerMenu({ visible, onClose, onSelect }: Props) {
               end={{ x: 1, y: 1 }}
               style={styles.headerGradient}
             >
-              <AeroStaffLogo variant="header" size={48} />
+              <AeroStaffLogo variant="large" monochrome />
               <TouchableOpacity onPress={onClose} style={styles.closeIconBtn}>
                 <MaterialIcons name="close" size={20} color="rgba(255,255,255,0.7)" />
               </TouchableOpacity>

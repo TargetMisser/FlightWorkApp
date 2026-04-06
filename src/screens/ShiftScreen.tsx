@@ -10,6 +10,7 @@ const DARK_ORANGE = '#C2520A';
 const BG = '#F3F4F6';
 
 export default function ShiftScreen() {
+  const { t } = useLanguage();
   const [imageList, setImageList] = useState<string[]>([]);
   const [ocrText, setOcrText] = useState<string>('');
   const [processing, setProcessing] = useState(false);
