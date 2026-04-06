@@ -15,11 +15,11 @@ import ShiftTimeline from '../components/ShiftTimeline';
 
 import { getAirlineOps, getAirlineColor } from '../utils/airlineOps';
 import {
-import { useLanguage } from '../context/LanguageContext';
   getWritableCalendarId,
   replaceShiftForDate,
   replaceShiftsForRange,
 } from '../utils/shiftCalendar';
+import { useLanguage } from '../context/LanguageContext';
 
 const GOLD = '#F59E0B';
 
