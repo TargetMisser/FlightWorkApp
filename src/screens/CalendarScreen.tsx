@@ -38,16 +38,8 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-const weatherMap: Record<number, { text: string; icon: string }> = {
-  0: { text: 'Sereno', icon: '☀️' },
-  1: { text: 'Poco Nuvoloso', icon: '🌤️' },
-  2: { text: 'Nuvoloso', icon: '⛅' },
-  3: { text: 'Coperto', icon: '☁️' },
-  45: { text: 'Nebbia', icon: '🌫️' },
-  61: { text: 'Pioggia Leggera', icon: '🌦️' },
-  63: { text: 'Pioggia', icon: '🌧️' },
-  80: { text: 'Rovesci', icon: '🌧️' },
-};
+// weatherMap comes from useLanguage() context
+
 
 function getMonday(d: Date | null | undefined): Date {
   if (!d || isNaN(d.getTime())) return getMonday(new Date());
@@ -524,7 +516,7 @@ export default function CalendarScreen() {
                   style={[s.manualTypeBtn, { borderColor: colors.border }, manualType === t && { backgroundColor: colors.primary, borderColor: colors.primary }]}
                   onPress={() => setManualType(t)}
                 >
-                  <Text style={{ color: manualType === t ? '#fff' : colors.text, fontWeight: '700' }}>{t === 'Lavoro' ? t('calTypeWork') : '🌴 Riposo'}</Text>
+                  <Text style={{ color: manualType === t ? '#fff' : colors.text, fontWeight: '700' }}>{t === 'Lavoro' ? t('calTypeWork') : t('calTypeRest')}</Text>
                 </TouchableOpacity>
               ))}
             </View>
