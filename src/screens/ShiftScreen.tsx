@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ActivityIndicator, ScrollView, Alert, Touchable
 import * as ImagePicker from 'expo-image-picker';
 import { WebView } from 'react-native-webview';
 import * as Calendar from 'expo-calendar';
+import { useLanguage } from '../context/LanguageContext';
 
 const PRIMARY = '#F47B16';
 const DARK_ORANGE = '#C2520A';
@@ -79,7 +80,7 @@ export default function ShiftScreen() {
       }
 
       if (!targetCalendar) {
-        Alert.alert('Errore', 'Nessun calendario scrivibile trovato sul dispositivo.');
+        Alert.alert('Errore', t('shiftNoCalendar'));
         return;
       }
       // Normalizzazione Estrema OCR globale prima di estrarre
@@ -194,7 +195,7 @@ export default function ShiftScreen() {
 
     } catch (e: any) {
       console.error(e);
-      Alert.alert('Errore Calendario', 'Non è stato possibile salvare: ' + e.message);
+      Alert.alert(t('shiftCalErrTitle'), 'Non è stato possibile salvare: ' + e.message);
     }
   };
 
@@ -238,8 +239,8 @@ export default function ShiftScreen() {
 
       {/* Page Header */}
       <View style={styles.pageHeader}>
-        <Text style={styles.pageTitle}>Gestione Turni</Text>
-        <Text style={styles.pageSub}>Scansiona i turni dal tabellone e sincronizzali nel calendario.</Text>
+        <Text style={styles.pageTitle}>{t('shiftTitle')}</Text>
+        <Text style={styles.pageSub}>{t('shiftSub')}</Text>
       </View>
 
       <View style={styles.infoCard}>
@@ -266,13 +267,13 @@ export default function ShiftScreen() {
       {processing && (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={PRIMARY} />
-          <Text style={styles.loadingText}>Estrazione del testo in corso...</Text>
+          <Text style={styles.loadingText}>{t('shiftExtracting')}</Text>
         </View>
       )}
 
       {ocrText ? (
         <View style={styles.resultContainer}>
-          <Text style={styles.resultTitle}>Testo Estratto:</Text>
+          <Text style={styles.resultTitle}>{t('shiftExtractedTitle')}</Text>
           <Text style={styles.resultText}>{ocrText}</Text>
           
           <TouchableOpacity style={styles.saveButton} onPress={parseAndSaveShifts}>
