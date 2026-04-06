@@ -7,6 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAppTheme, ThemeMode } from '../context/ThemeContext';
 import { useAirport } from '../context/AirportContext';
+import { useLanguage } from '../context/LanguageContext';
 import {
   AIRPORT_PRESETS,
   formatAirportSettingLabel,
@@ -53,10 +54,11 @@ const THEME_OPTIONS: ThemeOption[] = [
   },
 ];
 
-function ThemeCard({ option, selected, onSelect }: {
+function ThemeCard({ option, selected, onSelect, activeLabel }: {
   option: ThemeOption;
   selected: boolean;
   onSelect: () => void;
+  activeLabel: string;
 }) {
   const { colors } = useAppTheme();
   return (
@@ -103,7 +105,7 @@ function ThemeCard({ option, selected, onSelect }: {
           </Text>
           {selected && (
             <View style={[styles.activeBadge, { backgroundColor: colors.primary }]}>
-              <Text style={styles.activeBadgeTxt}>Attivo</Text>
+              <Text style={styles.activeBadgeTxt}>{activeLabel}</Text>
             </View>
           )}
         </View>
@@ -161,7 +163,14 @@ function SettingRow({
 export default function SettingsScreen() {
   const { colors, mode, setMode, isLoading } = useAppTheme();
   const { airport, airportCode, setAirportCode, isLoading: airportLoading } = useAirport();
+  const { t, lang, setLang, languages } = useLanguage();
   const [airportModalOpen, setAirportModalOpen] = useState(false);
+
+  const translatedOptions = THEME_OPTIONS.map(opt => ({
+    ...opt,
+    label: opt.id === 'light' ? t('themeLight') : opt.id === 'dark' ? t('themeDark') : t('themeWeather'),
+    sublabel: opt.id === 'light' ? t('themeLightSub') : opt.id === 'dark' ? t('themeDarkSub') : t('themeWeatherSub'),
+  }));
   const [airportInput, setAirportInput] = useState(airportCode);
 
   const openAirportModal = () => {
@@ -177,19 +186,16 @@ export default function SettingsScreen() {
   const saveAirport = async () => {
     const normalized = normalizeAirportCode(airportInput);
     if (!isValidAirportCode(normalized)) {
-      Alert.alert('Codice non valido', 'Inserisci un codice IATA di 3 lettere, per esempio PSA o FCO.');
+      Alert.alert(t('airportAlertInvalidTitle'), t('airportAlertInvalidMsg'));
       return;
     }
 
     try {
       await setAirportCode(normalized);
       setAirportModalOpen(false);
-      Alert.alert(
-        'Aeroporto aggiornato',
-        'Voli, timeline, widget e notifiche useranno il nuovo aeroporto.',
-      );
+      Alert.alert(t('airportAlertUpdatedTitle'), t('airportAlertUpdatedMsg'));
     } catch {
-      Alert.alert('Errore', 'Non sono riuscito a salvare il nuovo aeroporto.');
+      Alert.alert(t('airportAlertErrorTitle'), t('airportAlertErrorMsg'));
     }
   };
 
@@ -206,69 +212,96 @@ export default function SettingsScreen() {
           <MaterialIcons name="settings" size={28} color={colors.primary} />
         </View>
         <View>
-          <Text style={[styles.bannerTitle, { color: colors.primaryDark }]}>Impostazioni</Text>
+          <Text style={[styles.bannerTitle, { color: colors.primaryDark }]}>{t('settingsTitle')}</Text>
           <Text style={[styles.bannerSub, { color: colors.textMuted }]}>AeroStaff Pro · v1.1.0</Text>
         </View>
       </View>
 
       {/* ── Sezione Tema ── */}
-      <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>TEMA</Text>
+      <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>{t('sectionTheme')}</Text>
 
       {isLoading ? (
         <View style={[styles.card, { backgroundColor: colors.card, alignItems: 'center', padding: 24 }]}>
           <ActivityIndicator color={colors.primary} />
           <Text style={[styles.rowSub, { color: colors.textMuted, marginTop: 8 }]}>
-            Caricamento tema meteo…
+            {t('themeLoading')}
           </Text>
         </View>
       ) : (
         <View style={styles.themeGrid}>
-          {THEME_OPTIONS.map(opt => (
+          {translatedOptions.map(opt => (
             <ThemeCard
               key={opt.id}
               option={opt}
               selected={mode === opt.id}
               onSelect={() => setMode(opt.id)}
+              activeLabel={t('themeActive')}
             />
           ))}
         </View>
       )}
 
       {/* ── Sezione Account ── */}
-      <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>ACCOUNT</Text>
+      <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>{t('sectionAccount')}</Text>
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }, colors.isDark && { elevation: 0, shadowOpacity: 0, borderWidth: 1 }]}>
-        <SettingRow icon="person-outline"  label="Profilo"       sublabel="Nome, ruolo, compagnia"   type="arrow" disabled />
+        <SettingRow icon="person-outline"  label={t('accountProfile')} sublabel={t('accountProfileSub')}   type="arrow" disabled />
         <View style={[styles.divider, { backgroundColor: colors.border }]} />
-        <SettingRow icon="badge"           label="Matricola / ID" sublabel="Non configurato"          type="arrow" disabled />
+        <SettingRow icon="badge"           label={t('accountId')} sublabel={t('accountIdSub')}          type="arrow" disabled />
       </View>
 
       {/* ── Sezione Aeroporto ── */}
-      <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>AEROPORTO</Text>
+      <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>{t('sectionAirport')}</Text>
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }, colors.isDark && { elevation: 0, shadowOpacity: 0, borderWidth: 1 }]}>
         <SettingRow
           icon="flight-land"
-          label="Aeroporto base"
-          sublabel={airportLoading ? 'Caricamento aeroporto...' : formatAirportSettingLabel(airport.code)}
+          label={t('airportBase')}
+          sublabel={airportLoading ? t('airportLoading') : formatAirportSettingLabel(airport.code)}
           type="arrow"
           onPress={airportLoading ? undefined : openAirportModal}
           disabled={airportLoading}
         />
         <View style={[styles.divider, { backgroundColor: colors.border }]} />
-        <SettingRow icon="airlines"        label="Compagnie monitorate" sublabel="Wizz, easyJet, Ryanair…"     type="arrow" disabled />
+        <SettingRow icon="airlines"        label={t('airportAirlines')} sublabel={t('airportAirlinesSub')}     type="arrow" disabled />
       </View>
 
       {/* ── Sezione Notifiche ── */}
-      <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>NOTIFICHE</Text>
+      <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>{t('sectionNotifications')}</Text>
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }, colors.isDark && { elevation: 0, shadowOpacity: 0, borderWidth: 1 }]}>
-        <SettingRow icon="notifications"   label="Notifiche voli"   sublabel="Gestito nella tab Voli"  type="info" />
+        <SettingRow icon="notifications"   label={t('notifFlights')} sublabel={t('notifFlightsSub')}  type="info" />
         <View style={[styles.divider, { backgroundColor: colors.border }]} />
-        <SettingRow icon="alarm"           label="Promemoria turno" sublabel="Prossimamente"            type="toggle" disabled />
+        <SettingRow icon="alarm"           label={t('notifReminder')} sublabel={t('notifReminderSub')}            type="toggle" disabled />
       </View>
 
       {/* ── Info app ── */}
-      <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>APP</Text>
+      <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>{t('sectionApp')}</Text>
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }, colors.isDark && { elevation: 0, shadowOpacity: 0, borderWidth: 1 }]}>
-        <SettingRow icon="info-outline"    label="Versione"         sublabel="1.1.0"                    type="info" />
+        <SettingRow icon="info-outline"    label={t('appVersion')} sublabel='1.1.0'                    type="info" />
+      </View>
+
+
+      {/* ── Sezione Lingua ── */}
+      <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>{t('sectionLanguage')}</Text>
+      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }, colors.isDark && { elevation: 0, shadowOpacity: 0, borderWidth: 1 }]}>
+        {languages.map((langOpt, idx) => (
+          <React.Fragment key={langOpt.code}>
+            {idx > 0 && <View style={[styles.divider, { backgroundColor: colors.border }]} />}
+            <TouchableOpacity
+              style={[styles.row, lang === langOpt.code && { backgroundColor: colors.primaryLight }]}
+              onPress={() => setLang(langOpt.code)}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.iconWrap, { backgroundColor: colors.primaryLight }]}>
+                <Text style={{ fontSize: 18 }}>{langOpt.flag}</Text>
+              </View>
+              <View style={styles.rowText}>
+                <Text style={[styles.rowLabel, { color: colors.text }]}>{langOpt.label}</Text>
+              </View>
+              {lang === langOpt.code && (
+                <MaterialIcons name="check-circle" size={20} color={colors.primary} />
+              )}
+            </TouchableOpacity>
+          </React.Fragment>
+        ))}
       </View>
 
         <View style={{ height: 32 }} />
@@ -286,12 +319,13 @@ export default function SettingsScreen() {
         >
           <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={closeAirportModal} />
           <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.modalTitle, { color: colors.primaryDark }]}>Cambia aeroporto</Text>
+            <Text style={[styles.modalTitle, { color: colors.primaryDark }]}>{t('airportModalTitle')}</Text>
             <Text style={[styles.modalCopy, { color: colors.textMuted }]}>
-              Inserisci un codice IATA di 3 lettere. Il cambio aggiorna voli, timeline, widget e notifiche.
+
+              {t('airportModalCopy')}
             </Text>
 
-            <Text style={[styles.modalLabel, { color: colors.textMuted }]}>Codice aeroporto</Text>
+            <Text style={[styles.modalLabel, { color: colors.textMuted }]}>{t('airportModalLabel')}</Text>
             <TextInput
               value={airportInput}
               onChangeText={text => setAirportInput(normalizeAirportCode(text))}
@@ -303,7 +337,7 @@ export default function SettingsScreen() {
               style={[styles.modalInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.bg }]}
             />
 
-            <Text style={[styles.modalLabel, { color: colors.textMuted }]}>Scelta rapida</Text>
+            <Text style={[styles.modalLabel, { color: colors.textMuted }]}>{t('airportModalQuickPick')}</Text>
             <View style={styles.airportChipWrap}>
               {AIRPORT_PRESETS.map(item => {
                 const selected = airportInput === item.code;
@@ -337,14 +371,14 @@ export default function SettingsScreen() {
                 onPress={closeAirportModal}
                 activeOpacity={0.85}
               >
-                <Text style={[styles.modalBtnTxt, { color: colors.text }]}>Annulla</Text>
+                <Text style={[styles.modalBtnTxt, { color: colors.text }]}>{t('cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalBtn, { backgroundColor: colors.primary }]}
                 onPress={saveAirport}
                 activeOpacity={0.85}
               >
-                <Text style={[styles.modalBtnTxt, { color: '#fff' }]}>Salva</Text>
+                <Text style={[styles.modalBtnTxt, { color: '#fff' }]}>{t('save')}</Text>
               </TouchableOpacity>
             </View>
           </View>
