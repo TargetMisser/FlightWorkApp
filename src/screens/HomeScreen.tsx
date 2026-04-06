@@ -19,6 +19,7 @@ import {
   replaceShiftForDate,
   replaceShiftsForRange,
 } from '../utils/shiftCalendar';
+import { SHIFT_TITLE_REST, SHIFT_TITLE_WORK } from '../constants/shifts';
 
 const GOLD = '#F59E0B';
 
@@ -27,7 +28,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 }
 
 const PINNED_FLIGHT_KEY = 'pinned_flight_v1';
-const HOME_SHIFT_TITLES = { work: 'Turno Lavoro ✈️', rest: '🌴 Riposo' };
+const HOME_SHIFT_TITLES = { work: `Turno ${SHIFT_TITLE_WORK} ✈️`, rest: `🌴 ${SHIFT_TITLE_REST}` };
 const HOME_REST_TIMING = { startHour: 12, startMinute: 0, endHour: 14, endMinute: 0, allDay: true };
 
 const weatherMap: Record<number, { text: string; icon: string }> = {
@@ -158,7 +159,7 @@ export default function HomeScreen() {
   const [processing, setProcessing] = useState(false);
 
   const [shiftModalOpen, setShiftModalOpen] = useState(false);
-  const [newShiftType, setNewShiftType] = useState<'Lavoro' | 'Riposo'>('Lavoro');
+  const [newShiftType, setNewShiftType] = useState<typeof SHIFT_TITLE_WORK | typeof SHIFT_TITLE_REST>(SHIFT_TITLE_WORK);
   const [newStartH, setNewStartH] = useState('08');
   const [newStartM, setNewStartM] = useState('00');
   const [newEndH, setNewEndH] = useState('16');
@@ -197,7 +198,7 @@ export default function HomeScreen() {
 
   const openModifyModal = () => {
     if (shiftEvent) {
-      setNewShiftType(isRest ? 'Riposo' : 'Lavoro');
+      setNewShiftType(isRest ? SHIFT_TITLE_REST : SHIFT_TITLE_WORK);
       const start = new Date(shiftEvent.startDate);
       const end = new Date(shiftEvent.endDate);
       setNewStartH(start.getHours().toString().padStart(2, '0'));
@@ -205,7 +206,7 @@ export default function HomeScreen() {
       setNewEndH(end.getHours().toString().padStart(2, '0'));
       setNewEndM(end.getMinutes().toString().padStart(2, '0'));
     } else {
-      setNewShiftType('Lavoro');
+      setNewShiftType(SHIFT_TITLE_WORK);
       setNewStartH('08'); setNewStartM('00'); setNewEndH('16'); setNewEndM('00');
     }
     setShiftModalOpen(true);
@@ -227,9 +228,9 @@ export default function HomeScreen() {
       await replaceShiftForDate({
         calendarId,
         date,
-        type: newShiftType === 'Riposo' ? 'rest' : 'work',
-        startTime: newShiftType === 'Lavoro' ? `${newStartH.padStart(2, '0')}:${newStartM.padStart(2, '0')}` : undefined,
-        endTime: newShiftType === 'Lavoro' ? `${newEndH.padStart(2, '0')}:${newEndM.padStart(2, '0')}` : undefined,
+        type: newShiftType === SHIFT_TITLE_REST ? 'rest' : 'work',
+        startTime: newShiftType === SHIFT_TITLE_WORK ? `${newStartH.padStart(2, '0')}:${newStartM.padStart(2, '0')}` : undefined,
+        endTime: newShiftType === SHIFT_TITLE_WORK ? `${newEndH.padStart(2, '0')}:${newEndM.padStart(2, '0')}` : undefined,
         titles: HOME_SHIFT_TITLES,
         restTiming: HOME_REST_TIMING,
       });
@@ -251,7 +252,7 @@ export default function HomeScreen() {
       d.setHours(0, 0, 0, 0);
       const dEnd = new Date(); dEnd.setHours(23, 59, 59, 999);
       const events = await Calendar.getEventsAsync([cal.id], d, dEnd);
-      const shift = events.find(e => e.title.includes('Lavoro') || e.title.includes('Riposo'));
+      const shift = events.find(e => e.title.includes(SHIFT_TITLE_WORK) || e.title.includes(SHIFT_TITLE_REST));
       setShiftEvent(shift || null);
     } catch (e) { console.error('[shift]', e); } finally { setLoadingShift(false); }
   };
@@ -350,8 +351,8 @@ export default function HomeScreen() {
     } catch (e: any) { Alert.alert('Errore Calendario', e.message); }
   };
 
-  const isRest = shiftEvent?.title?.includes('Riposo');
-  const isWork = shiftEvent?.title?.includes('Lavoro');
+  const isRest = shiftEvent?.title?.includes(SHIFT_TITLE_REST);
+  const isWork = shiftEvent?.title?.includes(SHIFT_TITLE_WORK);
   const s = useMemo(() => makeStyles(colors), [colors]);
 
   return (
@@ -397,7 +398,7 @@ export default function HomeScreen() {
               <View style={s.shiftBadgeRow}>
                 <View style={s.inProgressBadge}><Text style={s.inProgressText}>IN CORSO</Text></View>
               </View>
-              <Text style={s.shiftTitle}>Turno Lavoro ✈️</Text>
+              <Text style={s.shiftTitle}>Turno {SHIFT_TITLE_WORK} ✈️</Text>
               <Text style={s.shiftTime}>
                 {new Date(shiftEvent.startDate).toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})} – {new Date(shiftEvent.endDate).toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})}
               </Text>
@@ -406,7 +407,7 @@ export default function HomeScreen() {
         ) : isRest ? (
           <View style={s.restRow}>
             <Text style={{ fontSize: 28, marginRight: 12 }}>🌴</Text>
-            <Text style={s.restText}>Giorno di Riposo</Text>
+            <Text style={s.restText}>Giorno di {SHIFT_TITLE_REST}</Text>
           </View>
         ) : (
           <Text style={s.emptyShift}>Nessun turno per oggi</Text>

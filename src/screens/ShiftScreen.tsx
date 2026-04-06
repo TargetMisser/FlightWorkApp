@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ActivityIndicator, ScrollView, Alert, Touchable
 import * as ImagePicker from 'expo-image-picker';
 import { WebView } from 'react-native-webview';
 import * as Calendar from 'expo-calendar';
+import { SHIFT_TITLE_REST, SHIFT_TITLE_WORK } from '../constants/shifts';
 
 const PRIMARY = '#2563EB';
 const DARK_BLUE = '#1E3A8A';
@@ -136,11 +137,11 @@ export default function ShiftScreen() {
 
         const isDuplicate = existingEvents.some(e => {
           if (s.isRest) {
-            return e.title.includes("Riposo");
+            return e.title.includes(SHIFT_TITLE_REST);
           } else {
             // Verifica se c'è già un turno di lavoro che inizia alla stessa ora
             const eStart = new Date(e.startDate);
-            return e.title.includes("Lavoro") && eStart.getHours() === s.startH;
+            return e.title.includes(SHIFT_TITLE_WORK) && eStart.getHours() === s.startH;
           }
         });
 
@@ -153,7 +154,7 @@ export default function ShiftScreen() {
           const alldayStart = new Date(d.year, d.month, d.day, 12, 0, 0);
           const alldayEnd = new Date(d.year, d.month, d.day, 14, 0, 0);
           await Calendar.createEventAsync(targetCalendar.id, {
-            title: "🌴 Riposo",
+            title: `🌴 ${SHIFT_TITLE_REST}`,
             startDate: alldayStart,
             endDate: alldayEnd,
             allDay: true,
@@ -173,7 +174,7 @@ export default function ShiftScreen() {
           }
 
           await Calendar.createEventAsync(targetCalendar.id, {
-            title: "Turno Lavoro ✈️",
+            title: `Turno ${SHIFT_TITLE_WORK} ✈️`,
             startDate: startDate,
             endDate: endDate,
             notes: "Dati estratti: " + d.raw + " -> " + s.raw,

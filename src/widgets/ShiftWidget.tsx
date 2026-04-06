@@ -1,6 +1,7 @@
 import React from 'react';
 import { FlexWidget, TextWidget, ListWidget } from 'react-native-android-widget';
 import type { WidgetData, WidgetFlight } from './widgetTaskHandler';
+import { SHIFT_TITLE_REST, SHIFT_TITLE_WORK } from '../constants/shifts';
 
 const BG = '#0F172A';
 const HEADER_BG = '#1E293B';
@@ -138,7 +139,7 @@ export function ShiftWidget({ data }: { data: WidgetData }) {
       >
         <TextWidget text="🌴" style={{ fontSize: 40 }} />
         <TextWidget
-          text="Giorno di Riposo"
+          text={`Giorno di ${SHIFT_TITLE_REST}`}
           style={{ fontSize: 18, fontWeight: 'bold', color: TEXT, marginTop: 8 }}
         />
       </FlexWidget>
@@ -206,7 +207,7 @@ export function ShiftWidget({ data }: { data: WidgetData }) {
           }}
         >
           <TextWidget
-            text={`✈  Turno Lavoro  ${data.shiftLabel}`}
+            text={`✈  Turno ${SHIFT_TITLE_WORK}  ${data.shiftLabel}`}
             style={{ fontSize: 14, fontWeight: 'bold', color: TEXT }}
           />
         </FlexWidget>
@@ -250,7 +251,7 @@ export function ShiftWidget({ data }: { data: WidgetData }) {
         clickAction="OPEN_APP"
       >
         <TextWidget
-          text={`✈  Turno Lavoro  ${data.shiftLabel}`}
+          text={`✈  Turno ${SHIFT_TITLE_WORK}  ${data.shiftLabel}`}
           style={{ fontSize: 14, fontWeight: 'bold', color: TEXT }}
         />
       </FlexWidget>

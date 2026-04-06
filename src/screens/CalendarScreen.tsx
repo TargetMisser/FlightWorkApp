@@ -22,6 +22,7 @@ import {
   getPdfExtractorHtml, parseShiftCells,
   type ParsedSchedule, type ParsedEmployee, type ParsedShift,
 } from '../utils/pdfShiftParser';
+import { SHIFT_TITLE_REST, SHIFT_TITLE_WORK } from '../constants/shifts';
 
 const PRIMARY = '#2563EB';
 const STORAGE_KEY = '@shift_import_name';
@@ -522,19 +523,19 @@ export default function CalendarScreen() {
             {/* Tipo */}
             <Text style={[s.manualLabel, { color: colors.textSub }]}>TIPO</Text>
             <View style={{ flexDirection: 'row', gap: 10, marginBottom: 16 }}>
-              {(['Lavoro', 'Riposo'] as const).map(t => (
+              {([SHIFT_TITLE_WORK, SHIFT_TITLE_REST] as const).map(t => (
                 <TouchableOpacity
                   key={t}
                   style={[s.manualTypeBtn, { borderColor: colors.border }, manualType === t && { backgroundColor: colors.primary, borderColor: colors.primary }]}
                   onPress={() => setManualType(t)}
                 >
-                  <Text style={{ color: manualType === t ? '#fff' : colors.text, fontWeight: '700' }}>{t === 'Lavoro' ? '✈️ Lavoro' : '🌴 Riposo'}</Text>
+                  <Text style={{ color: manualType === t ? '#fff' : colors.text, fontWeight: '700' }}>{t === SHIFT_TITLE_WORK ? `✈️ ${SHIFT_TITLE_WORK}` : `🌴 ${SHIFT_TITLE_REST}`}</Text>
                 </TouchableOpacity>
               ))}
             </View>
 
             {/* Orari (solo lavoro) */}
-            {manualType === 'Lavoro' && (
+            {manualType === SHIFT_TITLE_WORK && (
               <>
                 <Text style={[s.manualLabel, { color: colors.textSub }]}>ORARIO INIZIO</Text>
                 <View style={s.manualTimeRow}>

@@ -17,6 +17,7 @@ import { requestWidgetUpdate } from 'react-native-android-widget';
 import { WIDGET_CACHE_KEY } from '../widgets/widgetTaskHandler';
 import type { WidgetData, WidgetFlight } from '../widgets/widgetTaskHandler';
 import { ShiftWidget } from '../widgets/ShiftWidget';
+import { SHIFT_TITLE_REST, SHIFT_TITLE_WORK } from '../constants/shifts';
 
 const WearDataSender = Platform.OS === 'android' ? NativeModules.WearDataSender : null;
 
@@ -311,12 +312,12 @@ export default function FlightScreen() {
           const todayEnd = new Date(todayStart); todayEnd.setHours(23, 59, 59, 999);
           const tomorrowStart = new Date(todayStart); tomorrowStart.setDate(tomorrowStart.getDate() + 1);
           for (const e of evts) {
-            if (e.title.includes('Riposo')) {
+            if (e.title.includes(SHIFT_TITLE_REST)) {
               const evtDay = new Date(e.startDate);
               if (evtDay >= todayStart && evtDay <= todayEnd) isRestDay = true;
               continue;
             }
-            if (!e.title.includes('Lavoro')) continue;
+            if (!e.title.includes(SHIFT_TITLE_WORK)) continue;
             const s = new Date(e.startDate).getTime() / 1000;
             const en = new Date(e.endDate).getTime() / 1000;
             const evtDay = new Date(e.startDate);
