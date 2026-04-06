@@ -1,9 +1,13 @@
+import { version } from '../../package.json';
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import {
   Animated, Modal, StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useAppTheme } from '../context/ThemeContext';
+import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useAppTheme, type ThemeColors } from '../context/ThemeContext';
+import AeroStaffLogo from './AeroStaffLogo';
 
 type DrawerItem = {
   id: string;
@@ -61,76 +65,109 @@ export default function DrawerMenu({ visible, onClose, onSelect }: Props) {
         </Animated.View>
 
         {/* Drawer */}
-        <Animated.View style={[styles.drawer, { transform: [{ translateX: slideAnim }] }]}>
-          {/* Header */}
-          <View style={styles.header}>
-            <View style={styles.logoCircle}>
-              <MaterialIcons name="flight-takeoff" size={22} color="#fff" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.appName}>AeroStaff Pro</Text>
-              <Text style={styles.appSub}>Strumenti</Text>
-            </View>
-            <TouchableOpacity onPress={onClose} style={styles.closeIconBtn}>
-              <MaterialIcons name="close" size={20} color={colors.textMuted} />
-            </TouchableOpacity>
-          </View>
+        <Animated.View style={[styles.drawerWrapper, { transform: [{ translateX: slideAnim }] }]}>
+          <BlurView
+            intensity={colors.isDark ? 50 : 40}
+            tint={colors.isDark ? 'dark' : 'light'}
+            style={styles.blurFill}
+          >
+            {/* Glass overlay tint */}
+            <View style={[styles.glassTint, { backgroundColor: colors.isDark
+              ? 'rgba(20, 14, 10, 0.82)' : 'rgba(255, 252, 248, 0.82)' }]} />
 
-          {/* Section label */}
-          <Text style={styles.sectionLabel}>STRUMENTI</Text>
-
-          {/* Menu items */}
-          <View style={styles.items}>
-            {ITEMS.map(item => (
-              <TouchableOpacity
-                key={item.id}
-                style={styles.item}
-                onPress={() => { onSelect(item.id); onClose(); }}
-                activeOpacity={0.7}
-              >
-                <View style={styles.itemIcon}>
-                  <MaterialIcons name={item.icon} size={22} color="#2563EB" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.itemLabel}>{item.label}</Text>
-                  <Text style={styles.itemSub}>{item.sublabel}</Text>
-                </View>
-                <MaterialIcons name="chevron-right" size={18} color={colors.textMuted} />
+            {/* Orange gradient header */}
+            <LinearGradient
+              colors={['#C2410C', '#F97316', '#FB923C']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.headerGradient}
+            >
+              <AeroStaffLogo variant="header" size={48} />
+              <TouchableOpacity onPress={onClose} style={styles.closeIconBtn}>
+                <MaterialIcons name="close" size={20} color="rgba(255,255,255,0.7)" />
               </TouchableOpacity>
-            ))}
-          </View>
+            </LinearGradient>
 
-          {/* Divider */}
-          <View style={styles.divider} />
+            {/* Section label */}
+            <Text style={styles.sectionLabel}>STRUMENTI</Text>
 
-          <Text style={styles.version}>AeroStaff Pro · v1.0</Text>
+            {/* Menu items */}
+            <View style={styles.items}>
+              {ITEMS.map(item => (
+                <TouchableOpacity
+                  key={item.id}
+                  style={styles.item}
+                  onPress={() => { onSelect(item.id); onClose(); }}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.itemIcon}>
+                    <MaterialIcons name={item.icon} size={22} color={colors.primary} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.itemLabel}>{item.label}</Text>
+                    <Text style={styles.itemSub}>{item.sublabel}</Text>
+                  </View>
+                  <MaterialIcons name="chevron-right" size={18} color={colors.textMuted} />
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Divider */}
+            <View style={styles.divider} />
+
+            <Text style={styles.version}>AeroStaff Pro · v{version}</Text>
+          </BlurView>
         </Animated.View>
       </View>
     </Modal>
   );
 }
 
-function makeStyles(c: any) {
+function makeStyles(c: ThemeColors) {
   return StyleSheet.create({
     root: { flex: 1, flexDirection: 'row' },
-    overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(15,23,42,0.5)' },
-    drawer: {
-      width: DRAWER_WIDTH, backgroundColor: c.card === 'transparent' ? c.bg : c.card, height: '100%', paddingTop: 52,
-      shadowColor: '#000', shadowOffset: { width: 6, height: 0 }, shadowOpacity: c.isDark ? 0 : 0.18, shadowRadius: 20, elevation: c.isDark ? 0 : 24,
+    overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(10,5,0,0.55)' },
+    drawerWrapper: {
+      width: DRAWER_WIDTH,
+      height: '100%',
+      overflow: 'hidden',
+      // Subtle warm glow shadow
+      shadowColor: '#F97316',
+      shadowOffset: { width: 6, height: 0 },
+      shadowOpacity: 0.12,
+      shadowRadius: 24,
+      elevation: 20,
     },
-    header: {
-      flexDirection: 'row', alignItems: 'center', gap: 12,
-      paddingHorizontal: 18, paddingBottom: 20,
-      borderBottomWidth: 1, borderBottomColor: c.border,
+    blurFill: {
+      ...StyleSheet.absoluteFillObject,
     },
-    logoCircle: { width: 42, height: 42, borderRadius: 21, backgroundColor: c.primary, justifyContent: 'center', alignItems: 'center' },
-    appName: { fontSize: 15, fontWeight: '700', color: c.primaryDark },
-    appSub:  { fontSize: 11, color: c.textMuted, marginTop: 1 },
+    glassTint: {
+      ...StyleSheet.absoluteFillObject,
+    },
+    headerGradient: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 18,
+      paddingTop: 56,
+      paddingBottom: 22,
+    },
     closeIconBtn: { padding: 6 },
-    sectionLabel: { fontSize: 10, fontWeight: '700', color: c.textMuted, letterSpacing: 1.2, paddingHorizontal: 20, paddingTop: 20, paddingBottom: 8 },
+    sectionLabel: {
+      fontSize: 10, fontWeight: '700', color: c.textMuted,
+      letterSpacing: 1.4, paddingHorizontal: 20, paddingTop: 20, paddingBottom: 8,
+    },
     items: { paddingHorizontal: 10 },
-    item: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 13, paddingHorizontal: 10, borderRadius: 14, marginBottom: 2 },
-    itemIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: c.primaryLight, justifyContent: 'center', alignItems: 'center' },
+    item: {
+      flexDirection: 'row', alignItems: 'center', gap: 12,
+      paddingVertical: 13, paddingHorizontal: 10,
+      borderRadius: 16, marginBottom: 2,
+    },
+    itemIcon: {
+      width: 42, height: 42, borderRadius: 14,
+      backgroundColor: c.primaryLight,
+      justifyContent: 'center', alignItems: 'center',
+    },
     itemLabel: { fontSize: 14, fontWeight: '600', color: c.text },
     itemSub:   { fontSize: 11, color: c.textMuted, marginTop: 1 },
     divider:   { height: 1, backgroundColor: c.border, marginHorizontal: 18, marginTop: 16 },

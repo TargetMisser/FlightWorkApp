@@ -6,7 +6,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useAppTheme } from '../context/ThemeContext';
+import { useAppTheme, type ThemeColors } from '../context/ThemeContext';
 
 const PASSWORDS_KEY = 'aerostaff_passwords_v1';
 const PIN_KEY       = 'aerostaff_pin_v1';
@@ -167,7 +167,7 @@ export default function PasswordScreen() {
             setPinEnabled(false);
             await AsyncStorage.setItem(PIN_ENABLED_KEY, 'false');
             await deleteSecurePin();
-          } catch (e) { console.error('[pin] disable error', e); }
+          } catch (e) { if (__DEV__) console.error('[pin] disable error', e); }
         }},
       ]);
     } else {
@@ -183,7 +183,7 @@ export default function PasswordScreen() {
       setPinMode(null);
       Alert.alert('PIN impostato', 'La schermata password è ora protetta.');
     } catch (e) {
-      console.error('[pin] setup error', e);
+      if (__DEV__) console.error('[pin] setup error', e);
       Alert.alert('Errore', 'Impossibile impostare il PIN. Riprova.');
     }
   }, []);
@@ -197,7 +197,7 @@ export default function PasswordScreen() {
         Alert.alert('PIN errato', 'Riprova.');
       }
     } catch (e) {
-      console.error('[pin] unlock error', e);
+      if (__DEV__) console.error('[pin] unlock error', e);
       Alert.alert('Errore', 'Impossibile verificare il PIN. Riprova.');
     }
   }, []);
@@ -349,7 +349,7 @@ export default function PasswordScreen() {
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
-function makePinStyles(c: any) {
+function makePinStyles(c: ThemeColors) {
   return StyleSheet.create({
     overlay: { flex: 1, backgroundColor: c.bg, justifyContent: 'center', alignItems: 'center' },
     box:     { alignItems: 'center', padding: 32, width: '100%', maxWidth: 320 },
@@ -364,9 +364,9 @@ function makePinStyles(c: any) {
   });
 }
 
-function makeRowStyles(c: any) {
+function makeRowStyles(c: ThemeColors) {
   return StyleSheet.create({
-    card:    { backgroundColor: c.card, borderRadius: 14, padding: 14, marginBottom: 10, flexDirection: 'row', alignItems: 'flex-start', borderWidth: 1, borderColor: c.border, shadowColor: '#000', shadowOpacity: c.isDark ? 0 : 0.05, shadowRadius: 6, elevation: c.isDark ? 0 : 2 },
+    card:    { backgroundColor: c.card, borderRadius: 16, padding: 14, marginBottom: 10, flexDirection: 'row', alignItems: 'flex-start', borderWidth: 1, borderColor: c.glassBorder, shadowColor: c.primary, shadowOpacity: c.isDark ? 0 : 0.08, shadowRadius: 8, elevation: c.isDark ? 0 : 3 },
     cardLeft:{ flex: 1 },
     name:    { fontSize: 15, fontWeight: '700', color: c.primaryDark, marginBottom: 2 },
     username:{ fontSize: 12, color: c.textSub, marginBottom: 4 },
@@ -380,7 +380,7 @@ function makeRowStyles(c: any) {
   });
 }
 
-function makeStyles(c: any) {
+function makeStyles(c: ThemeColors) {
   return StyleSheet.create({
     root:         { flex: 1, backgroundColor: c.bg },
     toolbar:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: c.card, borderBottomWidth: 1, borderBottomColor: c.border },

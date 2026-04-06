@@ -32,7 +32,7 @@ const THEME_OPTIONS: ThemeOption[] = [
     sublabel: 'Tema standard, sfondo bianco',
     icon: 'light-mode',
     previewBg: '#F3F4F6',
-    previewAccent: '#2563EB',
+    previewAccent: '#F47B16',
   },
   {
     id: 'dark',
@@ -40,7 +40,7 @@ const THEME_OPTIONS: ThemeOption[] = [
     sublabel: 'Ideale di notte, riduce affaticamento',
     icon: 'dark-mode',
     previewBg: '#0F172A',
-    previewAccent: '#3B82F6',
+    previewAccent: '#FF9A42',
   },
   {
     id: 'weather',
@@ -394,8 +394,8 @@ const styles = StyleSheet.create({
   // Generic rows
   card: {
     borderRadius: 16, marginBottom: 20,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04, shadowRadius: 4, elevation: 2, overflow: 'hidden',
+    shadowColor: '#F47B16', shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06, shadowRadius: 6, elevation: 2, overflow: 'hidden',
   },
   divider: { height: 1, marginLeft: 56 },
   row:     { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 13, gap: 12 },

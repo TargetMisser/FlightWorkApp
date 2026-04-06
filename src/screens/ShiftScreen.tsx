@@ -4,8 +4,8 @@ import * as ImagePicker from 'expo-image-picker';
 import { WebView } from 'react-native-webview';
 import * as Calendar from 'expo-calendar';
 
-const PRIMARY = '#2563EB';
-const DARK_BLUE = '#1E3A8A';
+const PRIMARY = '#F47B16';
+const DARK_ORANGE = '#C2520A';
 const BG = '#F3F4F6';
 
 export default function ShiftScreen() {
@@ -296,7 +296,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16, paddingVertical: 14,
     borderBottomWidth: 1, borderBottomColor: '#E5E7EB',
   },
-  pageTitle: { fontSize: 24, fontWeight: 'bold', color: DARK_BLUE },
+  pageTitle: { fontSize: 24, fontWeight: 'bold', color: DARK_ORANGE },
   pageSub: { fontSize: 13, color: '#6B7280', marginTop: 4 },
   infoCard: {
     backgroundColor: '#fff',
@@ -309,10 +309,10 @@ const styles = StyleSheet.create({
   infoDesc: { fontSize: 13, color: '#6B7280', lineHeight: 20 },
   buttonsContainer: { margin: 16, marginBottom: 0 },
   button: {
-    backgroundColor: DARK_BLUE,
+    backgroundColor: DARK_ORANGE,
     padding: 16, borderRadius: 14,
     alignItems: 'center',
-    shadowColor: DARK_BLUE, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5,
+    shadowColor: DARK_ORANGE, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5,
   },
   buttonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
   imagesPreview: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', margin: 16, gap: 10 },
@@ -324,7 +324,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff', borderRadius: 14,
     shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8, elevation: 3,
   },
-  resultTitle: { fontSize: 15, fontWeight: 'bold', color: DARK_BLUE, marginBottom: 10, borderBottomWidth: 1, borderBottomColor: '#E5E7EB', paddingBottom: 8 },
+  resultTitle: { fontSize: 15, fontWeight: 'bold', color: DARK_ORANGE, marginBottom: 10, borderBottomWidth: 1, borderBottomColor: '#E5E7EB', paddingBottom: 8 },
   resultText: { fontSize: 13, color: '#374151', lineHeight: 20, marginBottom: 16 },
   saveButton: {
     backgroundColor: PRIMARY,
