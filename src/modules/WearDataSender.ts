@@ -1,5 +1,6 @@
 import { NativeModules, Platform } from 'react-native';
 import { getAirlineOps, getAirlineColor } from '../utils/airlineOps';
+import type { PinnedFlightItem, WearFlightPayload } from '../types/flight';
 
 const { WearDataSender } = NativeModules;
 
@@ -7,13 +8,13 @@ const { WearDataSender } = NativeModules;
  * Transforms a FR24 flight item (as stored in AsyncStorage) into the JSON
  * format expected by the WearOS FlightData.fromJson().
  */
-function flightItemToWearJson(item: any): string {
-  const tab: string = item._pinTab || 'departures';
+function flightItemToWearJson(item: PinnedFlightItem): string {
+  const tab = item._pinTab || 'departures';
   const airline = item.flight?.airline?.name || 'Sconosciuta';
   const iataCode = item.flight?.airline?.code?.iata || '';
   const ops = tab === 'departures' ? getAirlineOps(airline) : null;
 
-  const payload: Record<string, any> = {
+  const payload: WearFlightPayload = {
     flightNumber: item.flight?.identification?.number?.default || 'N/A',
     airline,
     airlineColor: getAirlineColor(airline),
@@ -62,7 +63,7 @@ function flightItemToWearJson(item: any): string {
   return JSON.stringify(payload);
 }
 
-export async function sendPinnedFlightToWatch(item: any): Promise<void> {
+export async function sendPinnedFlightToWatch(item: PinnedFlightItem): Promise<void> {
   if (Platform.OS !== 'android' || !WearDataSender) return;
   const json = flightItemToWearJson(item);
   await WearDataSender.sendPinnedFlight(json);
@@ -73,7 +74,7 @@ export async function clearPinnedFlightOnWatch(): Promise<void> {
   await WearDataSender.clearPinnedFlight();
 }
 
-export async function startWatchOngoing(item: any, shiftEnd: number): Promise<void> {
+export async function startWatchOngoing(item: PinnedFlightItem, shiftEnd: number): Promise<void> {
   if (Platform.OS !== 'android' || !WearDataSender) return;
   const json = flightItemToWearJson(item);
   await WearDataSender.startWatchOngoing(json, shiftEnd);
