@@ -3,6 +3,7 @@ import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getAirlineOps } from './airlineOps';
 import { fetchAirportScheduleRaw } from './fr24api';
+import { FR24Flight } from '../types/flight';
 
 const NOTIF_IDS_KEY = 'aerostaff_notif_ids_v1';
 const LAST_SCHEDULE_KEY = 'aerostaff_notif_last_schedule';
@@ -52,13 +53,13 @@ export async function autoScheduleNotifications(): Promise<number> {
     const { departures: allDepartures, arrivals: allArrivals } = await fetchAirportScheduleRaw();
 
     // Filter departures during shift
-    const shiftDepartures = allDepartures.filter((item: any) => {
+    const shiftDepartures = allDepartures.filter((item: FR24Flight) => {
       const ts = item.flight?.time?.scheduled?.departure;
       return ts && ts >= shiftStart && ts <= shiftEnd;
     });
 
     // Filter arrivals during shift (inbound aircraft that become our departures)
-    const shiftArrivals = allArrivals.filter((item: any) => {
+    const shiftArrivals = allArrivals.filter((item: FR24Flight) => {
       const ts = item.flight?.time?.scheduled?.arrival;
       return ts && ts >= shiftStart && ts <= shiftEnd;
     });
