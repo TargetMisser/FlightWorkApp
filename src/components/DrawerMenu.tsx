@@ -3,7 +3,7 @@ import {
   Animated, Modal, StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useAppTheme } from '../context/ThemeContext';
+import { useAppTheme, ThemeColors } from '../context/ThemeContext';
 
 type DrawerItem = {
   id: string;
@@ -110,7 +110,7 @@ export default function DrawerMenu({ visible, onClose, onSelect }: Props) {
   );
 }
 
-function makeStyles(c: any) {
+function makeStyles(c: ThemeColors) {
   return StyleSheet.create({
     root: { flex: 1, flexDirection: 'row' },
     overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(15,23,42,0.5)' },
