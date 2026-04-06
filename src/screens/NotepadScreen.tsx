@@ -128,7 +128,7 @@ export default function NotepadScreen() {
         <Text style={s.statusTxt}>
           {saved ? 'Salvato' : t('notepadUnsaved')}
         </Text>
-        <Text style={s.charCount}>{charCount} caratteri</Text>
+        <Text style={s.charCount}>{charCount} {t('notepadChars')}</Text>
       </View>
 
       {/* Text input */}
