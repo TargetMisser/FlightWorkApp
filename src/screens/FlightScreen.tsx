@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
-  View, Text, StyleSheet, ActivityIndicator,
+  View, Text, StyleSheet, ActivityIndicator, Modal,
   FlatList, TouchableOpacity, RefreshControl, Image, Alert,
   Animated, PanResponder, NativeModules, Platform,
 } from 'react-native';
@@ -25,6 +25,7 @@ const NOTIF_IDS_KEY = 'aerostaff_notif_ids_v1';
 const NOTIF_ENABLED_KEY = 'aerostaff_notif_enabled';
 const PINNED_FLIGHT_KEY = 'pinned_flight_v1';
 const PINNED_NOTIF_IDS_KEY = 'pinned_notif_ids_v1';
+const FLIGHT_FILTER_KEY = 'aerostaff_flight_filter_v1';
 
 // Handler: mostra notifiche anche con app aperta (wrapped for Expo Go compat)
 try { Notifications.setNotificationHandler({
@@ -247,10 +248,15 @@ export default function FlightScreen() {
   const [scheduledCount, setScheduledCount] = useState(0);
   const [pinnedFlightId, setPinnedFlightId] = useState<string | null>(null);
   const [inboundArrivals, setInboundArrivals] = useState<Record<string, number>>({});
+  const [filterMode, setFilterMode] = useState<'mine' | 'all'>('mine');
+  const [filterMenuVisible, setFilterMenuVisible] = useState(false);
+  const [allArrivalsFull, setAllArrivalsFull] = useState<any[]>([]);
+  const [allDeparturesFull, setAllDeparturesFull] = useState<any[]>([]);
 
   // Carica preferenza notifiche salvata
   useEffect(() => {
     AsyncStorage.getItem(NOTIF_ENABLED_KEY).then(v => setNotifsEnabled(v === 'true'));
+    AsyncStorage.getItem(FLIGHT_FILTER_KEY).then(v => { if (v === 'all' || v === 'mine') setFilterMode(v); });
   }, []);
 
   const fetchAll = useCallback(async () => {
@@ -259,9 +265,12 @@ export default function FlightScreen() {
     try {
       const {
         allArrivals,
+        allDepartures,
         departures: fetchedDepartures,
         arrivals: fetchedArrivals,
       } = await fetchAirportScheduleRaw(airportCode);
+      setAllArrivalsFull(allArrivals);
+      setAllDeparturesFull(allDepartures);
 
       // Build inbound arrival map: registration → best known arrival timestamp
       const inboundMap: Record<string, number> = {};
@@ -501,10 +510,17 @@ export default function FlightScreen() {
   const isSameDay = (d1: Date, d2: Date) =>
     d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
 
-  const currentData = (activeTab === 'arrivals' ? arrivals : departures).filter(item => {
-    const ts = activeTab === 'arrivals' ? item.flight?.time?.scheduled?.arrival : item.flight?.time?.scheduled?.departure;
-    return ts && isSameDay(new Date(ts * 1000), selectedDate);
-  });
+  const currentData = (() => {
+    const source = filterMode === 'all'
+      ? (activeTab === 'arrivals' ? allArrivalsFull : allDeparturesFull)
+      : (activeTab === 'arrivals' ? arrivals : departures);
+    return source.filter(item => {
+      const ts = activeTab === 'arrivals'
+        ? item.flight?.time?.scheduled?.arrival
+        : item.flight?.time?.scheduled?.departure;
+      return ts && isSameDay(new Date(ts * 1000), selectedDate);
+    });
+  })();
 
   const renderFlight = useCallback(({ item }: { item: any }) => {
     const flightNumber = item.flight?.identification?.number?.default || 'N/A';
@@ -669,6 +685,15 @@ export default function FlightScreen() {
           <Text style={s.pageSub}>{formatAirportHeader(airport.code)}</Text>
         </View>
         <TouchableOpacity
+          style={[s.filterBtn, filterMode === 'all' && s.filterBtnActive]}
+          onPress={() => setFilterMenuVisible(true)}
+          activeOpacity={0.8}
+          accessibilityLabel={t('flightFilterTitle')}
+          accessibilityRole="button"
+        >
+          <MaterialIcons name="filter-list" size={20} color={filterMode === 'all' ? '#fff' : '#64748B'} />
+        </TouchableOpacity>
+        <TouchableOpacity
           style={[s.notifBtn, notifsEnabled && s.notifBtnActive]}
           onPress={toggleNotifications}
           activeOpacity={0.8}
@@ -724,6 +749,54 @@ export default function FlightScreen() {
           showsVerticalScrollIndicator={false}
         />
       )}
+
+      {/* Flight Filter Modal */}
+      <Modal
+        visible={filterMenuVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setFilterMenuVisible(false)}
+      >
+        <TouchableOpacity
+          style={s.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setFilterMenuVisible(false)}
+        >
+          <View style={s.filterSheet}>
+            <View style={s.filterSheetHandle} />
+            <Text style={s.filterSheetTitle}>{t('flightFilterTitle')}</Text>
+            {(['mine', 'all'] as const).map(mode => (
+              <TouchableOpacity
+                key={mode}
+                style={[s.filterOption, filterMode === mode && s.filterOptionActive]}
+                activeOpacity={0.8}
+                onPress={() => {
+                  setFilterMode(mode);
+                  AsyncStorage.setItem(FLIGHT_FILTER_KEY, mode);
+                  setFilterMenuVisible(false);
+                }}
+              >
+                <MaterialIcons
+                  name={filterMode === mode ? 'radio-button-checked' : 'radio-button-unchecked'}
+                  size={22}
+                  color={filterMode === mode ? colors.primary : '#9CA3AF'}
+                />
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.filterOptionText, filterMode === mode && { color: colors.primary }]}>
+                    {mode === 'mine' ? t('flightFilterMine') : t('flightFilterAll')}
+                  </Text>
+                  <Text style={s.filterOptionSub}>
+                    {mode === 'mine' ? t('flightFilterMineSub') : t('flightFilterAllSub')}
+                  </Text>
+                </View>
+                {filterMode === mode && (
+                  <MaterialIcons name="check-circle" size={20} color={colors.primary} />
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -768,5 +841,15 @@ function makeStyles(c: ThemeColors) {
     opsTime: { fontSize: 13, fontWeight: '800', color: c.primaryDark },
     pinBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', alignItems: 'center' },
     pinBtnActive: { backgroundColor: 'rgba(245,158,11,0.25)' },
+    filterBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: c.cardSecondary, justifyContent: 'center', alignItems: 'center', marginRight: 8 },
+    filterBtnActive: { backgroundColor: c.primary, shadowColor: c.primary, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.35, shadowRadius: 6, elevation: 5 },
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' },
+    filterSheet: { backgroundColor: c.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 36 },
+    filterSheetHandle: { width: 36, height: 4, borderRadius: 2, backgroundColor: c.border, alignSelf: 'center', marginBottom: 16 },
+    filterSheetTitle: { fontSize: 16, fontWeight: '700', color: c.text, marginBottom: 16, textAlign: 'center' },
+    filterOption: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 14, marginBottom: 8, backgroundColor: c.bg },
+    filterOptionActive: { backgroundColor: c.primaryLight, borderWidth: 1.5, borderColor: c.primaryLight },
+    filterOptionText: { fontSize: 15, fontWeight: '600', color: c.text },
+    filterOptionSub: { fontSize: 12, color: c.textSub, marginTop: 2 },
   });
 }
