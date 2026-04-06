@@ -88,7 +88,7 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
-      - name: Generate debug keystore
+      - name: Generate debug keystore (used by release signing config)
         run: |
           mkdir -p android/app
           keytool -genkey -v \
@@ -100,14 +100,11 @@ jobs:
             -keysize 2048 \
             -validity 10000 \
             -dname "CN=Android Debug,O=Android,C=US"
-          echo "Keystore generated:"
-          ls -lh android/app/debug.keystore
 
-      - name: Build debug APK
+      - name: Build release APK (standalone, JS bundle embedded)
         run: |
-          set -o pipefail
           cd android
-          ./gradlew :app:assembleDebug \
+          ./gradlew :app:assembleRelease \
             --no-daemon \
             -Pandroid.overridePathCheck=true
         env:
@@ -117,10 +114,10 @@ jobs:
       - name: Find & rename APK
         id: apk
         run: |
-          APK=$(find android/app/build/outputs/apk -name "*.apk" -type f | head -1)
+          APK=$(find android/app/build/outputs/apk/release -name "*.apk" -type f | head -1)
           echo "Found: $APK"
           VERSION=${{ steps.meta.outputs.version }}
-          DEST="AeroStaffPro-v${VERSION}-debug.apk"
+          DEST="AeroStaffPro-v${VERSION}.apk"
           mkdir -p artifacts
           cp "$APK" "artifacts/$DEST"
           echo "apk_path=artifacts/$DEST" >> "$GITHUB_OUTPUT"
@@ -130,7 +127,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AeroStaffPro-v${{ steps.meta.outputs.version }}-debug
+          name: AeroStaffPro-v${{ steps.meta.outputs.version }}
           path: ${{ steps.apk.outputs.apk_path }}
 
   release:
@@ -141,7 +138,7 @@ jobs:
       - name: Download APK artifact
         uses: actions/download-artifact@v4
         with:
-          name: AeroStaffPro-v${{ needs.build.outputs.version }}-debug
+          name: AeroStaffPro-v${{ needs.build.outputs.version }}
           path: artifacts/
 
       - name: Create or update GitHub release
@@ -160,7 +157,10 @@ jobs:
             - Tab bar, AppBar e DrawerMenu aggiornati
             - Tutti gli hardcoded blue rimossi
 
+            ### ✅ APK Standalone
+            Bundle JavaScript incorporato — funziona senza Metro dev server.
+
             ### Download
-            Installa `AeroStaffPro-v${{ needs.build.outputs.version }}-debug.apk` sul tuo dispositivo Android.
+            Installa `AeroStaffPro-v${{ needs.build.outputs.version }}.apk` sul tuo dispositivo Android.
           prerelease: true
           files: artifacts/*.apk
