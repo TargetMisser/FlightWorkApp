@@ -496,12 +496,16 @@ export default function FlightScreen() {
 
   const userShift = activeDay === 'today' ? shifts.today : shifts.tomorrow;
   const selectedDate = activeDay === 'today' ? new Date() : (() => { const d = new Date(); d.setDate(d.getDate() + 1); return d; })();
-  const isSameDay = (d1: Date, d2: Date) =>
-    d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
+
+  // Optimization: Calculate start and end of day timestamps once,
+  // instead of creating Date objects for every flight in the loop
+  const startOfDayTs = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate()).getTime() / 1000;
+  // Use Date logic to correctly handle DST transitions instead of fixed 86400 offset
+  const endOfDayTs = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate() + 1).getTime() / 1000;
 
   const currentData = (activeTab === 'arrivals' ? arrivals : departures).filter(item => {
     const ts = activeTab === 'arrivals' ? item.flight?.time?.scheduled?.arrival : item.flight?.time?.scheduled?.departure;
-    return ts && isSameDay(new Date(ts * 1000), selectedDate);
+    return ts && ts >= startOfDayTs && ts < endOfDayTs;
   });
 
   const renderFlight = useCallback(({ item }: { item: any }) => {
