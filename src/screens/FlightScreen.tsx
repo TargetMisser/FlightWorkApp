@@ -113,47 +113,58 @@ async function scheduleShiftNotifications(
 ): Promise<number> {
   await cancelPreviousNotifications();
   const now = Date.now() / 1000;
-  const newIds: string[] = [];
 
-  for (const item of shiftFlights) {
-    const ts: number | undefined = item.flight?.time?.scheduled?.arrival;
-    if (!ts) continue;
-    const secondsUntilNotify = ts - 15 * 60 - now; // 15 min prima
-    if (secondsUntilNotify <= 0) continue;           // già passato
+  // Promise.all to schedule flight notifications in parallel
+  const flightPromises = shiftFlights.map(async (item) => {
+    try {
+      const ts: number | undefined = item.flight?.time?.scheduled?.arrival;
+      if (!ts) return undefined;
+      const secondsUntilNotify = ts - 15 * 60 - now; // 15 min prima
+      if (secondsUntilNotify <= 0) return undefined;           // già passato
 
-    const flightNumber = item.flight?.identification?.number?.default || 'N/A';
-    const airline      = item.flight?.airline?.name || 'Sconosciuta';
-    const origin       = item.flight?.airport?.origin?.name
-                      || item.flight?.airport?.origin?.code?.iata
-                      || 'N/A';
-    const arrivalTime  = new Date(ts * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+      const flightNumber = item.flight?.identification?.number?.default || 'N/A';
+      const airline      = item.flight?.airline?.name || 'Sconosciuta';
+      const origin       = item.flight?.airport?.origin?.name
+                        || item.flight?.airport?.origin?.code?.iata
+                        || 'N/A';
+      const arrivalTime  = new Date(ts * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
 
-    const id = await Notifications.scheduleNotificationAsync({
-      content: {
-        title: `✈️ Arrivo tra 15 min — ${flightNumber}`,
-        body: `${airline} da ${origin} · atterraggio alle ${arrivalTime}`,
-        sound: true,
-        data: { flightNumber, ts },
-      },
-      trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: Math.round(secondsUntilNotify), repeats: false },
-    });
-    newIds.push(id);
-  }
+      return await Notifications.scheduleNotificationAsync({
+        content: {
+          title: `✈️ Arrivo tra 15 min — ${flightNumber}`,
+          body: `${airline} da ${origin} · atterraggio alle ${arrivalTime}`,
+          sound: true,
+          data: { flightNumber, ts },
+        },
+        trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: Math.round(secondsUntilNotify), repeats: false },
+      });
+    } catch (e) {
+      console.warn('[scheduleShiftNotifications] error scheduling', e);
+      return undefined;
+    }
+  });
+
+  const idsArr = await Promise.all(flightPromises);
+  const newIds = idsArr.filter((id): id is string => id !== undefined);
 
   // Notifica fine turno
   const secondsUntilEnd = shiftEnd - now;
   if (secondsUntilEnd > 0) {
-    const endTime = new Date(shiftEnd * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
-    const endId = await Notifications.scheduleNotificationAsync({
-      content: {
-        title: '🏁 Turno terminato',
-        body: `Buon lavoro! Il tuo turno delle ${endTime} è concluso.`,
-        sound: true,
-        data: { type: 'shift_end' },
-      },
-      trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: Math.round(secondsUntilEnd), repeats: false },
-    });
-    newIds.push(endId);
+    try {
+      const endTime = new Date(shiftEnd * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+      const endId = await Notifications.scheduleNotificationAsync({
+        content: {
+          title: '🏁 Turno terminato',
+          body: `Buon lavoro! Il tuo turno delle ${endTime} è concluso.`,
+          sound: true,
+          data: { type: 'shift_end' },
+        },
+        trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: Math.round(secondsUntilEnd), repeats: false },
+      });
+      newIds.push(endId);
+    } catch (e) {
+      console.warn('[scheduleShiftNotifications] error scheduling shift end', e);
+    }
   }
 
   await AsyncStorage.setItem(NOTIF_IDS_KEY, JSON.stringify(newIds));
@@ -171,7 +182,7 @@ async function cancelPinnedNotifications() {
 async function schedulePinnedNotifications(item: any, tab: 'arrivals' | 'departures'): Promise<void> {
   await cancelPinnedNotifications();
   const now = Date.now() / 1000;
-  const ids: string[] = [];
+  let ids: string[] = [];
 
   const flightNumber = item.flight?.identification?.number?.default || 'N/A';
   const airline = item.flight?.airline?.name || 'Sconosciuta';
@@ -183,16 +194,20 @@ async function schedulePinnedNotifications(item: any, tab: 'arrivals' | 'departu
     const arrTime = new Date(ts * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
     const secsUntil = ts - 15 * 60 - now;
     if (secsUntil > 0) {
-      const id = await Notifications.scheduleNotificationAsync({
-        content: {
-          title: `📌 Arrivo tra 15 min — ${flightNumber}`,
-          body: `${airline} da ${origin} · atterraggio alle ${arrTime}`,
-          sound: true,
-          data: { flightNumber, ts, pinned: true },
-        },
-        trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: Math.round(secsUntil), repeats: false },
-      });
-      ids.push(id);
+      try {
+        const id = await Notifications.scheduleNotificationAsync({
+          content: {
+            title: `📌 Arrivo tra 15 min — ${flightNumber}`,
+            body: `${airline} da ${origin} · atterraggio alle ${arrTime}`,
+            sound: true,
+            data: { flightNumber, ts, pinned: true },
+          },
+          trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: Math.round(secsUntil), repeats: false },
+        });
+        ids.push(id);
+      } catch (e) {
+        console.warn('[schedulePinnedNotifications] error scheduling arrival', e);
+      }
     }
   } else {
     const ts = item.flight?.time?.scheduled?.departure;
@@ -208,20 +223,27 @@ async function schedulePinnedNotifications(item: any, tab: 'arrivals' | 'departu
       { offset: 10, title: `📌 Partenza tra 10 min — ${flightNumber}`, body: `${airline} → ${dest} · partenza alle ${depTime}` },
     ];
 
-    for (const phase of phases) {
-      const secsUntil = ts - phase.offset * 60 - now;
-      if (secsUntil <= 0) continue;
-      const id = await Notifications.scheduleNotificationAsync({
-        content: {
-          title: phase.title,
-          body: phase.body,
-          sound: true,
-          data: { flightNumber, ts, pinned: true },
-        },
-        trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: Math.round(secsUntil), repeats: false },
-      });
-      ids.push(id);
-    }
+    const phasePromises = phases.map(async (phase) => {
+      try {
+        const secsUntil = ts - phase.offset * 60 - now;
+        if (secsUntil <= 0) return undefined;
+        return await Notifications.scheduleNotificationAsync({
+          content: {
+            title: phase.title,
+            body: phase.body,
+            sound: true,
+            data: { flightNumber, ts, pinned: true },
+          },
+          trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: Math.round(secsUntil), repeats: false },
+        });
+      } catch (e) {
+        console.warn('[schedulePinnedNotifications] error scheduling phase', e);
+        return undefined;
+      }
+    });
+
+    const phaseIds = await Promise.all(phasePromises);
+    ids = phaseIds.filter((id): id is string => id !== undefined);
   }
 
   if (ids.length > 0) {
