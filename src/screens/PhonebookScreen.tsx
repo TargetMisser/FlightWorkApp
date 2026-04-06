@@ -6,6 +6,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../context/ThemeContext';
+import { useLanguage } from '../context/LanguageContext';
 
 const STORAGE_KEY = 'aerostaff_phonebook_v1';
 
@@ -88,6 +89,7 @@ function makeModalStyles(c: ThemeColors) {
 
 function EditModal({ visible, contact, onSave, onClose }: EditModalProps) {
   const { colors } = useAppTheme();
+  const { t } = useLanguage();
   const modalStyles = useMemo(() => makeModalStyles(colors), [colors]);
   const [name, setName]         = useState('');
   const [number, setNumber]     = useState('');
@@ -107,7 +109,7 @@ function EditModal({ visible, contact, onSave, onClose }: EditModalProps) {
 
   const handleSave = () => {
     if (!name.trim() || !number.trim()) {
-      Alert.alert('Campi obbligatori', 'Nome e numero sono obbligatori.');
+      Alert.alert(t('contactErrReqTitle'), t('contactErrReqMsg'));
       return;
     }
     onSave({
@@ -131,33 +133,33 @@ function EditModal({ visible, contact, onSave, onClose }: EditModalProps) {
           <View style={modalStyles.handle} />
 
           <Text style={modalStyles.title}>
-            {contact?.id ? 'Modifica contatto' : 'Nuovo contatto'}
+            {contact?.id ? t('contactModalEdit') : t('contactModalNew')}
           </Text>
 
           {/* Nome */}
-          <Text style={modalStyles.label}>Nome *</Text>
+          <Text style={modalStyles.label}>{t('contactNameLabel')}</Text>
           <TextInput
             style={modalStyles.input}
             value={name}
             onChangeText={setName}
-            placeholder="es. OPS Malpensa"
+            placeholder={t('contactNamePh')}
             placeholderTextColor={colors.textSub}
             autoCapitalize="words"
           />
 
           {/* Numero */}
-          <Text style={modalStyles.label}>Numero *</Text>
+          <Text style={modalStyles.label}>{t('contactNumberLabel')}</Text>
           <TextInput
             style={modalStyles.input}
             value={number}
             onChangeText={setNumber}
-            placeholder="+39 02 1234567"
+            placeholder={t('contactNumberPh')}
             placeholderTextColor={colors.textSub}
             keyboardType="phone-pad"
           />
 
           {/* Categoria */}
-          <Text style={modalStyles.label}>Categoria</Text>
+          <Text style={modalStyles.label}>{t('contactCatLabel')}</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={modalStyles.catRow}>
             {CATEGORIES.map(cat => (
               <TouchableOpacity
@@ -176,12 +178,12 @@ function EditModal({ visible, contact, onSave, onClose }: EditModalProps) {
           </ScrollView>
 
           {/* Nota */}
-          <Text style={modalStyles.label}>Nota (opzionale)</Text>
+          <Text style={modalStyles.label}>{t('contactNoteLabel')}</Text>
           <TextInput
             style={[modalStyles.input, { height: 70, textAlignVertical: 'top' }]}
             value={note}
             onChangeText={setNote}
-            placeholder="es. Solo orario ufficio, interno 3..."
+            placeholder={t('contactNotePh')}
             placeholderTextColor={colors.textSub}
             multiline
           />
@@ -251,9 +253,9 @@ function ContactRow({ contact, onEdit, onDelete }: ContactRowProps) {
   };
 
   const confirmDelete = () => {
-    Alert.alert('Elimina contatto', `Eliminare "${contact.name}"?`, [
+    Alert.alert(t('contactDeleteTitle'), `${t('contactDeleteTitle')} "${contact.name}"?`, [
       { text: 'Annulla', style: 'cancel' },
-      { text: 'Elimina', style: 'destructive', onPress: () => onDelete(contact.id) },
+      { text: t('contactDeleteConfirm'), style: 'destructive', onPress: () => onDelete(contact.id) },
     ]);
   };
 
@@ -395,10 +397,10 @@ export default function PhonebookScreen() {
       {/* Header */}
       <View style={s.header}>
         <MaterialIcons name="contacts" size={22} color={colors.primary} />
-        <Text style={s.headerTitle}>Rubrica</Text>
+        <Text style={s.headerTitle}>{t('phonebookTitle')}</Text>
         <TouchableOpacity style={s.addBtn} onPress={openAdd}>
           <MaterialIcons name="add" size={20} color="#fff" />
-          <Text style={s.addTxt}>Aggiungi</Text>
+          <Text style={s.addTxt}>{t('contactAdd')}</Text>
         </TouchableOpacity>
       </View>
 
@@ -409,7 +411,7 @@ export default function PhonebookScreen() {
           style={s.searchInput}
           value={search}
           onChangeText={setSearch}
-          placeholder="Cerca nome o numero..."
+          placeholder={t('contactSearch')}
           placeholderTextColor={colors.textSub}
           autoCorrect={false}
         />
@@ -430,7 +432,7 @@ export default function PhonebookScreen() {
           style={[s.filterChip, !filterCat && s.filterChipActive]}
           onPress={() => setFilterCat(null)}
         >
-          <Text style={[s.filterTxt, !filterCat && s.filterTxtActive]}>Tutti</Text>
+          <Text style={[s.filterTxt, !filterCat && s.filterTxtActive]}>{t('contactAll')}</Text>
         </TouchableOpacity>
         {CATEGORIES.map(cat => {
           const active = filterCat === cat;
@@ -454,13 +456,13 @@ export default function PhonebookScreen() {
         {contacts.length === 0 ? (
           <View style={s.empty}>
             <MaterialIcons name="contacts" size={56} color={colors.textMuted} />
-            <Text style={s.emptyTitle}>Rubrica vuota</Text>
+            <Text style={s.emptyTitle}>{t('contactEmptyTitle')}</Text>
             <Text style={s.emptyHint}>Tocca "Aggiungi" per inserire il primo contatto</Text>
           </View>
         ) : filtered.length === 0 ? (
           <View style={s.empty}>
             <MaterialIcons name="search-off" size={48} color={colors.textMuted} />
-            <Text style={s.emptyTitle}>Nessun risultato</Text>
+            <Text style={s.emptyTitle}>{t('contactNoResults')}</Text>
           </View>
         ) : (
           Object.entries(grouped).map(([cat, list]) => (
