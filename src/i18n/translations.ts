@@ -55,7 +55,7 @@ const it = {
   shiftSyncBtn: '\u2705 Sincronizza nel Calendario!',
   shiftErrOcrTitle: 'Errore OCR', shiftErrOcrMsg: "Impossibile elaborare l'immagine.",
   shiftPermTitle: 'Permesso negato',
-  shiftPermMsg: 'Devi autorizzare l'accesso al calendario del telefono.',
+  shiftPermMsg: "Devi autorizzare l'accesso al calendario del telefono.",
   shiftNoCalendar: 'Nessun calendario scrivibile trovato sul dispositivo.',
   shiftSyncOkTitle: '\u2705 Turni Sincronizzati!',
   shiftNoShifts: 'Nessun orario trovato', shiftCalErrTitle: 'Errore Calendario',
