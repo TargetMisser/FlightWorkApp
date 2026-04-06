@@ -5,7 +5,7 @@ import {
   LayoutAnimation, Platform, UIManager, TextInput, Modal, Alert, KeyboardAvoidingView,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useAppTheme } from '../context/ThemeContext';
+import { useAppTheme, ThemeColors } from '../context/ThemeContext';
 
 const STORAGE_KEY = 'manuals_data_v2';
 
@@ -298,7 +298,7 @@ const DEFAULT_AIRLINES: Airline[] = [
 // ─── Inline command highlighting ──────────────────────────────────────────────
 const CMD_REGEX = /(`[^`]+`)/g;
 
-function RichBodyText({ text, colors }: { text: string; colors: any }) {
+function RichBodyText({ text, colors }: { text: string; colors: ThemeColors }) {
   const parts = text.split(CMD_REGEX);
   return (
     <Text style={{ fontSize: 13, color: colors.textSub, lineHeight: 20 }}>
@@ -329,7 +329,7 @@ function RichBodyText({ text, colors }: { text: string; colors: any }) {
 }
 
 // ─── Commands Tab component ──────────────────────────────────────────────────
-function CommandsTab({ commands, colors }: { commands: DCSCommand[]; colors: any }) {
+function CommandsTab({ commands, colors }: { commands: DCSCommand[]; colors: ThemeColors }) {
   const [search, setSearch] = useState('');
   const lower = search.toLowerCase();
   const filtered = lower
@@ -416,7 +416,7 @@ function CommandsTab({ commands, colors }: { commands: DCSCommand[]; colors: any
 }
 
 // ─── Item component ───────────────────────────────────────────────────────────
-function makeItemStyles(c: any) {
+function makeItemStyles(c: ThemeColors) {
   return StyleSheet.create({
     wrapper: {
       backgroundColor: c.card,
@@ -485,7 +485,7 @@ function ManualItemRow({
 }
 
 // ─── Section component ────────────────────────────────────────────────────────
-function makeSectionStyles(c: any) {
+function makeSectionStyles(c: ThemeColors) {
   return StyleSheet.create({
     wrapper: {
       marginBottom: 12,
@@ -583,7 +583,7 @@ const modalStyles = StyleSheet.create({
 });
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
-function makeStyles(c: any) {
+function makeStyles(c: ThemeColors) {
   return StyleSheet.create({
     root: { flex: 1, backgroundColor: c.bg },
     header: {
