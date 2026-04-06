@@ -3,9 +3,11 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { StyleSheet, View, Text, ActivityIndicator } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { useAppTheme } from '../context/ThemeContext';
+import { useLanguage } from '../context/LanguageContext';
 
 export default function TraveldocScreen() {
   const { colors } = useAppTheme();
+  const { t } = useLanguage();
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
 
@@ -21,14 +23,14 @@ export default function TraveldocScreen() {
       {/* Header */}
       <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <Text style={[styles.title, { color: colors.primaryDark }]}>TravelDoc</Text>
-        <Text style={[styles.sub, { color: colors.textSub }]}>Verifica documenti di viaggio</Text>
+        <Text style={[styles.sub, { color: colors.textSub }]}>{t('traveldocSub')}</Text>
       </View>
 
       {/* WebView */}
       {loading && (
         <View style={[styles.loadingWrap, { backgroundColor: colors.bg }]}>
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[styles.loadingText, { color: colors.textSub }]}>Caricamento TravelDoc…</Text>
+          <Text style={[styles.loadingText, { color: colors.textSub }]}>{t('traveldocLoading')}</Text>
         </View>
       )}
       {loadError && !loading && (
