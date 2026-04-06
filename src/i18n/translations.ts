@@ -135,6 +135,19 @@ const it = {
   pinDisableBtn: 'Disattiva', pinErrMsg: 'Impossibile impostare il PIN. Riprova.',
   pinVerifyErr: 'Impossibile verificare il PIN. Riprova.',
   pinAccessEnable: 'Attiva protezione PIN', pinAccessDisable: 'Disattiva protezione PIN',
+  // DrawerMenu
+  drawerNotepadTitle: 'Blocco Note',
+  drawerNotepadSub: 'Note personali',
+  drawerPhonebookTitle: 'Rubrica',
+  drawerPhonebookSub: 'Numeri utili',
+  drawerPasswordTitle: 'Password',
+  drawerPasswordSub: 'Credenziali salvate',
+  drawerManualsTitle: 'Manuali DCS',
+  drawerManualsSub: 'Libreria documenti',
+  drawerSettingsTitle: 'Impostazioni',
+  drawerSettingsSub: 'Preferenze app',
+  // ShiftTimeline
+  shiftUnknown: 'Sconosciuta',
 };
 
 const en: typeof it = {
@@ -320,4 +333,17 @@ export const WEATHER_MAP: Record<Lang, Record<number, { text: string; icon: stri
     63: { text: 'Rain', icon: '\ud83c\udf27\ufe0f' },
     80: { text: 'Showers', icon: '\ud83c\udf27\ufe0f' },
   },
+  // DrawerMenu
+  drawerNotepadTitle: 'Notepad',
+  drawerNotepadSub: 'Personal notes',
+  drawerPhonebookTitle: 'Phonebook',
+  drawerPhonebookSub: 'Useful numbers',
+  drawerPasswordTitle: 'Passwords',
+  drawerPasswordSub: 'Saved credentials',
+  drawerManualsTitle: 'DCS Manuals',
+  drawerManualsSub: 'Document library',
+  drawerSettingsTitle: 'Settings',
+  drawerSettingsSub: 'App preferences',
+  // ShiftTimeline
+  shiftUnknown: 'Unknown',
 };
