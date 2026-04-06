@@ -148,6 +148,12 @@ const it = {
   drawerSettingsSub: 'Preferenze app',
   // ShiftTimeline
   shiftUnknown: 'Sconosciuta',
+  // FlightScreen filter menu
+  flightFilterTitle: 'Mostra voli',
+  flightFilterMine: 'Solo mie compagnie',
+  flightFilterMineSub: 'Wizz, EasyJet e altri operatori configurati',
+  flightFilterAll: 'Tutti i voli',
+  flightFilterAllSub: 'Mostra tutti gli operatori presenti',
 };
 
 const en: typeof it = {
@@ -346,4 +352,10 @@ export const WEATHER_MAP: Record<Lang, Record<number, { text: string; icon: stri
   drawerSettingsSub: 'App preferences',
   // ShiftTimeline
   shiftUnknown: 'Unknown',
+  // FlightScreen filter menu
+  flightFilterTitle: 'Show flights',
+  flightFilterMine: 'My airlines only',
+  flightFilterMineSub: 'Wizz, EasyJet and other configured operators',
+  flightFilterAll: 'All flights',
+  flightFilterAllSub: 'Show all operators at this airport',
 };
