@@ -5,6 +5,7 @@ import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { MaterialIcons } from '@expo/vector-icons';
 import { ThemeProvider, useAppTheme } from './src/context/ThemeContext';
+import { LanguageProvider, useLanguage } from './src/context/LanguageContext';
 import { AirportProvider } from './src/context/AirportContext';
 import HomeScreen from './src/screens/HomeScreen';
 import TraveldocScreen from './src/screens/TraveldocScreen';
@@ -77,9 +78,18 @@ function GlassTab({ icon, label, focused, activeColor, inactiveColor, onPress }:
 // ─── Inner app (inside ThemeProvider) ────────────────────────────────────────
 function AppInner() {
   const { colors, mode } = useAppTheme();
+  const { t } = useLanguage();
   const [activeTab, setActiveTab]   = useState<Tab>('Shifts');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [overlay, setOverlay]       = useState<OverlayScreen>(null);
+
+  const tabLabels: Record<Tab, string> = {
+    Shifts: t('tabHome'), Calendar: t('tabShifts'), Flights: t('tabFlights'), TravelDoc: t('tabTravelDoc'),
+  };
+  const overlayTitles: Record<NonNullable<OverlayScreen>, string> = {
+    Notepad: t('overlayNotepad'), Phonebook: t('overlayPhonebook'),
+    Passwords: t('overlayPasswords'), Manuals: t('overlayManuals'), Settings: t('overlaySettings'),
+  };
 
   const handleDrawerSelect = (id: string) => setOverlay(id as OverlayScreen);
   const handleBack = () => setOverlay(null);
@@ -165,7 +175,7 @@ function AppInner() {
   };
 
 
-  const appBarTitle = overlay ? OVERLAY_TITLES[overlay] : 'AeroStaff Pro';
+  const appBarTitle = overlay ? overlayTitles[overlay] : 'AeroStaff Pro';
   const isWeather   = mode === 'weather' && !!colors.gradient;
 
   return (
@@ -245,7 +255,7 @@ function AppInner() {
                 <GlassTab
                   key={tab.id}
                   icon={tab.icon}
-                  label={tab.label}
+                  label={tabLabels[tab.id]}
                   focused={active}
                   activeColor={colors.tabIconActive}
                   inactiveColor={colors.tabIconInactive}
@@ -275,7 +285,9 @@ export default function App() {
   return (
     <ThemeProvider>
       <AirportProvider>
-        <AppInner />
+        <LanguageProvider>
+          <AppInner />
+        </LanguageProvider>
       </AirportProvider>
     </ThemeProvider>
   );
