@@ -24,6 +24,7 @@ import {
   type ParsedSchedule, type ParsedEmployee, type ParsedShift,
 } from '../utils/pdfShiftParser';
 import { useLanguage } from '../context/LanguageContext';
+import { handleError } from '../utils/errorHandler';
 
 const STORAGE_KEY = '@shift_import_name';
 
@@ -111,7 +112,7 @@ export default function CalendarScreen() {
       setManualModalOpen(false);
       fetchCalendar(true);
       Alert.alert(t('calShiftSaved'));
-    } catch (e: any) { Alert.alert('Errore', e.message); }
+    } catch (e: unknown) { handleError(e, 'calendar'); }
   };
 
   const SCREEN_W = Dimensions.get('window').width;
@@ -198,7 +199,7 @@ export default function CalendarScreen() {
       setEventsData(localData);
       setLoading(false);
       fetchWeatherAndFlights(start, end, localData);
-    } catch (e) { if (__DEV__) console.error(e); setLoading(false); }
+    } catch (e: unknown) { handleError(e, 'calendar'); setLoading(false); }
   };
 
   const fetchWeatherAndFlights = async (start: Date, end: Date, localData: Record<string, ShiftEvent[]>) => {
@@ -216,7 +217,7 @@ export default function CalendarScreen() {
           dict[date] = { weatherText: m.text, weatherIcon: m.icon, flightCount: 0 };
         });
       }
-    } catch (e) { if (__DEV__) console.warn('[calWeather]', e); }
+    } catch (e: unknown) { handleError(e, 'network', true); }
     try {
       const { arrivals, departures } = await fetchAirportScheduleRaw(airportCode);
       const allF = [...arrivals, ...departures];
@@ -232,7 +233,7 @@ export default function CalendarScreen() {
           if (dict[iso]) dict[iso].flightCount = cnt; else dict[iso] = { weatherText: 'N/A', weatherIcon: '❓', flightCount: cnt };
         }
       });
-    } catch (e) { if (__DEV__) console.warn('[calFlights]', e); }
+    } catch (e: unknown) { handleError(e, 'flight', true); }
     setDailyStats(dict);
   };
 
@@ -261,9 +262,8 @@ export default function CalendarScreen() {
       setImportStep('extracting');
       setImportModalVisible(true);
       setPdfHtml(getPdfExtractorHtml(base64));
-    } catch (e: any) {
-      if (__DEV__) console.error(`Import error at step=${step}:`, e);
-      Alert.alert('Errore', `Errore (${step}): ${e?.message || e}`);
+    } catch (e: unknown) {
+      handleError(e instanceof Error ? new Error(`Errore (${step}): ${e.message}`, { cause: e }) : e, 'import');
     }
   };
 
@@ -302,9 +302,8 @@ export default function CalendarScreen() {
       }
 
       setImportStep('pickName');
-    } catch (e) {
-      if (__DEV__) console.error(e);
-      Alert.alert('Errore', 'Errore nel parsing del PDF');
+    } catch (e: unknown) {
+      handleError(e instanceof Error ? new Error('Errore nel parsing del PDF', { cause: e }) : e, 'import');
       setImportModalVisible(false);
       setImportStep('idle');
     }
@@ -348,9 +347,8 @@ export default function CalendarScreen() {
         fetchCalendar(true);
         Alert.alert(t('calImportComplete'), `${saved} turni salvati nel calendario`);
       }, 800);
-    } catch (e) {
-      if (__DEV__) console.error(e);
-      Alert.alert('Errore', t('calImportError'));
+    } catch (e: unknown) {
+      handleError(e instanceof Error ? new Error(t('calImportError'), { cause: e }) : e, 'import');
       setImportStep('idle');
     }
   };
