@@ -7,7 +7,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../context/ThemeContext';
 import { useAirport } from '../context/AirportContext';
 import { getAirlineOps, getAirlineColor } from '../utils/airlineOps';
-import { fetchAirportScheduleRaw } from '../utils/fr24api';
+import { fetchAirportScheduleRaw, type FR24FlightData } from '../utils/fr24api';
 import { useLanguage } from '../context/LanguageContext';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -36,7 +36,7 @@ type Flight = {
   ops: { checkInOpen: number; checkInClose: number; gateOpen: number; gateClose: number };
 };
 
-function parseFlight(item: any): Flight | null {
+function parseFlight(item: FR24FlightData): Flight | null {
   const f = item.flight;
   if (!f) return null;
   const ts = f.time?.scheduled?.departure;
