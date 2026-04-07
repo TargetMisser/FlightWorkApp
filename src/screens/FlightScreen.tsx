@@ -19,6 +19,7 @@ import { WIDGET_CACHE_KEY } from '../widgets/widgetTaskHandler';
 import type { WidgetData, WidgetFlight } from '../widgets/widgetTaskHandler';
 import { ShiftWidget } from '../widgets/ShiftWidget';
 import { useLanguage } from '../context/LanguageContext';
+import { handleError } from '../utils/errorHandler';
 
 const WearDataSender = Platform.OS === 'android' ? NativeModules.WearDataSender : null;
 
@@ -37,7 +38,7 @@ try { Notifications.setNotificationHandler({
     shouldShowBanner: true,
     shouldShowList: true,
   }),
-}); } catch (e) { if (__DEV__) console.warn('[notifHandler]', e); }
+}); } catch (e) { handleError(e, 'notification', true); }
 
 
 function LogoPill({ iataCode, airlineName, color }: { iataCode: string; airlineName: string; color: string }) {
@@ -411,7 +412,7 @@ export default function FlightScreen() {
         await cancelPreviousNotifications();
         setScheduledCount(0);
       }
-    } catch (e) { if (__DEV__) console.error('[fetchAll]', e); } finally { setLoading(false); setRefreshing(false); }
+    } catch (e) { handleError(e, 'flight', true); } finally { setLoading(false); setRefreshing(false); }
   }, [airportCode, airportLoading]);
 
   useEffect(() => {
@@ -493,7 +494,7 @@ export default function FlightScreen() {
       const tab = activeTab;
       await AsyncStorage.setItem(PINNED_FLIGHT_KEY, JSON.stringify({ ...item, _pinTab: tab, _pinnedAt: Date.now() }));
       setPinnedFlightId(id);
-      try { await schedulePinnedNotifications(item, tab, locale); } catch (e) { if (__DEV__) console.warn('[pinnedNotif]', e); }
+      try { await schedulePinnedNotifications(item, tab, locale); } catch (e) { handleError(e, 'notification', true); }
       // Send to watch
       if (WearDataSender) {
         const payload = JSON.stringify({
@@ -520,10 +521,10 @@ export default function FlightScreen() {
   const unpinFlight = useCallback(async () => {
     try {
       await AsyncStorage.removeItem(PINNED_FLIGHT_KEY);
-      try { await cancelPinnedNotifications(); } catch (e) { if (__DEV__) console.warn('[cancelPinNotif]', e); }
+      try { await cancelPinnedNotifications(); } catch (e) { handleError(e, 'notification', true); }
       setPinnedFlightId(null);
       if (WearDataSender) WearDataSender.clearPinnedFlight();
-    } catch (e) { if (__DEV__) console.error('[unpin]', e); }
+    } catch (e) { handleError(e, 'pin', true); }
   }, []);
 
   const userShift = activeDay === 'today' ? shifts.today : shifts.tomorrow;
