@@ -12,6 +12,7 @@ import { useAppTheme, type ThemeColors } from '../context/ThemeContext';
 import { useAirport } from '../context/AirportContext';
 import { getAirlineOps, getAirlineColor } from '../utils/airlineOps';
 import { fetchAirportScheduleRaw } from '../utils/fr24api';
+import { fetchStaffMonitorData, normalizeFlightNumber, type StaffMonitorFlight } from '../utils/staffMonitor';
 import { formatAirportHeader } from '../utils/airportSettings';
 import { requestWidgetUpdate } from 'react-native-android-widget';
 import { WIDGET_CACHE_KEY } from '../widgets/widgetTaskHandler';
@@ -245,6 +246,8 @@ export default function FlightScreen() {
   const [scheduledCount, setScheduledCount] = useState(0);
   const [pinnedFlightId, setPinnedFlightId] = useState<string | null>(null);
   const [inboundArrivals, setInboundArrivals] = useState<Record<string, number>>({});
+  const [staffMonitorDeps, setStaffMonitorDeps] = useState<StaffMonitorFlight[]>([]);
+  const [staffMonitorArrs, setStaffMonitorArrs] = useState<StaffMonitorFlight[]>([]);
 
   // Carica preferenza notifiche salvata
   useEffect(() => {
@@ -416,6 +419,32 @@ export default function FlightScreen() {
     });
   }, []);
 
+  // staffMonitor: poll stand / gate / belt every 60s
+  useEffect(() => {
+    if (airportCode !== 'PSA') {
+      setStaffMonitorDeps([]);
+      setStaffMonitorArrs([]);
+      return;
+    }
+
+    const loadStaffMonitor = async () => {
+      try {
+        const [deps, arrs] = await Promise.all([
+          fetchStaffMonitorData('D'),
+          fetchStaffMonitorData('A'),
+        ]);
+        setStaffMonitorDeps(deps);
+        setStaffMonitorArrs(arrs);
+      } catch (e) {
+        if (__DEV__) console.warn('[staffMonitor] poll failed', e);
+      }
+    };
+
+    loadStaffMonitor();
+    const iv = setInterval(loadStaffMonitor, 60_000);
+    return () => clearInterval(iv);
+  }, [airportCode]);
+
   // Toggle notifiche
   const toggleNotifications = useCallback(async () => {
     const { status } = await Notifications.requestPermissionsAsync();
@@ -543,6 +572,12 @@ export default function FlightScreen() {
 
     const flightId = item.flight?.identification?.number?.default || null;
     const isPinned = flightId !== null && flightId === pinnedFlightId;
+    const normFn = normalizeFlightNumber(flightNumber);
+    const normalizeForMatching = (s: string) => s.replace(/[\s\-_]/g, '').toUpperCase();
+    const smPool = activeTab === 'departures' ? staffMonitorDeps : staffMonitorArrs;
+    const smFlight =
+      smPool.find(sm => sm.flightNumber === normFn) ??
+      smPool.find(sm => normalizeForMatching(sm.flightNumber) === normalizeForMatching(normFn));
 
     return (
       <SwipeableFlightCard
@@ -654,9 +689,37 @@ export default function FlightScreen() {
           )}
         </View>
       </View>
+      {smFlight && (smFlight.stand || smFlight.checkin || smFlight.gate || smFlight.belt) && (
+        <View style={s.smFooter}>
+          {smFlight.stand && (
+            <View style={s.smPill}>
+              <MaterialIcons name="local-parking" size={11} color={colors.primary} />
+              <Text style={s.smPillText}>Stand {smFlight.stand}</Text>
+            </View>
+          )}
+          {smFlight.checkin && (
+            <View style={s.smPill}>
+              <MaterialIcons name="desktop-windows" size={11} color={colors.primary} />
+              <Text style={s.smPillText}>Check-in {smFlight.checkin}</Text>
+            </View>
+          )}
+          {smFlight.gate && (
+            <View style={s.smPill}>
+              <MaterialIcons name="meeting-room" size={11} color={colors.primary} />
+              <Text style={s.smPillText}>Gate {smFlight.gate}</Text>
+            </View>
+          )}
+          {smFlight.belt && (
+            <View style={s.smPill}>
+              <MaterialIcons name="luggage" size={11} color={colors.primary} />
+              <Text style={s.smPillText}>Nastro {smFlight.belt}</Text>
+            </View>
+          )}
+        </View>
+      )}
       </SwipeableFlightCard>
     );
-  }, [activeTab, userShift, s, pinnedFlightId, pinFlight, unpinFlight, inboundArrivals, colors]);
+  }, [activeTab, userShift, s, pinnedFlightId, pinFlight, unpinFlight, inboundArrivals, colors, staffMonitorDeps, staffMonitorArrs]);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
@@ -750,6 +813,9 @@ function makeStyles(c: ThemeColors) {
     pinBannerText: { color: '#fff', fontWeight: 'bold', fontSize: 11, letterSpacing: 0.5 },
     statusPill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20, marginTop: 5 },
     statusText: { fontSize: 10, fontWeight: '700' },
+    smFooter: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: 12, paddingBottom: 10, backgroundColor: c.card },
+    smPill: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: c.primaryLight, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
+    smPillText: { fontSize: 11, fontWeight: '700', color: c.primaryDark },
     cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 14 },
     headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
     headerFlightNum: { color: '#fff', fontWeight: '900', fontSize: 15, lineHeight: 18 },
