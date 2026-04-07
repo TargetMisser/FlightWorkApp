@@ -527,21 +527,29 @@ export default function FlightScreen() {
   }, []);
 
   const userShift = activeDay === 'today' ? shifts.today : shifts.tomorrow;
-  const selectedDate = activeDay === 'today' ? new Date() : (() => { const d = new Date(); d.setDate(d.getDate() + 1); return d; })();
-  const isSameDay = (d1: Date, d2: Date) =>
-    d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
 
-  const currentData = (() => {
+  const currentData = useMemo(() => {
+    // ⚡ Bolt Optimization: Calculate day boundaries once instead of object creation in loop
+    const targetDate = new Date();
+    if (activeDay === 'tomorrow') {
+      targetDate.setDate(targetDate.getDate() + 1);
+    }
+    targetDate.setHours(0, 0, 0, 0);
+    const dayStartTs = targetDate.getTime() / 1000;
+    targetDate.setHours(23, 59, 59, 999);
+    const dayEndTs = targetDate.getTime() / 1000;
+
     const source = filterMode === 'all'
       ? (activeTab === 'arrivals' ? allArrivalsFull : allDeparturesFull)
       : (activeTab === 'arrivals' ? arrivals : departures);
+
     return source.filter(item => {
       const ts = activeTab === 'arrivals'
         ? item.flight?.time?.scheduled?.arrival
         : item.flight?.time?.scheduled?.departure;
-      return ts && isSameDay(new Date(ts * 1000), selectedDate);
+      return ts && ts >= dayStartTs && ts <= dayEndTs;
     });
-  })();
+  }, [activeDay, activeTab, filterMode, allArrivalsFull, allDeparturesFull, arrivals, departures]);
 
   const renderFlight = useCallback(({ item }: { item: any }) => {
     const flightNumber = item.flight?.identification?.number?.default || 'N/A';
