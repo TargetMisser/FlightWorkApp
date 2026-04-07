@@ -584,9 +584,15 @@ export default function FlightScreen() {
     const isPinned = flightId !== null && flightId === pinnedFlightId;
 
     const normFn = normalizeFlightNumber(flightNumber);
-    const smFlight = activeTab === 'departures'
-      ? staffMonitorDeps.find(sm => sm.flightNumber === normFn)
-      : staffMonitorArrs.find(sm => sm.flightNumber === normFn);
+    const normalizeForMatching = (s: string) => s.replace(/[\s\-_]/g, '').toUpperCase();
+    const normFnStripped = normalizeForMatching(normFn);
+    const smPool = activeTab === 'departures' ? staffMonitorDeps : staffMonitorArrs;
+    const smFlight =
+      smPool.find(sm => sm.flightNumber === normFn) ??
+      smPool.find(sm => normalizeForMatching(sm.flightNumber) === normFnStripped);
+    if (__DEV__ && !smFlight && smPool.length > 0) {
+      console.log(`[FlightScreen] No staffMonitor match for "${normFn}" (stripped: "${normFnStripped}") in ${activeTab}`);
+    }
 
     return (
       <SwipeableFlightCard

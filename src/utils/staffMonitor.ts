@@ -47,7 +47,10 @@ export async function fetchStaffMonitorData(nature: 'D' | 'A'): Promise<StaffMon
   try {
     const url = `https://servizi.pisa-airport.com/staffMonitor/staffMonitor?trans=true&nature=${nature}`;
     const resp = await fetch(url);
-    if (!resp.ok) return [];
+    if (!resp.ok) {
+      console.warn(`[staffMonitor] HTTP error for nature=${nature}: ${resp.status} ${resp.statusText}`);
+      return [];
+    }
     const html = await resp.text();
 
     const results: StaffMonitorFlight[] = [];
@@ -56,8 +59,8 @@ export async function fetchStaffMonitorData(nature: 'D' | 'A'): Promise<StaffMon
 
     while ((match = trRegex.exec(html)) !== null) {
       const rowHTML = match[1];
-      // Only rows that carry a flight number cell
-      if (!/class="clsFlight"/i.test(rowHTML) && !/class='clsFlight'/i.test(rowHTML)) continue;
+      // Only rows that carry a flight number cell (match clsFlight as a substring of the class attribute)
+      if (!/class\s*=\s*["'][^"']*clsFlight[^"']*["']/i.test(rowHTML)) continue;
 
       const cells = extractTDCells(rowHTML);
       if (cells.length < 2) continue;
@@ -83,8 +86,13 @@ export async function fetchStaffMonitorData(nature: 'D' | 'A'): Promise<StaffMon
       }
     }
 
+    if (__DEV__) {
+      console.log(`[staffMonitor] nature=${nature} parsed ${results.length} flights.`, results.slice(0, 5).map(r => r.flightNumber));
+    }
+
     return results;
-  } catch {
+  } catch (e) {
+    console.error(`[staffMonitor] fetch/parse error for nature=${nature}:`, e);
     return [];
   }
 }
