@@ -1,0 +1,3 @@
+## 2026-04-07 - Prevent Date object instantiation in loops
+**Learning:** Re-instantiating `Date` objects within high-frequency loops (like `Array.prototype.filter` iterating over hundreds of items) is a significant performance bottleneck due to unnecessary object allocation and GC pressure. Pre-calculating boundaries and performing numeric checks is much faster (~6x in our tests).
+**Action:** Always pre-calculate timestamps (or timestamp ranges) outside loops when evaluating whether a sequence of data items (flights, shifts, etc.) falls within a certain time window, and rely purely on numeric comparison inside the loop.
