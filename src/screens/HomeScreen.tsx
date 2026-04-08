@@ -84,7 +84,7 @@ function PinnedFlightCard({ item, colors }: { item: any; colors: any }) {
       marginHorizontal: 16, marginTop: 16,
       borderRadius: 16, overflow: 'hidden',
       backgroundColor: colors.card,
-      shadowColor: colors.primary, shadowOpacity: 0.15, shadowRadius: 12, elevation: 6,
+      shadowColor: colors.isDark ? '#000000' : colors.primary, shadowOpacity: 0.15, shadowRadius: 12, elevation: 6,
       borderWidth: colors.isDark ? 1 : 0, borderColor: colors.border,
     }}>
       {/* Compact header: airline color bar + flight info */}
