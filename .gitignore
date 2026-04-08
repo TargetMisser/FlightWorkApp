@@ -54,3 +54,14 @@ test_cli.js
 # generated native folders
 /ios
 .dual-graph/
+
+# IDEs and Editors
+.idea/
+*.iml
+*.swp
+
+# Testing
+coverage/
+
+# Logs
+*.log
