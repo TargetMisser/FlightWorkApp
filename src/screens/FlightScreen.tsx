@@ -24,6 +24,8 @@ const NOTIF_IDS_KEY = 'aerostaff_notif_ids_v1';
 const NOTIF_ENABLED_KEY = 'aerostaff_notif_enabled';
 const PINNED_FLIGHT_KEY = 'pinned_flight_v1';
 const PINNED_NOTIF_IDS_KEY = 'pinned_notif_ids_v1';
+const SHIFT_NOTIF_ID_KEY = 'aerostaff_shift_notif_id_v1';
+const SHIFT_NOTIF_CHANNEL = 'turno_attivo';
 
 // ─── In-memory flight cache ────────────────────────────────────────────────────
 let _flightCache: { data: FR24ScheduleRaw; ts: number } | null = null;
@@ -233,6 +235,59 @@ async function schedulePinnedNotifications(item: any, tab: 'arrivals' | 'departu
   }
 }
 
+// ─── Notifica persistente turno ───────────────────────────────────────────────
+async function setupShiftNotifChannel() {
+  if (Platform.OS !== 'android') return;
+  try {
+    await Notifications.setNotificationChannelAsync(SHIFT_NOTIF_CHANNEL, {
+      name: 'Turno in corso',
+      importance: Notifications.AndroidImportance.LOW, // no pop-up, no suono
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+      sound: null,
+      vibrationPattern: [0],
+      enableLights: false,
+      showBadge: false,
+    });
+  } catch {}
+}
+
+async function cancelShiftNotification() {
+  const id = await AsyncStorage.getItem(SHIFT_NOTIF_ID_KEY);
+  if (!id) return;
+  await Promise.all([
+    Notifications.dismissNotificationAsync(id).catch(() => {}),
+    Notifications.cancelScheduledNotificationAsync(id).catch(() => {}),
+  ]);
+  await AsyncStorage.removeItem(SHIFT_NOTIF_ID_KEY);
+}
+
+async function showShiftNotification(
+  shift: { start: number; end: number },
+  nextFlightLabel: string | null,
+) {
+  await cancelShiftNotification();
+  const fmtT = (ts: number) =>
+    new Date(ts * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+
+  const id = await Notifications.scheduleNotificationAsync({
+    content: {
+      title: `✈️ Turno in corso: ${fmtT(shift.start)} – ${fmtT(shift.end)}`,
+      body: nextFlightLabel ?? 'Nessun volo imminente nel turno',
+      sticky: true,
+      sound: false,
+      data: { type: 'shift_active' },
+      android: {
+        channelId: SHIFT_NOTIF_CHANNEL,
+        ongoing: true,
+        color: '#2563EB',
+        smallIcon: 'ic_notification',
+      } as any,
+    },
+    trigger: null,
+  });
+  await AsyncStorage.setItem(SHIFT_NOTIF_ID_KEY, id);
+}
+
 // ─── Screen ────────────────────────────────────────────────────────────────────
 export default function FlightScreen() {
   const { colors } = useAppTheme();
@@ -404,15 +459,30 @@ export default function FlightScreen() {
       ;(async () => {
         try {
           const enabled = (await AsyncStorage.getItem(NOTIF_ENABLED_KEY)) === 'true';
-          if (enabled && shiftToday) {
+          const now = Date.now() / 1000;
+          if (enabled && shiftToday && now >= shiftToday.start && now <= shiftToday.end) {
+            // Notifiche temporizzate (arrivi + fine turno)
             const shiftFlights = fetchedArrivals.filter(item => {
               const ts = item.flight?.time?.scheduled?.arrival;
               return ts && ts >= shiftToday!.start && ts <= shiftToday!.end;
             });
             const count = await scheduleShiftNotifications(shiftFlights, shiftToday!.end);
             setScheduledCount(count);
+            // Notifica persistente: prossimo volo in arrivo nel turno
+            const nextArrival = fetchedArrivals
+              .filter(item => {
+                const ts = item.flight?.time?.scheduled?.arrival;
+                return ts && ts > now && ts >= shiftToday!.start && ts <= shiftToday!.end;
+              })
+              .sort((a, b) => (a.flight?.time?.scheduled?.arrival ?? 0) - (b.flight?.time?.scheduled?.arrival ?? 0))[0];
+            const fmtT2 = (ts: number) => new Date(ts * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+            const nextLabel = nextArrival
+              ? `Prossimo arrivo: ${nextArrival.flight?.identification?.number?.default ?? 'N/A'} alle ${fmtT2(nextArrival.flight.time.scheduled.arrival)}`
+              : 'Nessun arrivo imminente';
+            await showShiftNotification(shiftToday!, nextLabel);
           } else {
             await cancelPreviousNotifications();
+            await cancelShiftNotification();
             setScheduledCount(0);
           }
         } catch {}
@@ -436,6 +506,8 @@ export default function FlightScreen() {
         if (id) setPinnedFlightId(id);
       } catch {}
     });
+    // Crea il canale notifiche persistenti all'avvio
+    setupShiftNotifChannel();
   }, []);
 
   // Toggle notifiche
@@ -451,24 +523,40 @@ export default function FlightScreen() {
 
     if (!next) {
       await cancelPreviousNotifications();
+      await cancelShiftNotification();
       setScheduledCount(0);
       return;
     }
 
     // Schedula subito con i dati già caricati (turno di oggi)
-    if (shifts.today) {
+    const now = Date.now() / 1000;
+    if (shifts.today && now >= shifts.today.start && now <= shifts.today.end) {
       const shiftFlights = arrivals.filter(item => {
         const ts = item.flight?.time?.scheduled?.arrival;
         return ts && ts >= shifts.today!.start && ts <= shifts.today!.end;
       });
       const count = await scheduleShiftNotifications(shiftFlights, shifts.today!.end);
       setScheduledCount(count);
+      // Mostra notifica persistente
+      const nextArrival = arrivals
+        .filter(item => {
+          const ts = item.flight?.time?.scheduled?.arrival;
+          return ts && ts > now && ts >= shifts.today!.start && ts <= shifts.today!.end;
+        })
+        .sort((a, b) => (a.flight?.time?.scheduled?.arrival ?? 0) - (b.flight?.time?.scheduled?.arrival ?? 0))[0];
+      const fmtT = (ts: number) => new Date(ts * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+      const nextLabel = nextArrival
+        ? `Prossimo arrivo: ${nextArrival.flight?.identification?.number?.default ?? 'N/A'} alle ${fmtT(nextArrival.flight.time.scheduled.arrival)}`
+        : 'Nessun arrivo imminente';
+      await showShiftNotification(shifts.today!, nextLabel);
       Alert.alert(
         'Notifiche attivate',
         count > 0
-          ? `Programmate ${count} notifiche: arrivi voli (15 min prima) + fine turno.`
-          : 'Nessun volo futuro trovato, ma riceverai la notifica di fine turno.',
+          ? `Programmate ${count} notifiche + notifica turno in alto.`
+          : 'Notifica turno attiva. Nessun volo futuro trovato.',
       );
+    } else if (shifts.today) {
+      Alert.alert('Turno non in corso', 'Le notifiche si attiveranno automaticamente all\'inizio del turno.');
     } else {
       Alert.alert('Nessun turno trovato', 'Non ho trovato un turno "Lavoro" per oggi nel calendario.');
       setNotifsEnabled(false);
