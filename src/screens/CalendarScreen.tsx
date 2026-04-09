@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ActivityIndicator, ScrollView, TouchableOpacity,
-  PanResponder, Platform, UIManager, Animated, Dimensions, Modal, Alert, FlatList, TextInput, KeyboardAvoidingView, Keyboard,
+  PanResponder, Platform, UIManager, Animated, Dimensions, Modal, Alert, FlatList, TextInput,
 } from 'react-native';
 import * as SystemCalendar from 'expo-calendar';
 import * as Location from 'expo-location';
@@ -25,6 +25,58 @@ import {
 
 const PRIMARY = '#2563EB';
 const STORAGE_KEY = '@shift_import_name';
+
+// ─── Wheel picker arrays ──────────────────────────────────────────────────────
+const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
+const MINUTES = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
+const WHEEL_ITEM_H = 48;
+
+function WheelPicker({ items, value, onChange, textColor }: {
+  items: string[];
+  value: string;
+  onChange: (v: string) => void;
+  textColor: string;
+}) {
+  const listRef = useRef<FlatList>(null);
+  const idx = items.indexOf(value);
+
+  useEffect(() => {
+    if (idx >= 0) {
+      setTimeout(() => {
+        listRef.current?.scrollToOffset({ offset: idx * WHEEL_ITEM_H, animated: false });
+      }, 80);
+    }
+  }, []);
+
+  return (
+    <View style={{ height: WHEEL_ITEM_H * 3, flex: 1, overflow: 'hidden' }}>
+      <FlatList
+        ref={listRef}
+        data={items}
+        keyExtractor={item => item}
+        snapToInterval={WHEEL_ITEM_H}
+        decelerationRate="fast"
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingVertical: WHEEL_ITEM_H }}
+        getItemLayout={(_, i) => ({ length: WHEEL_ITEM_H, offset: WHEEL_ITEM_H * i, index: i })}
+        onMomentumScrollEnd={e => {
+          const i = Math.round(e.nativeEvent.contentOffset.y / WHEEL_ITEM_H);
+          const clamped = Math.max(0, Math.min(items.length - 1, i));
+          onChange(items[clamped]);
+        }}
+        renderItem={({ item }) => (
+          <View style={{ height: WHEEL_ITEM_H, justifyContent: 'center', alignItems: 'center' }}>
+            <Text style={{ fontSize: 22, color: item === value ? textColor : textColor + '66', fontWeight: item === value ? 'bold' : 'normal' }}>{item}</Text>
+          </View>
+        )}
+      />
+      <View pointerEvents="none" style={{
+        position: 'absolute', top: WHEEL_ITEM_H, height: WHEEL_ITEM_H,
+        left: 0, right: 0, borderTopWidth: 1.5, borderBottomWidth: 1.5, borderColor: PRIMARY,
+      }} />
+    </View>
+  );
+}
 
 type ShiftEvent = {
   id: string;
@@ -84,10 +136,6 @@ export default function CalendarScreen() {
   const [manualStartM, setManualStartM] = useState('00');
   const [manualEndH, setManualEndH] = useState('16');
   const [manualEndM, setManualEndM] = useState('00');
-  const manualStartMRef = useRef<TextInput>(null);
-  const manualEndHRef = useRef<TextInput>(null);
-  const manualEndMRef = useRef<TextInput>(null);
-
   const openManualEntry = () => {
     setEditMenuOpen(false);
     setManualDate(selectedDay);
@@ -96,8 +144,6 @@ export default function CalendarScreen() {
     setManualEndH('16'); setManualEndM('00');
     setManualModalOpen(true);
   };
-
-  const sanitizeTimePart = (value: string) => value.replace(/\D/g, '').slice(0, 2);
 
   const saveManualShift = async () => {
     const { status } = await SystemCalendar.requestCalendarPermissionsAsync();
@@ -493,12 +539,8 @@ export default function CalendarScreen() {
 
       {/* ─── Manual Entry Modal ─── */}
       <Modal visible={manualModalOpen} transparent animationType="slide" statusBarTranslucent onRequestClose={() => setManualModalOpen(false)}>
-        <KeyboardAvoidingView
-          style={s.modalOverlay}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 24 : 0}
-        >
-          <TouchableOpacity style={s.modalBg} activeOpacity={1} onPress={Keyboard.dismiss} />
+        <View style={s.modalOverlay}>
+          <TouchableOpacity style={s.modalBg} activeOpacity={1} onPress={() => setManualModalOpen(false)} />
           <View style={s.modalScrollContent}>
             <View style={[s.manualModalContent, { backgroundColor: colors.isDark || colors.card === 'transparent' ? '#1E293B' : '#FFFFFF' }]}>
             <View style={s.modalHeader}>
@@ -508,8 +550,6 @@ export default function CalendarScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Form fields scrollable so the Save button stays visible above keyboard */}
-            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
             {/* Data */}
             <Text style={[s.manualLabel, { color: colors.textSub }]}>DATA</Text>
             <TextInput
@@ -535,80 +575,34 @@ export default function CalendarScreen() {
               ))}
             </View>
 
-            {/* Orari (solo lavoro) */}
+            {/* Orari (solo lavoro) — carosello scroll, nessuna tastiera */}
             {manualType === 'Lavoro' && (
               <>
                 <Text style={[s.manualLabel, { color: colors.textSub }]}>ORARIO INIZIO</Text>
-                <View style={s.manualTimeRow}>
-                  <TextInput
-                    style={[s.manualInput, s.manualTimeInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.bg }]}
-                    placeholder="HH"
-                    placeholderTextColor={colors.textMuted}
-                    keyboardType="number-pad"
-                    maxLength={2}
-                    value={manualStartH}
-                    onChangeText={v => setManualStartH(sanitizeTimePart(v))}
-                    selectTextOnFocus
-                    returnKeyType="next"
-                    blurOnSubmit={false}
-                    onSubmitEditing={() => manualStartMRef.current?.focus()}
-                  />
-                  <TextInput
-                    ref={manualStartMRef}
-                    style={[s.manualInput, s.manualTimeInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.bg }]}
-                    placeholder="MM"
-                    placeholderTextColor={colors.textMuted}
-                    keyboardType="number-pad"
-                    maxLength={2}
-                    value={manualStartM}
-                    onChangeText={v => setManualStartM(sanitizeTimePart(v))}
-                    selectTextOnFocus
-                    returnKeyType="next"
-                    blurOnSubmit={false}
-                    onSubmitEditing={() => manualEndHRef.current?.focus()}
-                  />
+                <View style={[s.manualTimeRow, { borderWidth: 1, borderColor: colors.border, borderRadius: 12, overflow: 'hidden', marginBottom: 14 }]}>
+                  <WheelPicker items={HOURS} value={manualStartH} onChange={setManualStartH} textColor={colors.text} />
+                  <View style={{ justifyContent: 'center', paddingHorizontal: 6 }}>
+                    <Text style={{ fontSize: 26, color: colors.text, fontWeight: 'bold' }}>:</Text>
+                  </View>
+                  <WheelPicker items={MINUTES} value={manualStartM} onChange={setManualStartM} textColor={colors.text} />
                 </View>
                 <Text style={[s.manualLabel, { color: colors.textSub }]}>ORARIO FINE</Text>
-                <View style={s.manualTimeRow}>
-                  <TextInput
-                    ref={manualEndHRef}
-                    style={[s.manualInput, s.manualTimeInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.bg }]}
-                    placeholder="HH"
-                    placeholderTextColor={colors.textMuted}
-                    keyboardType="number-pad"
-                    maxLength={2}
-                    value={manualEndH}
-                    onChangeText={v => setManualEndH(sanitizeTimePart(v))}
-                    selectTextOnFocus
-                    returnKeyType="next"
-                    blurOnSubmit={false}
-                    onSubmitEditing={() => manualEndMRef.current?.focus()}
-                  />
-                  <TextInput
-                    ref={manualEndMRef}
-                    style={[s.manualInput, s.manualTimeInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.bg }]}
-                    placeholder="MM"
-                    placeholderTextColor={colors.textMuted}
-                    keyboardType="number-pad"
-                    maxLength={2}
-                    value={manualEndM}
-                    onChangeText={v => setManualEndM(sanitizeTimePart(v))}
-                    selectTextOnFocus
-                    returnKeyType="done"
-                    onSubmitEditing={Keyboard.dismiss}
-                  />
+                <View style={[s.manualTimeRow, { borderWidth: 1, borderColor: colors.border, borderRadius: 12, overflow: 'hidden', marginBottom: 14 }]}>
+                  <WheelPicker items={HOURS} value={manualEndH} onChange={setManualEndH} textColor={colors.text} />
+                  <View style={{ justifyContent: 'center', paddingHorizontal: 6 }}>
+                    <Text style={{ fontSize: 26, color: colors.text, fontWeight: 'bold' }}>:</Text>
+                  </View>
+                  <WheelPicker items={MINUTES} value={manualEndM} onChange={setManualEndM} textColor={colors.text} />
                 </View>
               </>
             )}
-            </ScrollView>
 
-            {/* Salva button outside scroll — sempre visibile sopra la tastiera */}
-            <TouchableOpacity style={[s.primaryBtn, { backgroundColor: colors.primary, marginTop: 12 }]} onPress={saveManualShift}>
+            <TouchableOpacity style={[s.primaryBtn, { backgroundColor: colors.primary, marginTop: 8 }]} onPress={saveManualShift}>
               <Text style={s.primaryBtnText}>Salva Turno</Text>
             </TouchableOpacity>
             </View>
           </View>
-        </KeyboardAvoidingView>
+        </View>
       </Modal>
 
       {/* Hidden WebView for PDF extraction */}
