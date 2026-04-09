@@ -11,7 +11,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useAppTheme } from '../context/ThemeContext';
 import { useAirport } from '../context/AirportContext';
 import { getAirlineOps, getAirlineColor } from '../utils/airlineOps';
-import { fetchAirportScheduleRaw } from '../utils/fr24api';
+import { fetchAirportScheduleRaw, type FR24ScheduleRaw } from '../utils/fr24api';
 import { formatAirportHeader } from '../utils/airportSettings';
 import { requestWidgetUpdate } from 'react-native-android-widget';
 import { WIDGET_CACHE_KEY } from '../widgets/widgetTaskHandler';
@@ -24,6 +24,10 @@ const NOTIF_IDS_KEY = 'aerostaff_notif_ids_v1';
 const NOTIF_ENABLED_KEY = 'aerostaff_notif_enabled';
 const PINNED_FLIGHT_KEY = 'pinned_flight_v1';
 const PINNED_NOTIF_IDS_KEY = 'pinned_notif_ids_v1';
+
+// ─── In-memory flight cache ────────────────────────────────────────────────────
+let _flightCache: { data: FR24ScheduleRaw; ts: number } | null = null;
+const CACHE_TTL_MS = 2 * 60 * 1000; // 2 minuti
 
 // Handler: mostra notifiche anche con app aperta (wrapped for Expo Go compat)
 try { Notifications.setNotificationHandler({
@@ -255,13 +259,19 @@ export default function FlightScreen() {
     if (airportLoading) return;
 
     try {
-      const {
-        allArrivals,
-        departures: fetchedDepartures,
-        arrivals: fetchedArrivals,
-      } = await fetchAirportScheduleRaw(airportCode);
+      // 1. Voli: usa cache in-memory se fresca (< 2 min), altrimenti fetch
+      const now = Date.now();
+      let rawResult: FR24ScheduleRaw;
+      if (_flightCache && (now - _flightCache.ts) < CACHE_TTL_MS) {
+        rawResult = _flightCache.data;
+      } else {
+        rawResult = await fetchAirportScheduleRaw(airportCode);
+        _flightCache = { data: rawResult, ts: now };
+      }
 
-      // Build inbound arrival map: registration → best known arrival timestamp
+      const { allArrivals, departures: fetchedDepartures, arrivals: fetchedArrivals } = rawResult;
+
+      // Build inbound arrival map
       const inboundMap: Record<string, number> = {};
       for (const a of allArrivals) {
         const reg = a.flight?.aircraft?.registration;
@@ -272,12 +282,46 @@ export default function FlightScreen() {
         if (t) inboundMap[reg] = t;
       }
       setInboundArrivals(inboundMap);
-
       setArrivals(fetchedArrivals);
       setDepartures(fetchedDepartures);
 
-      // Auto-clear expired pinned flight or stale data from another airport
-      const pinnedRaw = await AsyncStorage.getItem(PINNED_FLIGHT_KEY);
+      // 2. Pinned check + calendario IN PARALLELO
+      const [pinnedRaw, calResult] = await Promise.all([
+        AsyncStorage.getItem(PINNED_FLIGHT_KEY),
+        (async () => {
+          let shiftToday: { start: number; end: number } | null = null;
+          let shiftTomorrow: { start: number; end: number } | null = null;
+          let isRestDay = false;
+          const { status } = await Calendar.requestCalendarPermissionsAsync();
+          if (status === 'granted') {
+            const cals = await Calendar.getCalendarsAsync(Calendar.EntityTypes.EVENT);
+            const cal = cals.find(c => c.allowsModifications && c.isPrimary) || cals.find(c => c.allowsModifications);
+            if (cal) {
+              const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+              const tomorrowEnd = new Date(todayStart); tomorrowEnd.setDate(tomorrowEnd.getDate() + 1); tomorrowEnd.setHours(23, 59, 59, 999);
+              const evts = await Calendar.getEventsAsync([cal.id], todayStart, tomorrowEnd);
+              const todayEnd = new Date(todayStart); todayEnd.setHours(23, 59, 59, 999);
+              const tomorrowStart = new Date(todayStart); tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+              for (const e of evts) {
+                if (e.title.includes('Riposo')) {
+                  const evtDay = new Date(e.startDate);
+                  if (evtDay >= todayStart && evtDay <= todayEnd) isRestDay = true;
+                  continue;
+                }
+                if (!e.title.includes('Lavoro')) continue;
+                const s = new Date(e.startDate).getTime() / 1000;
+                const en = new Date(e.endDate).getTime() / 1000;
+                const evtDay = new Date(e.startDate);
+                if (evtDay >= todayStart && evtDay <= todayEnd) shiftToday = { start: s, end: en };
+                else if (evtDay >= tomorrowStart && evtDay <= tomorrowEnd) shiftTomorrow = { start: s, end: en };
+              }
+            }
+          }
+          return { shiftToday, shiftTomorrow, isRestDay };
+        })(),
+      ]);
+
+      // 3. Processa pinned
       if (pinnedRaw) {
         try {
           const pinned = JSON.parse(pinnedRaw);
@@ -296,106 +340,84 @@ export default function FlightScreen() {
         } catch {}
       }
 
-      // Shift (today + tomorrow)
-      let shiftToday: { start: number; end: number } | null = null;
-      let shiftTomorrow: { start: number; end: number } | null = null;
-      let isRestDay = false;
-      const { status } = await Calendar.requestCalendarPermissionsAsync();
-      if (status === 'granted') {
-        const cals = await Calendar.getCalendarsAsync(Calendar.EntityTypes.EVENT);
-        const cal = cals.find(c => c.allowsModifications && c.isPrimary) || cals.find(c => c.allowsModifications);
-        if (cal) {
-          const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
-          const tomorrowEnd = new Date(todayStart); tomorrowEnd.setDate(tomorrowEnd.getDate() + 1); tomorrowEnd.setHours(23, 59, 59, 999);
-          const evts = await Calendar.getEventsAsync([cal.id], todayStart, tomorrowEnd);
-          const todayEnd = new Date(todayStart); todayEnd.setHours(23, 59, 59, 999);
-          const tomorrowStart = new Date(todayStart); tomorrowStart.setDate(tomorrowStart.getDate() + 1);
-          for (const e of evts) {
-            if (e.title.includes('Riposo')) {
-              const evtDay = new Date(e.startDate);
-              if (evtDay >= todayStart && evtDay <= todayEnd) isRestDay = true;
-              continue;
-            }
-            if (!e.title.includes('Lavoro')) continue;
-            const s = new Date(e.startDate).getTime() / 1000;
-            const en = new Date(e.endDate).getTime() / 1000;
-            const evtDay = new Date(e.startDate);
-            if (evtDay >= todayStart && evtDay <= todayEnd) shiftToday = { start: s, end: en };
-            else if (evtDay >= tomorrowStart && evtDay <= tomorrowEnd) shiftTomorrow = { start: s, end: en };
-          }
-        }
-      }
+      // 4. Turni
+      const { shiftToday, shiftTomorrow, isRestDay } = calResult;
       setShifts({ today: shiftToday, tomorrow: shiftTomorrow });
 
-      // ── Push data to widget cache ──
-      try {
-        const fmtT = (ts: number) => new Date(ts * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
-        const fmtOff = (dep: number, off: number) => fmtT(dep - off * 60);
-        const nowHH = fmtT(Date.now() / 1000);
-
-        let widgetData: WidgetData;
-        if (isRestDay) {
-          widgetData = { state: 'rest' };
-        } else if (!shiftToday) {
-          widgetData = { state: 'no_shift' };
-        } else {
-          const shiftLabel = `${fmtT(shiftToday.start)} – ${fmtT(shiftToday.end)}`;
-          const pinnedRawW = await AsyncStorage.getItem(PINNED_FLIGHT_KEY);
-          let pinnedFn: string | null = null;
-          if (pinnedRawW) {
-            try { pinnedFn = JSON.parse(pinnedRawW).flight?.identification?.number?.default || null; } catch {}
+      // 5. Widget cache (fire-and-forget)
+      ;(async () => {
+        try {
+          const fmtT = (ts: number) => new Date(ts * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+          const fmtOff = (dep: number, off: number) => fmtT(dep - off * 60);
+          const nowHH = fmtT(Date.now() / 1000);
+          let widgetData: WidgetData;
+          if (isRestDay) {
+            widgetData = { state: 'rest' };
+          } else if (!shiftToday) {
+            widgetData = { state: 'no_shift' };
+          } else {
+            const shiftLabel = `${fmtT(shiftToday.start)} – ${fmtT(shiftToday.end)}`;
+            const pinnedRawW = await AsyncStorage.getItem(PINNED_FLIGHT_KEY);
+            let pinnedFn: string | null = null;
+            if (pinnedRawW) {
+              try { pinnedFn = JSON.parse(pinnedRawW).flight?.identification?.number?.default || null; } catch {}
+            }
+            const wFlights: WidgetFlight[] = fetchedDepartures
+              .filter(item => {
+                const ts = item.flight?.time?.scheduled?.departure;
+                if (ts == null) return false;
+                const airline = item.flight?.airline?.name || '';
+                const ops = getAirlineOps(airline);
+                const ciO = ts - ops.checkInOpen * 60, ciC = ts - ops.checkInClose * 60;
+                const gO = ts - ops.gateOpen * 60, gC = ts - ops.gateClose * 60;
+                return (ciO <= shiftToday!.end && ciC >= shiftToday!.start) || (gO <= shiftToday!.end && gC >= shiftToday!.start);
+              })
+              .map(item => {
+                const ts = item.flight.time.scheduled.departure;
+                const airline = item.flight?.airline?.name || 'Sconosciuta';
+                const ops = getAirlineOps(airline);
+                const fn = item.flight?.identification?.number?.default || 'N/A';
+                return {
+                  flightNumber: fn,
+                  destinationIata: item.flight?.airport?.destination?.code?.iata || '???',
+                  departureTs: ts,
+                  departureTime: fmtT(ts),
+                  ciOpen: fmtOff(ts, ops.checkInOpen), ciClose: fmtOff(ts, ops.checkInClose),
+                  gateOpen: fmtOff(ts, ops.gateOpen), gateClose: fmtOff(ts, ops.gateClose),
+                  airlineColor: getAirlineColor(airline),
+                  isPinned: fn === pinnedFn,
+                };
+              })
+              .sort((a, b) => a.departureTs - b.departureTs);
+            widgetData = wFlights.length === 0
+              ? { state: 'work_empty', shiftLabel, updatedAt: nowHH }
+              : { state: 'work', shiftLabel, flights: wFlights, updatedAt: nowHH };
           }
-          const wFlights: WidgetFlight[] = fetchedDepartures
-            .filter(item => {
-              const ts = item.flight?.time?.scheduled?.departure;
-              if (ts == null) return false;
-              const airline = item.flight?.airline?.name || '';
-              const ops = getAirlineOps(airline);
-              const ciO = ts - ops.checkInOpen * 60, ciC = ts - ops.checkInClose * 60;
-              const gO = ts - ops.gateOpen * 60, gC = ts - ops.gateClose * 60;
-              return (ciO <= shiftToday!.end && ciC >= shiftToday!.start) || (gO <= shiftToday!.end && gC >= shiftToday!.start);
-            })
-            .map(item => {
-              const ts = item.flight.time.scheduled.departure;
-              const airline = item.flight?.airline?.name || 'Sconosciuta';
-              const ops = getAirlineOps(airline);
-              const fn = item.flight?.identification?.number?.default || 'N/A';
-              return {
-                flightNumber: fn,
-                destinationIata: item.flight?.airport?.destination?.code?.iata || '???',
-                departureTs: ts,
-                departureTime: fmtT(ts),
-                ciOpen: fmtOff(ts, ops.checkInOpen), ciClose: fmtOff(ts, ops.checkInClose),
-                gateOpen: fmtOff(ts, ops.gateOpen), gateClose: fmtOff(ts, ops.gateClose),
-                airlineColor: getAirlineColor(airline),
-                isPinned: fn === pinnedFn,
-              };
-            })
-            .sort((a, b) => a.departureTs - b.departureTs);
+          await AsyncStorage.setItem(WIDGET_CACHE_KEY, JSON.stringify(widgetData));
+          if (Platform.OS === 'android') {
+            requestWidgetUpdate({ widgetName: 'ShiftFlights', renderWidget: () => (<ShiftWidget data={widgetData} />) as any }).catch(() => {});
+          }
+        } catch {}
+      })();
 
-          widgetData = wFlights.length === 0
-            ? { state: 'work_empty', shiftLabel, updatedAt: nowHH }
-            : { state: 'work', shiftLabel, flights: wFlights, updatedAt: nowHH };
-        }
-        await AsyncStorage.setItem(WIDGET_CACHE_KEY, JSON.stringify(widgetData));
-        if (Platform.OS === 'android') {
-          requestWidgetUpdate({ widgetName: 'ShiftFlights', renderWidget: () => (<ShiftWidget data={widgetData} />) as any }).catch(() => {});
-        }
-      } catch {}
+      // 6. Notifiche fire-and-forget — non blocca lo spinner
+      ;(async () => {
+        try {
+          const enabled = (await AsyncStorage.getItem(NOTIF_ENABLED_KEY)) === 'true';
+          if (enabled && shiftToday) {
+            const shiftFlights = fetchedArrivals.filter(item => {
+              const ts = item.flight?.time?.scheduled?.arrival;
+              return ts && ts >= shiftToday!.start && ts <= shiftToday!.end;
+            });
+            const count = await scheduleShiftNotifications(shiftFlights, shiftToday!.end);
+            setScheduledCount(count);
+          } else {
+            await cancelPreviousNotifications();
+            setScheduledCount(0);
+          }
+        } catch {}
+      })();
 
-      // Schedula notifiche se attive (solo turno di oggi)
-      const enabled = (await AsyncStorage.getItem(NOTIF_ENABLED_KEY)) === 'true';
-      if (enabled && shiftToday) {
-        const shiftFlights = fetchedArrivals.filter(item => {
-          const ts = item.flight?.time?.scheduled?.arrival;
-          return ts && ts >= shiftToday!.start && ts <= shiftToday!.end;
-        });
-        const count = await scheduleShiftNotifications(shiftFlights, shiftToday!.end);
-        setScheduledCount(count);
-      } else {
-        await cancelPreviousNotifications();
-        setScheduledCount(0);
-      }
     } catch (e) { console.error('[fetchAll]', e); } finally { setLoading(false); setRefreshing(false); }
   }, [airportCode, airportLoading]);
 
