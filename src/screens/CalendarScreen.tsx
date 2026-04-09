@@ -495,7 +495,7 @@ export default function CalendarScreen() {
       <Modal visible={manualModalOpen} transparent animationType="slide" statusBarTranslucent onRequestClose={() => setManualModalOpen(false)}>
         <KeyboardAvoidingView
           style={s.modalOverlay}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           keyboardVerticalOffset={Platform.OS === 'ios' ? 24 : 0}
         >
           <TouchableOpacity style={s.modalBg} activeOpacity={1} onPress={Keyboard.dismiss} />
@@ -508,6 +508,8 @@ export default function CalendarScreen() {
               </TouchableOpacity>
             </View>
 
+            {/* Form fields scrollable so the Save button stays visible above keyboard */}
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
             {/* Data */}
             <Text style={[s.manualLabel, { color: colors.textSub }]}>DATA</Text>
             <TextInput
@@ -598,8 +600,10 @@ export default function CalendarScreen() {
                 </View>
               </>
             )}
+            </ScrollView>
 
-            <TouchableOpacity style={[s.primaryBtn, { backgroundColor: colors.primary, marginTop: 8 }]} onPress={saveManualShift}>
+            {/* Salva button outside scroll — sempre visibile sopra la tastiera */}
+            <TouchableOpacity style={[s.primaryBtn, { backgroundColor: colors.primary, marginTop: 12 }]} onPress={saveManualShift}>
               <Text style={s.primaryBtnText}>Salva Turno</Text>
             </TouchableOpacity>
             </View>
