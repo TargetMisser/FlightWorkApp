@@ -1,3 +1,4 @@
+import { version } from '../../package.json';
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, ActivityIndicator,
@@ -213,7 +214,7 @@ export default function SettingsScreen() {
         </View>
         <View>
           <Text style={[styles.bannerTitle, { color: colors.primaryDark }]}>{t('settingsTitle')}</Text>
-          <Text style={[styles.bannerSub, { color: colors.textMuted }]}>AeroStaff Pro · v1.1.0</Text>
+          <Text style={[styles.bannerSub, { color: colors.textMuted }]}>{`AeroStaff Pro · v${version}`}</Text>
         </View>
       </View>
 
@@ -275,7 +276,7 @@ export default function SettingsScreen() {
       {/* ── Info app ── */}
       <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>{t('sectionApp')}</Text>
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }, colors.isDark && { elevation: 0, shadowOpacity: 0, borderWidth: 1 }]}>
-        <SettingRow icon="info-outline"    label={t('appVersion')} sublabel='1.1.0'                    type="info" />
+        <SettingRow icon="info-outline"    label={t('appVersion')} sublabel={version}                  type="info" />
       </View>
 
 
