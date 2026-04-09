@@ -9,6 +9,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write   # necessario per creare/aggiornare release
 
     steps:
       - name: Checkout
@@ -69,13 +71,23 @@ jobs:
           ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
           GRADLE_OPTS: "-Xmx4g -XX:MaxMetaspaceSize=512m"
 
+      - name: Read version from build.gradle
+        id: version
+        run: |
+          VERSION_NAME=$(grep 'versionName' android/app/build.gradle | grep -oP '"\K[^"]+')
+          VERSION_CODE=$(grep 'versionCode' android/app/build.gradle | grep -oP '\d+')
+          echo "name=$VERSION_NAME" >> $GITHUB_OUTPUT
+          echo "code=$VERSION_CODE" >> $GITHUB_OUTPUT
+          echo "tag=v$VERSION_NAME" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION_NAME (code $VERSION_CODE)"
+
       - name: Find and rename APK
         run: |
           APK=$(find android/app/build/outputs/apk -name "*.apk" -type f | head -1)
           echo "Found APK: $APK"
           if [ -n "$APK" ]; then
             mkdir -p artifacts
-            cp "$APK" "artifacts/AeroStaffPro-debug.apk"
+            cp "$APK" "artifacts/AeroStaffPro-v${{ steps.version.outputs.name }}.apk"
             ls -lh artifacts/
           else
             echo "ERROR: No APK found"
@@ -86,5 +98,28 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AeroStaffPro-debug
-          path: artifacts/AeroStaffPro-debug.apk
+          name: AeroStaffPro-v${{ steps.version.outputs.name }}
+          path: artifacts/AeroStaffPro-v${{ steps.version.outputs.name }}.apk
+
+      - name: Create or update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: AeroStaff Pro ${{ steps.version.outputs.name }}
+          body: |
+            ## AeroStaff Pro ${{ steps.version.outputs.name }}
+
+            Build automatico dal branch `claude/build-aerostaffpro-apk-R00yT`.
+
+            ### Novità in questo build
+            - Carosello ore/minuti nella modifica turni manuali (no tastiera)
+            - Pull-to-refresh velocizzato (cache 2 min + parallelo)
+            - Notifica persistente turno in corso (sticky in area notifiche)
+            - Keystore stabile: aggiornamenti futuri senza disinstallazione
+
+            ### Installazione
+            1. Scarica `AeroStaffPro-v${{ steps.version.outputs.name }}.apk`
+            2. Se hai già installato una versione con keystore diverso: disinstalla prima
+            3. Abilita "Installa da fonti sconosciute" se richiesto
+          files: artifacts/AeroStaffPro-v${{ steps.version.outputs.name }}.apk
+          make_latest: true
