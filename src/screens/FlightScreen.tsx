@@ -60,7 +60,7 @@ function LogoPill({ iataCode, airlineName, color }: { iataCode: string; airlineN
 
 const SWIPE_THRESHOLD = 80;
 
-function SwipeableFlightCard({
+const SwipeableFlightCard = React.memo(function SwipeableFlightCard({
   children, isPinned, onToggle,
 }: {
   children: React.ReactNode;
@@ -99,7 +99,7 @@ function SwipeableFlightCard({
       </Animated.View>
     </View>
   );
-}
+});
 
 // ─── Helpers notifiche ─────────────────────────────────────────────────────────
 async function cancelPreviousNotifications() {
@@ -528,18 +528,20 @@ export default function FlightScreen() {
 
   const userShift = activeDay === 'today' ? shifts.today : shifts.tomorrow;
   const selectedDate = activeDay === 'today' ? new Date() : (() => { const d = new Date(); d.setDate(d.getDate() + 1); return d; })();
-  const isSameDay = (d1: Date, d2: Date) =>
-    d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
-
   const currentData = (() => {
     const source = filterMode === 'all'
       ? (activeTab === 'arrivals' ? allArrivalsFull : allDeparturesFull)
       : (activeTab === 'arrivals' ? arrivals : departures);
+
+    // Optimization: pre-calculate boundaries to avoid Date instantiation in loop
+    const startOfDayTs = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate()).getTime() / 1000;
+    const endOfDayTs = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate() + 1).getTime() / 1000;
+
     return source.filter(item => {
       const ts = activeTab === 'arrivals'
         ? item.flight?.time?.scheduled?.arrival
         : item.flight?.time?.scheduled?.departure;
-      return ts && isSameDay(new Date(ts * 1000), selectedDate);
+      return ts && ts >= startOfDayTs && ts < endOfDayTs;
     });
   })();
 
@@ -807,6 +809,10 @@ export default function FlightScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchAll(); }} tintColor={colors.primary} />}
           ListEmptyComponent={<Text style={{ textAlign: 'center', marginTop: 40, color: '#9CA3AF', fontSize: 15 }}>{t('flightNoFlights')}</Text>}
           showsVerticalScrollIndicator={false}
+          initialNumToRender={10}
+          windowSize={5}
+          maxToRenderPerBatch={10}
+          removeClippedSubviews={true}
         />
       )}
 

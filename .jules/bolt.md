@@ -1,0 +1,3 @@
+## 2025-02-23 - Optimize Date instantiations in high-frequency React Native loops
+**Learning:** Instantiating `Date` objects and deep object property access inside a `.filter()` or `.map()` loop in a React Native app can cause significant CPU and memory overhead, leading to main thread blocks. Furthermore, React Native's `FlatList` component is memory-intensive without configured windowing properties.
+**Action:** Always pre-calculate boundaries outside of `.filter()` loops using pure epoch timestamps and rely on primitive numeric comparisons. Additionally, always implement windowing props (`initialNumToRender`, `windowSize`, `maxToRenderPerBatch`, `removeClippedSubviews`) for `FlatList` components and use `React.memo` for list items.
