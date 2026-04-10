@@ -1,2 +1,2 @@
 export const APP_NAME = 'AeroStaff Pro';
-export const APP_VERSION = '1.1.1';
+export const APP_VERSION = '2.1.0';
