@@ -4,10 +4,11 @@ import {
   ActivityIndicator, Dimensions, LayoutAnimation, Platform, UIManager,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useAppTheme } from '../context/ThemeContext';
+import { useAppTheme, type ThemeColors } from '../context/ThemeContext';
 import { useAirport } from '../context/AirportContext';
 import { getAirlineOps, getAirlineColor } from '../utils/airlineOps';
 import { fetchAirportScheduleRaw } from '../utils/fr24api';
+import { useLanguage } from '../context/LanguageContext';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -40,7 +41,7 @@ function parseFlight(item: any): Flight | null {
   if (!f) return null;
   const ts = f.time?.scheduled?.departure;
   if (!ts) return null;
-  const airlineName = f.airline?.name || 'Sconosciuta';
+  const airlineName = f.airline?.name || '—';
   return {
     id: f.identification?.id || `${ts}`,
     flightNumber: f.identification?.number?.default || 'N/A',
@@ -55,6 +56,7 @@ function parseFlight(item: any): Flight | null {
 
 export default function ShiftTimeline({ visible, onClose, shiftStart, shiftEnd, inline }: Props) {
   const { colors } = useAppTheme();
+  const { t } = useLanguage();
   const { airportCode, isLoading: airportLoading } = useAirport();
   const [flights, setFlights] = useState<Flight[]>([]);
   const [loading, setLoading] = useState(true);
@@ -300,7 +302,7 @@ export default function ShiftTimeline({ visible, onClose, shiftStart, shiftEnd, 
   );
 }
 
-function makeStyles(c: any) {
+function makeStyles(c: ThemeColors) {
   return StyleSheet.create({
     overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
     sheet: {

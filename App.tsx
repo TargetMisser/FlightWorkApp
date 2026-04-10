@@ -5,6 +5,7 @@ import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { MaterialIcons } from '@expo/vector-icons';
 import { ThemeProvider, useAppTheme } from './src/context/ThemeContext';
+import { LanguageProvider, useLanguage } from './src/context/LanguageContext';
 import { AirportProvider } from './src/context/AirportContext';
 import HomeScreen from './src/screens/HomeScreen';
 import TraveldocScreen from './src/screens/TraveldocScreen';
@@ -77,9 +78,18 @@ function GlassTab({ icon, label, focused, activeColor, inactiveColor, onPress }:
 // ─── Inner app (inside ThemeProvider) ────────────────────────────────────────
 function AppInner() {
   const { colors, mode } = useAppTheme();
+  const { t } = useLanguage();
   const [activeTab, setActiveTab]   = useState<Tab>('Shifts');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [overlay, setOverlay]       = useState<OverlayScreen>(null);
+
+  const tabLabels: Record<Tab, string> = {
+    Shifts: t('tabHome'), Calendar: t('tabShifts'), Flights: t('tabFlights'), TravelDoc: t('tabTravelDoc'),
+  };
+  const overlayTitles: Record<NonNullable<OverlayScreen>, string> = {
+    Notepad: t('overlayNotepad'), Phonebook: t('overlayPhonebook'),
+    Passwords: t('overlayPasswords'), Manuals: t('overlayManuals'), Settings: t('overlaySettings'),
+  };
 
   const handleDrawerSelect = (id: string) => setOverlay(id as OverlayScreen);
   const handleBack = () => setOverlay(null);
@@ -87,7 +97,7 @@ function AppInner() {
   // ─── Auto-schedule flight notifications on startup ─────────────────────────
   useEffect(() => {
     autoScheduleNotifications().then(count => {
-      if (count > 0) console.log(`Auto-scheduled ${count} notifications`);
+      if (count > 0 && __DEV__) console.log(`Auto-scheduled ${count} notifications`);
     }).catch(() => {});
   }, []);
 
@@ -165,7 +175,7 @@ function AppInner() {
   };
 
 
-  const appBarTitle = overlay ? OVERLAY_TITLES[overlay] : 'AeroStaff Pro';
+  const appBarTitle = overlay ? overlayTitles[overlay] : 'AeroStaff Pro';
   const isWeather   = mode === 'weather' && !!colors.gradient;
 
   return (
@@ -175,8 +185,13 @@ function AppInner() {
         backgroundColor={colors.appBar}
       />
 
-      {/* Top App Bar */}
-      <View style={[styles.appBar, { backgroundColor: colors.appBar, borderBottomColor: colors.border }]}>
+      {/* Top App Bar — liquid glass */}
+      <BlurView
+        intensity={colors.isDark ? 60 : 50}
+        tint={colors.isDark ? 'dark' : 'light'}
+        style={[styles.appBar, { borderBottomColor: colors.glassBorder }]}
+      >
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.appBar }]} />
         {overlay ? (
           <TouchableOpacity onPress={handleBack} style={styles.iconBtn}>
             <MaterialIcons name="arrow-back" size={22} color={colors.primaryDark} />
@@ -187,15 +202,20 @@ function AppInner() {
           </TouchableOpacity>
         )}
         <View style={styles.titleRow}>
-          <Text style={[styles.appBarTitle, { color: colors.primaryDark }]}>{appBarTitle}</Text>
+          <Text style={[styles.appBarTitle, { color: colors.text }]}>{appBarTitle}</Text>
           {isWeather && (
             <Text style={styles.weatherChip}>{colors.weatherIcon} {colors.weatherLabel}</Text>
           )}
         </View>
-        <View style={[styles.avatar, { backgroundColor: colors.primaryLight }]}>
-          <Text style={[styles.avatarText, { color: colors.primaryDark }]}>MR</Text>
-        </View>
-      </View>
+        <LinearGradient
+          colors={[colors.primaryLight, colors.primary]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.avatar}
+        >
+          <Text style={styles.avatarText}>MR</Text>
+        </LinearGradient>
+      </BlurView>
 
       {/* Screen Content */}
       {isWeather ? (
@@ -235,10 +255,10 @@ function AppInner() {
                 <GlassTab
                   key={tab.id}
                   icon={tab.icon}
-                  label={tab.label}
+                  label={tabLabels[tab.id]}
                   focused={active}
-                  activeColor={colors.primary}
-                  inactiveColor={colors.isDark ? '#94A3B8' : '#64748B'}
+                  activeColor={colors.tabIconActive}
+                  inactiveColor={colors.tabIconInactive}
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     goToTab(TABS.findIndex(t => t.id === tab.id));
@@ -265,7 +285,9 @@ export default function App() {
   return (
     <ThemeProvider>
       <AirportProvider>
-        <AppInner />
+        <LanguageProvider>
+          <AppInner />
+        </LanguageProvider>
       </AirportProvider>
     </ThemeProvider>
   );
@@ -282,10 +304,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderBottomWidth: 1,
+    overflow: 'hidden',
   },
   iconBtn: { padding: 6, borderRadius: 8, marginRight: 6 },
   titleRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
-  appBarTitle: { fontSize: 18, fontWeight: 'bold', letterSpacing: 0.3 },
+  appBarTitle: { fontSize: 18, fontWeight: '700', letterSpacing: 0.3 },
   weatherChip: {
     fontSize: 11, color: 'rgba(255,255,255,0.8)',
     backgroundColor: 'rgba(255,255,255,0.15)',
@@ -295,8 +318,9 @@ const styles = StyleSheet.create({
   avatar: {
     width: 34, height: 34, borderRadius: 17,
     justifyContent: 'center', alignItems: 'center',
+    overflow: 'hidden',
   },
-  avatarText: { fontSize: 12, fontWeight: 'bold' },
+  avatarText: { fontSize: 12, fontWeight: '700', color: '#FFFFFF' },
   content: { flex: 1 },
   // ─── Glassmorphic floating tab bar ───
   tabBarWrapper: {
@@ -307,19 +331,19 @@ const styles = StyleSheet.create({
   },
   tabBarBlur: {
     flexDirection: 'row',
-    height: 64,
-    borderRadius: 32,
+    height: 66,
+    borderRadius: 33,
     justifyContent: 'space-around',
     alignItems: 'center',
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
+    borderWidth: 0.75,
+    borderColor: 'rgba(255,255,255,0.22)',
   },
   glassTab: {
     alignItems: 'center',
     justifyContent: 'center',
-    width: 64,
-    height: 54,
+    width: 68,
+    height: 56,
   },
   glassLabel: {
     fontSize: 10,
@@ -329,8 +353,8 @@ const styles = StyleSheet.create({
   },
   glassIndicator: {
     position: 'absolute',
-    bottom: 0,
-    width: 20,
+    bottom: 4,
+    width: 18,
     height: 3,
     borderRadius: 999,
   },

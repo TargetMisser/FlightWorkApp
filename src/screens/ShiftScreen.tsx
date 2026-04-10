@@ -3,12 +3,14 @@ import { View, Text, StyleSheet, ActivityIndicator, ScrollView, Alert, Touchable
 import * as ImagePicker from 'expo-image-picker';
 import { WebView } from 'react-native-webview';
 import * as Calendar from 'expo-calendar';
+import { useLanguage } from '../context/LanguageContext';
 
-const PRIMARY = '#2563EB';
-const DARK_BLUE = '#1E3A8A';
+const PRIMARY = '#F47B16';
+const DARK_ORANGE = '#C2520A';
 const BG = '#F3F4F6';
 
 export default function ShiftScreen() {
+  const { t } = useLanguage();
   const [imageList, setImageList] = useState<string[]>([]);
   const [ocrText, setOcrText] = useState<string>('');
   const [processing, setProcessing] = useState(false);
@@ -79,7 +81,7 @@ export default function ShiftScreen() {
       }
 
       if (!targetCalendar) {
-        Alert.alert('Errore', 'Nessun calendario scrivibile trovato sul dispositivo.');
+        Alert.alert('Errore', t('shiftNoCalendar'));
         return;
       }
       // Normalizzazione Estrema OCR globale prima di estrarre
@@ -194,7 +196,7 @@ export default function ShiftScreen() {
 
     } catch (e: any) {
       console.error(e);
-      Alert.alert('Errore Calendario', 'Non è stato possibile salvare: ' + e.message);
+      Alert.alert(t('shiftCalErrTitle'), 'Non è stato possibile salvare: ' + e.message);
     }
   };
 
@@ -238,8 +240,8 @@ export default function ShiftScreen() {
 
       {/* Page Header */}
       <View style={styles.pageHeader}>
-        <Text style={styles.pageTitle}>Gestione Turni</Text>
-        <Text style={styles.pageSub}>Scansiona i turni dal tabellone e sincronizzali nel calendario.</Text>
+        <Text style={styles.pageTitle}>{t('shiftTitle')}</Text>
+        <Text style={styles.pageSub}>{t('shiftSub')}</Text>
       </View>
 
       <View style={styles.infoCard}>
@@ -266,13 +268,13 @@ export default function ShiftScreen() {
       {processing && (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={PRIMARY} />
-          <Text style={styles.loadingText}>Estrazione del testo in corso...</Text>
+          <Text style={styles.loadingText}>{t('shiftExtracting')}</Text>
         </View>
       )}
 
       {ocrText ? (
         <View style={styles.resultContainer}>
-          <Text style={styles.resultTitle}>Testo Estratto:</Text>
+          <Text style={styles.resultTitle}>{t('shiftExtractedTitle')}</Text>
           <Text style={styles.resultText}>{ocrText}</Text>
           
           <TouchableOpacity style={styles.saveButton} onPress={parseAndSaveShifts}>
@@ -296,7 +298,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16, paddingVertical: 14,
     borderBottomWidth: 1, borderBottomColor: '#E5E7EB',
   },
-  pageTitle: { fontSize: 24, fontWeight: 'bold', color: DARK_BLUE },
+  pageTitle: { fontSize: 24, fontWeight: 'bold', color: DARK_ORANGE },
   pageSub: { fontSize: 13, color: '#6B7280', marginTop: 4 },
   infoCard: {
     backgroundColor: '#fff',
@@ -309,10 +311,10 @@ const styles = StyleSheet.create({
   infoDesc: { fontSize: 13, color: '#6B7280', lineHeight: 20 },
   buttonsContainer: { margin: 16, marginBottom: 0 },
   button: {
-    backgroundColor: DARK_BLUE,
+    backgroundColor: DARK_ORANGE,
     padding: 16, borderRadius: 14,
     alignItems: 'center',
-    shadowColor: DARK_BLUE, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5,
+    shadowColor: DARK_ORANGE, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5,
   },
   buttonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
   imagesPreview: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', margin: 16, gap: 10 },
@@ -324,7 +326,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff', borderRadius: 14,
     shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8, elevation: 3,
   },
-  resultTitle: { fontSize: 15, fontWeight: 'bold', color: DARK_BLUE, marginBottom: 10, borderBottomWidth: 1, borderBottomColor: '#E5E7EB', paddingBottom: 8 },
+  resultTitle: { fontSize: 15, fontWeight: 'bold', color: DARK_ORANGE, marginBottom: 10, borderBottomWidth: 1, borderBottomColor: '#E5E7EB', paddingBottom: 8 },
   resultText: { fontSize: 13, color: '#374151', lineHeight: 20, marginBottom: 16 },
   saveButton: {
     backgroundColor: PRIMARY,

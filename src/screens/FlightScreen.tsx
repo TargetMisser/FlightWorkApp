@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
-  View, Text, StyleSheet, ActivityIndicator,
+  View, Text, StyleSheet, ActivityIndicator, Modal,
   FlatList, TouchableOpacity, RefreshControl, Image, Alert,
   Animated, PanResponder, NativeModules, Platform,
 } from 'react-native';
@@ -8,16 +8,17 @@ import * as Calendar from 'expo-calendar';
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useAppTheme } from '../context/ThemeContext';
+import { useAppTheme, type ThemeColors } from '../context/ThemeContext';
 import { useAirport } from '../context/AirportContext';
 import { getAirlineOps, getAirlineColor } from '../utils/airlineOps';
 import { fetchAirportScheduleRaw } from '../utils/fr24api';
-import { fetchStaffMonitorData, type StaffMonitorInfo } from '../utils/staffMonitor';
+import { fetchStaffMonitorData, normalizeFlightNumber, type StaffMonitorFlight } from '../utils/staffMonitor';
 import { formatAirportHeader } from '../utils/airportSettings';
 import { requestWidgetUpdate } from 'react-native-android-widget';
 import { WIDGET_CACHE_KEY } from '../widgets/widgetTaskHandler';
 import type { WidgetData, WidgetFlight } from '../widgets/widgetTaskHandler';
 import { ShiftWidget } from '../widgets/ShiftWidget';
+import { useLanguage } from '../context/LanguageContext';
 
 const WearDataSender = Platform.OS === 'android' ? NativeModules.WearDataSender : null;
 
@@ -25,6 +26,7 @@ const NOTIF_IDS_KEY = 'aerostaff_notif_ids_v1';
 const NOTIF_ENABLED_KEY = 'aerostaff_notif_enabled';
 const PINNED_FLIGHT_KEY = 'pinned_flight_v1';
 const PINNED_NOTIF_IDS_KEY = 'pinned_notif_ids_v1';
+const FLIGHT_FILTER_KEY = 'aerostaff_flight_filter_v1';
 
 // Handler: mostra notifiche anche con app aperta (wrapped for Expo Go compat)
 try { Notifications.setNotificationHandler({
@@ -35,7 +37,7 @@ try { Notifications.setNotificationHandler({
     shouldShowBanner: true,
     shouldShowList: true,
   }),
-}); } catch (e) { console.warn('[notifHandler]', e); }
+}); } catch (e) { if (__DEV__) console.warn('[notifHandler]', e); }
 
 
 function LogoPill({ iataCode, airlineName, color }: { iataCode: string; airlineName: string; color: string }) {
@@ -111,6 +113,7 @@ async function cancelPreviousNotifications() {
 async function scheduleShiftNotifications(
   shiftFlights: any[],
   shiftEnd: number,
+  locale: string,
 ): Promise<number> {
   await cancelPreviousNotifications();
   const now = Date.now() / 1000;
@@ -127,7 +130,7 @@ async function scheduleShiftNotifications(
     const origin       = item.flight?.airport?.origin?.name
                       || item.flight?.airport?.origin?.code?.iata
                       || 'N/A';
-    const arrivalTime  = new Date(ts * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+    const arrivalTime  = new Date(ts * 1000).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
 
     const id = await Notifications.scheduleNotificationAsync({
       content: {
@@ -144,7 +147,7 @@ async function scheduleShiftNotifications(
   // Notifica fine turno
   const secondsUntilEnd = shiftEnd - now;
   if (secondsUntilEnd > 0) {
-    const endTime = new Date(shiftEnd * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+    const endTime = new Date(shiftEnd * 1000).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
     const endId = await Notifications.scheduleNotificationAsync({
       content: {
         title: '🏁 Turno terminato',
@@ -169,7 +172,7 @@ async function cancelPinnedNotifications() {
   await AsyncStorage.removeItem(PINNED_NOTIF_IDS_KEY);
 }
 
-async function schedulePinnedNotifications(item: any, tab: 'arrivals' | 'departures'): Promise<void> {
+async function schedulePinnedNotifications(item: any, tab: 'arrivals' | 'departures', locale: string): Promise<void> {
   await cancelPinnedNotifications();
   const now = Date.now() / 1000;
   const ids: string[] = [];
@@ -181,7 +184,7 @@ async function schedulePinnedNotifications(item: any, tab: 'arrivals' | 'departu
     const ts = item.flight?.time?.scheduled?.arrival;
     if (!ts) return;
     const origin = item.flight?.airport?.origin?.name || item.flight?.airport?.origin?.code?.iata || 'N/A';
-    const arrTime = new Date(ts * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+    const arrTime = new Date(ts * 1000).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
     const secsUntil = ts - 15 * 60 - now;
     if (secsUntil > 0) {
       const id = await Notifications.scheduleNotificationAsync({
@@ -199,7 +202,7 @@ async function schedulePinnedNotifications(item: any, tab: 'arrivals' | 'departu
     const ts = item.flight?.time?.scheduled?.departure;
     if (!ts) return;
     const dest = item.flight?.airport?.destination?.name || item.flight?.airport?.destination?.code?.iata || 'N/A';
-    const depTime = new Date(ts * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+    const depTime = new Date(ts * 1000).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
     const ops = getAirlineOps(airline);
 
     const phases: Array<{ offset: number; title: string; body: string }> = [
@@ -233,6 +236,7 @@ async function schedulePinnedNotifications(item: any, tab: 'arrivals' | 'departu
 // ─── Screen ────────────────────────────────────────────────────────────────────
 export default function FlightScreen() {
   const { colors } = useAppTheme();
+  const { t, locale } = useLanguage();
   const { airport, airportCode, isLoading: airportLoading } = useAirport();
   const s = useMemo(() => makeStyles(colors), [colors]);
   const [loading, setLoading] = useState(true);
@@ -246,11 +250,17 @@ export default function FlightScreen() {
   const [scheduledCount, setScheduledCount] = useState(0);
   const [pinnedFlightId, setPinnedFlightId] = useState<string | null>(null);
   const [inboundArrivals, setInboundArrivals] = useState<Record<string, number>>({});
-  const [staffData, setStaffData] = useState<Map<string, StaffMonitorInfo>>(new Map());
+  const [filterMode, setFilterMode] = useState<'mine' | 'all'>('mine');
+  const [filterMenuVisible, setFilterMenuVisible] = useState(false);
+  const [allArrivalsFull, setAllArrivalsFull] = useState<any[]>([]);
+  const [allDeparturesFull, setAllDeparturesFull] = useState<any[]>([]);
+  const [staffMonitorDeps, setStaffMonitorDeps] = useState<StaffMonitorFlight[]>([]);
+  const [staffMonitorArrs, setStaffMonitorArrs] = useState<StaffMonitorFlight[]>([]);
 
   // Carica preferenza notifiche salvata
   useEffect(() => {
     AsyncStorage.getItem(NOTIF_ENABLED_KEY).then(v => setNotifsEnabled(v === 'true'));
+    AsyncStorage.getItem(FLIGHT_FILTER_KEY).then(v => { if (v === 'all' || v === 'mine') setFilterMode(v); });
   }, []);
 
   const fetchAll = useCallback(async () => {
@@ -259,9 +269,12 @@ export default function FlightScreen() {
     try {
       const {
         allArrivals,
+        allDepartures,
         departures: fetchedDepartures,
         arrivals: fetchedArrivals,
       } = await fetchAirportScheduleRaw(airportCode);
+      setAllArrivalsFull(allArrivals);
+      setAllDeparturesFull(allDepartures);
 
       // Build inbound arrival map: registration → best known arrival timestamp
       const inboundMap: Record<string, number> = {};
@@ -274,9 +287,6 @@ export default function FlightScreen() {
         if (t) inboundMap[reg] = t;
       }
       setInboundArrivals(inboundMap);
-
-      // Fetch dati operativi reali da staffMonitor (stand, banco CI, gate) — fail silenzioso
-      fetchStaffMonitorData().then(sm => setStaffData(sm));
 
       setArrivals(fetchedArrivals);
       setDepartures(fetchedDepartures);
@@ -334,7 +344,7 @@ export default function FlightScreen() {
 
       // ── Push data to widget cache ──
       try {
-        const fmtT = (ts: number) => new Date(ts * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+        const fmtT = (ts: number) => new Date(ts * 1000).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
         const fmtOff = (dep: number, off: number) => fmtT(dep - off * 60);
         const nowHH = fmtT(Date.now() / 1000);
 
@@ -395,13 +405,13 @@ export default function FlightScreen() {
           const ts = item.flight?.time?.scheduled?.arrival;
           return ts && ts >= shiftToday!.start && ts <= shiftToday!.end;
         });
-        const count = await scheduleShiftNotifications(shiftFlights, shiftToday!.end);
+        const count = await scheduleShiftNotifications(shiftFlights, shiftToday!.end, locale);
         setScheduledCount(count);
       } else {
         await cancelPreviousNotifications();
         setScheduledCount(0);
       }
-    } catch (e) { console.error('[fetchAll]', e); } finally { setLoading(false); setRefreshing(false); }
+    } catch (e) { if (__DEV__) console.error('[fetchAll]', e); } finally { setLoading(false); setRefreshing(false); }
   }, [airportCode, airportLoading]);
 
   useEffect(() => {
@@ -421,11 +431,28 @@ export default function FlightScreen() {
     });
   }, []);
 
+  // staffMonitor: poll stand / gate / belt every 60 s
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const [deps, arrs] = await Promise.all([
+          fetchStaffMonitorData('D'),
+          fetchStaffMonitorData('A'),
+        ]);
+        setStaffMonitorDeps(deps);
+        setStaffMonitorArrs(arrs);
+      } catch {}
+    };
+    load();
+    const iv = setInterval(load, 60_000);
+    return () => clearInterval(iv);
+  }, []);
+
   // Toggle notifiche
   const toggleNotifications = useCallback(async () => {
     const { status } = await Notifications.requestPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permesso negato', 'Abilita le notifiche nelle impostazioni del telefono per usare questa funzione.');
+      Alert.alert(t('flightNotifPermDenied'), t('flightNotifPermMsg'));
       return;
     }
     const next = !notifsEnabled;
@@ -444,16 +471,16 @@ export default function FlightScreen() {
         const ts = item.flight?.time?.scheduled?.arrival;
         return ts && ts >= shifts.today!.start && ts <= shifts.today!.end;
       });
-      const count = await scheduleShiftNotifications(shiftFlights, shifts.today!.end);
+      const count = await scheduleShiftNotifications(shiftFlights, shifts.today!.end, locale);
       setScheduledCount(count);
       Alert.alert(
-        'Notifiche attivate',
+        t('flightNotifEnabled'),
         count > 0
-          ? `Programmate ${count} notifiche: arrivi voli (15 min prima) + fine turno.`
-          : 'Nessun volo futuro trovato, ma riceverai la notifica di fine turno.',
+          ? `${t('flightNotifMsg1').replace('{count}', String(count))}`
+          : t('flightNotifMsg0'),
       );
     } else {
-      Alert.alert('Nessun turno trovato', 'Non ho trovato un turno "Lavoro" per oggi nel calendario.');
+      Alert.alert(t('flightNoShift'), t('flightNoShiftMsg'));
       setNotifsEnabled(false);
       await AsyncStorage.setItem(NOTIF_ENABLED_KEY, 'false');
     }
@@ -466,7 +493,7 @@ export default function FlightScreen() {
       const tab = activeTab;
       await AsyncStorage.setItem(PINNED_FLIGHT_KEY, JSON.stringify({ ...item, _pinTab: tab, _pinnedAt: Date.now() }));
       setPinnedFlightId(id);
-      try { await schedulePinnedNotifications(item, tab); } catch (e) { console.warn('[pinnedNotif]', e); }
+      try { await schedulePinnedNotifications(item, tab, locale); } catch (e) { if (__DEV__) console.warn('[pinnedNotif]', e); }
       // Send to watch
       if (WearDataSender) {
         const payload = JSON.stringify({
@@ -493,10 +520,10 @@ export default function FlightScreen() {
   const unpinFlight = useCallback(async () => {
     try {
       await AsyncStorage.removeItem(PINNED_FLIGHT_KEY);
-      try { await cancelPinnedNotifications(); } catch (e) { console.warn('[cancelPinNotif]', e); }
+      try { await cancelPinnedNotifications(); } catch (e) { if (__DEV__) console.warn('[cancelPinNotif]', e); }
       setPinnedFlightId(null);
       if (WearDataSender) WearDataSender.clearPinnedFlight();
-    } catch (e) { console.error('[unpin]', e); }
+    } catch (e) { if (__DEV__) console.error('[unpin]', e); }
   }, []);
 
   const userShift = activeDay === 'today' ? shifts.today : shifts.tomorrow;
@@ -504,10 +531,17 @@ export default function FlightScreen() {
   const isSameDay = (d1: Date, d2: Date) =>
     d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
 
-  const currentData = (activeTab === 'arrivals' ? arrivals : departures).filter(item => {
-    const ts = activeTab === 'arrivals' ? item.flight?.time?.scheduled?.arrival : item.flight?.time?.scheduled?.departure;
-    return ts && isSameDay(new Date(ts * 1000), selectedDate);
-  });
+  const currentData = (() => {
+    const source = filterMode === 'all'
+      ? (activeTab === 'arrivals' ? allArrivalsFull : allDeparturesFull)
+      : (activeTab === 'arrivals' ? arrivals : departures);
+    return source.filter(item => {
+      const ts = activeTab === 'arrivals'
+        ? item.flight?.time?.scheduled?.arrival
+        : item.flight?.time?.scheduled?.departure;
+      return ts && isSameDay(new Date(ts * 1000), selectedDate);
+    });
+  })();
 
   const renderFlight = useCallback(({ item }: { item: any }) => {
     const flightNumber = item.flight?.identification?.number?.default || 'N/A';
@@ -520,7 +554,7 @@ export default function FlightScreen() {
       ? (item.flight?.airport?.origin?.name || item.flight?.airport?.origin?.code?.iata || 'N/A')
       : (item.flight?.airport?.destination?.name || item.flight?.airport?.destination?.code?.iata || 'N/A');
     const ts = activeTab === 'arrivals' ? item.flight?.time?.scheduled?.arrival : item.flight?.time?.scheduled?.departure;
-    const time = ts ? new Date(ts * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : 'N/A';
+    const time = ts ? new Date(ts * 1000).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }) : 'N/A';
     const duringShift = userShift && ts && (() => {
       if (activeTab === 'arrivals') return ts >= userShift.start && ts <= userShift.end;
       // Departures: CI or Gate window overlaps with shift (even 1 min)
@@ -537,9 +571,9 @@ export default function FlightScreen() {
     // ops is null when ts is falsy — fmt is only called when ops is truthy
     const ops = activeTab === 'departures' && ts ? getAirlineOps(airline) : null;
     const fmt = (offsetMin: number) =>
-      ts ? new Date((ts - offsetMin * 60) * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : '';
+      ts ? new Date((ts - offsetMin * 60) * 1000).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }) : '';
     const fmtTs = (t: number) =>
-      new Date(t * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+      new Date(t * 1000).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
 
     // Gate open = inbound aircraft arrival time (if available)
     const reg = item.flight?.aircraft?.registration;
@@ -549,9 +583,16 @@ export default function FlightScreen() {
     const flightId = item.flight?.identification?.number?.default || null;
     const isPinned = flightId !== null && flightId === pinnedFlightId;
 
-    // Dati operativi reali dallo StaffMonitor (stand fisico, banco CI, gate)
-    const smKey = (flightId || '').replace(/\s/g, '');
-    const smInfo = staffData.get(smKey);
+    const normFn = normalizeFlightNumber(flightNumber);
+    const normalizeForMatching = (s: string) => s.replace(/[\s\-_]/g, '').toUpperCase();
+    const normFnStripped = normalizeForMatching(normFn);
+    const smPool = activeTab === 'departures' ? staffMonitorDeps : staffMonitorArrs;
+    const smFlight =
+      smPool.find(sm => sm.flightNumber === normFn) ??
+      smPool.find(sm => normalizeForMatching(sm.flightNumber) === normFnStripped);
+    if (__DEV__ && !smFlight && smPool.length > 0) {
+      console.log(`[FlightScreen] No staffMonitor match for "${normFn}" (stripped: "${normFnStripped}") in ${activeTab}`);
+    }
 
     return (
       <SwipeableFlightCard
@@ -559,7 +600,7 @@ export default function FlightScreen() {
         onToggle={() => isPinned ? unpinFlight() : pinFlight(item)}
       >
         <View style={[s.card, isPinned && s.cardPinned, { marginBottom: 0 }]}>
-          {isPinned && <View style={s.pinBanner}><Text style={s.pinBannerText}>PINNATO</Text></View>}
+          {isPinned && <View style={s.pinBanner}><Text style={s.pinBannerText}>{t('flightPinned')}</Text></View>}
           {/* Header */}
           <View style={[s.cardHeader, { backgroundColor: color }]}>
             <View style={s.headerLeft}>
@@ -581,14 +622,14 @@ export default function FlightScreen() {
               <View style={s.opsBadge}>
                 <MaterialIcons name="desktop-windows" size={16} color={colors.primary} />
                 <View>
-                  <Text style={s.opsLabel}>Check-in</Text>
+                  <Text style={s.opsLabel}>{t('flightCheckin')}</Text>
                   <Text style={s.opsTime}>{fmt(ops.checkInOpen)} – {fmt(ops.checkInClose)}</Text>
                 </View>
               </View>
               <View style={s.opsBadge}>
                 <MaterialIcons name="meeting-room" size={16} color={colors.primary} />
                 <View>
-                  <Text style={s.opsLabel}>Gate</Text>
+                  <Text style={s.opsLabel}>{t('flightGate')}</Text>
                   <Text style={s.opsTime}>
                     {gateOpenFromInbound ? fmtTs(gateOpenFromInbound) : fmt(ops.gateOpen)} – {fmt(ops.gateClose)}
                   </Text>
@@ -609,12 +650,12 @@ export default function FlightScreen() {
               : delayMin > 20 ? '#EF4444'
               : delayMin > 5 ? '#F59E0B'
               : colors.primary;
-            const landLabel = landed ? 'Atterrato' : 'Stimato';
+            const landLabel = landed ? t('flightLanded') : t('flightEstimated');
 
             // Delay pill
             const delayText = landed ? 'Atterrato'
               : delayMin > 0 ? `+${delayMin} min`
-              : 'In orario';
+              : t('flightOnTime');
             const delayColor = landed ? '#10B981'
               : delayMin > 20 ? '#EF4444'
               : delayMin > 5 ? '#F59E0B'
@@ -625,7 +666,7 @@ export default function FlightScreen() {
                 <View style={s.opsBadge}>
                   <MaterialIcons name="flight-takeoff" size={16} color={departed ? colors.primary : '#6B7280'} />
                   <View>
-                    <Text style={s.opsLabel}>Partito</Text>
+                    <Text style={s.opsLabel}>{t('flightDeparted')}</Text>
                     <Text style={[s.opsTime, !departed && { color: '#6B7280' }]}>
                       {departed ? fmtTs(realDep) : '--:--'}
                     </Text>
@@ -663,44 +704,55 @@ export default function FlightScreen() {
           )}
         </View>
       </View>
-      {/* StaffMonitor: Stand · Check-in banco · Gate */}
-      {!!smInfo && (!!smInfo.stand || !!smInfo.checkin || !!smInfo.gate) && (
-        <View style={s.staffRow}>
-          {!!smInfo.stand && (
-            <View style={s.staffBadge}>
-              <MaterialIcons name="local-parking" size={11} color={colors.textSub} />
-              <Text style={s.staffLabel}>Stand</Text>
-              <Text style={s.staffValue}>{smInfo.stand}</Text>
-            </View>
-          )}
-          {!!smInfo.checkin && (
-            <View style={s.staffBadge}>
-              <MaterialIcons name="desktop-windows" size={11} color={colors.textSub} />
-              <Text style={s.staffLabel}>CI</Text>
-              <Text style={s.staffValue}>{smInfo.checkin}</Text>
-            </View>
-          )}
-          {!!smInfo.gate && (
-            <View style={s.staffBadge}>
-              <MaterialIcons name="meeting-room" size={11} color={colors.textSub} />
-              <Text style={s.staffLabel}>Gate</Text>
-              <Text style={s.staffValue}>{smInfo.gate}</Text>
-            </View>
-          )}
-        </View>
-      )}
+        {smFlight && (smFlight.stand || smFlight.checkin || smFlight.gate || smFlight.belt) && (
+          <View style={s.smFooter}>
+            {smFlight.stand && (
+              <View style={s.smPill}>
+                <MaterialIcons name="local-parking" size={11} color={colors.primary} />
+                <Text style={s.smPillText}>Stand {smFlight.stand}</Text>
+              </View>
+            )}
+            {smFlight.checkin && (
+              <View style={s.smPill}>
+                <MaterialIcons name="desktop-windows" size={11} color={colors.primary} />
+                <Text style={s.smPillText}>{t('flightCheckin')} {smFlight.checkin}</Text>
+              </View>
+            )}
+            {smFlight.gate && (
+              <View style={s.smPill}>
+                <MaterialIcons name="meeting-room" size={11} color={colors.primary} />
+                <Text style={s.smPillText}>{t('flightGate')} {smFlight.gate}</Text>
+              </View>
+            )}
+            {smFlight.belt && (
+              <View style={s.smPill}>
+                <MaterialIcons name="luggage" size={11} color={colors.primary} />
+                <Text style={s.smPillText}>{t('flightBelt')} {smFlight.belt}</Text>
+              </View>
+            )}
+          </View>
+        )}
       </SwipeableFlightCard>
     );
-  }, [activeTab, userShift, s, pinnedFlightId, pinFlight, unpinFlight, inboundArrivals, colors]);
+  }, [activeTab, userShift, s, pinnedFlightId, pinFlight, unpinFlight, inboundArrivals, colors, staffMonitorDeps, staffMonitorArrs]);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       {/* Page header */}
       <View style={s.pageHeader}>
         <View style={{ flex: 1 }}>
-          <Text style={s.pageTitle}>Voli in tempo reale</Text>
+          <Text style={s.pageTitle}>{t('flightTitle')}</Text>
           <Text style={s.pageSub}>{formatAirportHeader(airport.code)}</Text>
         </View>
+        <TouchableOpacity
+          style={[s.filterBtn, filterMode === 'all' && s.filterBtnActive]}
+          onPress={() => setFilterMenuVisible(true)}
+          activeOpacity={0.8}
+          accessibilityLabel={t('flightFilterTitle')}
+          accessibilityRole="button"
+        >
+          <MaterialIcons name="filter-list" size={20} color={filterMode === 'all' ? '#fff' : '#64748B'} />
+        </TouchableOpacity>
         <TouchableOpacity
           style={[s.notifBtn, notifsEnabled && s.notifBtnActive]}
           onPress={toggleNotifications}
@@ -726,9 +778,9 @@ export default function FlightScreen() {
       <View style={s.controlsRow}>
         {/* Arrivi / Partenze */}
         <View style={s.segment}>
-          {(['arrivals', 'departures'] as const).map(t => (
-            <TouchableOpacity key={t} style={[s.segBtn, activeTab === t && s.segBtnActive]} onPress={() => setActiveTab(t)}>
-              <Text style={[s.segBtnText, activeTab === t && s.segBtnTextActive]}>{t === 'arrivals' ? 'Arrivi' : 'Partenze'}</Text>
+          {(['arrivals', 'departures'] as const).map(tab => (
+            <TouchableOpacity key={tab} style={[s.segBtn, activeTab === tab && s.segBtnActive]} onPress={() => setActiveTab(tab)}>
+              <Text style={[s.segBtnText, activeTab === tab && s.segBtnTextActive]}>{tab === 'arrivals' ? t('flightArrivals') : t('flightDepartures')}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -736,7 +788,7 @@ export default function FlightScreen() {
         <View style={s.segment}>
           {(['today', 'tomorrow'] as const).map(d => (
             <TouchableOpacity key={d} style={[s.segBtn, activeDay === d && s.segBtnActive]} onPress={() => setActiveDay(d)}>
-              <Text style={[s.segBtnText, activeDay === d && s.segBtnTextActive]}>{d === 'today' ? 'Oggi' : 'Domani'}</Text>
+              <Text style={[s.segBtnText, activeDay === d && s.segBtnTextActive]}>{d === 'today' ? t('flightToday') : t('flightTomorrow')}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -753,15 +805,63 @@ export default function FlightScreen() {
           renderItem={renderFlight}
           contentContainerStyle={{ padding: 16, paddingBottom: 96 }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchAll(); }} tintColor={colors.primary} />}
-          ListEmptyComponent={<Text style={{ textAlign: 'center', marginTop: 40, color: '#9CA3AF', fontSize: 15 }}>Nessun volo per questo giorno.</Text>}
+          ListEmptyComponent={<Text style={{ textAlign: 'center', marginTop: 40, color: '#9CA3AF', fontSize: 15 }}>{t('flightNoFlights')}</Text>}
           showsVerticalScrollIndicator={false}
         />
       )}
+
+      {/* Flight Filter Modal */}
+      <Modal
+        visible={filterMenuVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setFilterMenuVisible(false)}
+      >
+        <TouchableOpacity
+          style={s.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setFilterMenuVisible(false)}
+        >
+          <View style={s.filterSheet}>
+            <View style={s.filterSheetHandle} />
+            <Text style={s.filterSheetTitle}>{t('flightFilterTitle')}</Text>
+            {(['mine', 'all'] as const).map(mode => (
+              <TouchableOpacity
+                key={mode}
+                style={[s.filterOption, filterMode === mode && s.filterOptionActive]}
+                activeOpacity={0.8}
+                onPress={() => {
+                  setFilterMode(mode);
+                  AsyncStorage.setItem(FLIGHT_FILTER_KEY, mode);
+                  setFilterMenuVisible(false);
+                }}
+              >
+                <MaterialIcons
+                  name={filterMode === mode ? 'radio-button-checked' : 'radio-button-unchecked'}
+                  size={22}
+                  color={filterMode === mode ? colors.primary : '#9CA3AF'}
+                />
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.filterOptionText, filterMode === mode && { color: colors.primary }]}>
+                    {mode === 'mine' ? t('flightFilterMine') : t('flightFilterAll')}
+                  </Text>
+                  <Text style={s.filterOptionSub}>
+                    {mode === 'mine' ? t('flightFilterMineSub') : t('flightFilterAllSub')}
+                  </Text>
+                </View>
+                {filterMode === mode && (
+                  <MaterialIcons name="check-circle" size={20} color={colors.primary} />
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
 
-function makeStyles(c: any) {
+function makeStyles(c: ThemeColors) {
   return StyleSheet.create({
     pageHeader: { backgroundColor: c.card, paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: c.border, flexDirection: 'row', alignItems: 'center' },
     notifBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: c.cardSecondary, justifyContent: 'center', alignItems: 'center' },
@@ -776,7 +876,7 @@ function makeStyles(c: any) {
     segBtnActive: { backgroundColor: c.card, borderWidth: 1, borderColor: c.primaryLight },
     segBtnText: { fontSize: 12, fontWeight: '500', color: c.textSub },
     segBtnTextActive: { color: c.primary, fontWeight: '700' },
-    card: { backgroundColor: c.card, borderRadius: 14, marginBottom: 10, overflow: 'hidden', shadowColor: '#000', shadowOpacity: c.isDark ? 0 : 0.06, shadowRadius: 8, elevation: c.isDark ? 0 : 3, borderWidth: c.isDark ? 1 : 0, borderColor: c.border },
+    card: { backgroundColor: c.card, borderRadius: 16, marginBottom: 10, overflow: 'hidden', shadowColor: c.primary, shadowOpacity: c.isDark ? 0 : 0.08, shadowRadius: 10, elevation: c.isDark ? 0 : 3, borderWidth: c.isDark ? 1 : 0, borderColor: c.glassBorder },
     cardShift: { borderWidth: 1.5, borderColor: '#F59E0B' },
     shiftBanner: { backgroundColor: '#F59E0B', paddingVertical: 5, paddingHorizontal: 12 },
     shiftBannerText: { color: '#fff', fontWeight: 'bold', fontSize: 11, letterSpacing: 0.5 },
@@ -801,26 +901,18 @@ function makeStyles(c: any) {
     opsTime: { fontSize: 13, fontWeight: '800', color: c.primaryDark },
     pinBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', alignItems: 'center' },
     pinBtnActive: { backgroundColor: 'rgba(245,158,11,0.25)' },
-    staffRow: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 6,
-      paddingHorizontal: 14,
-      paddingVertical: 8,
-      borderTopWidth: 1,
-      borderTopColor: c.border,
-      backgroundColor: c.cardSecondary ?? c.bg,
-    },
-    staffBadge: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 4,
-      backgroundColor: c.primaryLight,
-      borderRadius: 8,
-      paddingHorizontal: 8,
-      paddingVertical: 4,
-    },
-    staffLabel: { fontSize: 9, fontWeight: '600' as const, color: c.textSub, letterSpacing: 0.5 },
-    staffValue: { fontSize: 12, fontWeight: '800' as const, color: c.primaryDark },
+    filterBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: c.cardSecondary, justifyContent: 'center', alignItems: 'center', marginRight: 8 },
+    filterBtnActive: { backgroundColor: c.primary, shadowColor: c.primary, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.35, shadowRadius: 6, elevation: 5 },
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' },
+    filterSheet: { backgroundColor: c.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 36 },
+    filterSheetHandle: { width: 36, height: 4, borderRadius: 2, backgroundColor: c.border, alignSelf: 'center', marginBottom: 16 },
+    filterSheetTitle: { fontSize: 16, fontWeight: '700', color: c.text, marginBottom: 16, textAlign: 'center' },
+    filterOption: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 14, marginBottom: 8, backgroundColor: c.bg },
+    filterOptionActive: { backgroundColor: c.primaryLight, borderWidth: 1.5, borderColor: c.primaryLight },
+    filterOptionText: { fontSize: 15, fontWeight: '600', color: c.text },
+    filterOptionSub: { fontSize: 12, color: c.textSub, marginTop: 2 },
+    smFooter: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: 14, paddingBottom: 10, backgroundColor: c.card },
+    smPill: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: c.primaryLight, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
+    smPillText: { fontSize: 11, fontWeight: '700', color: c.primaryDark },
   });
 }

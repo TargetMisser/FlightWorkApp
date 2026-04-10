@@ -3,6 +3,9 @@
 # dependencies
 node_modules/
 
+# Old build artifacts
+android/app/build_old_*/
+
 # Expo
 .expo/
 dist/
@@ -33,6 +36,7 @@ yarn-error.*
 
 # local env files
 .env*.local
+android/keystore.properties
 
 # typescript
 *.tsbuildinfo

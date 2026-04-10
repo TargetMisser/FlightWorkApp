@@ -1,134 +1,98 @@
-// src/utils/staffMonitor.ts
-
-export type StaffMonitorInfo = {
-  stand: string;   // es. "27"
-  checkin: string; // es. "17" oppure "33 / 34" per più banchi
-  gate: string;    // es. "11"
+export type StaffMonitorFlight = {
+  flightNumber: string;
+  stand?: string;
+  checkin?: string;
+  gate?: string;
+  belt?: string;
 };
 
-const BASE_URL = 'https://servizi.pisa-airport.com/staffMonitor/staffMonitor';
-const TIMEOUT_MS = 8_000;
-
-/**
- * Rimuove gli zeri iniziali dalla parte numerica del numero volo.
- * Il codice IATA è sempre i primi 2 caratteri (lettere o cifre).
- *   FR08973  → FR8973
- *   U202490  → U22490
- *   HV05424  → HV5424
- */
-function normalizeFlightNumber(raw: string): string {
-  const s = raw.trim().toUpperCase();  // normalizza a maiuscolo per match con dati FR24
-  if (s.length < 3) return s;
-  const iata = s.slice(0, 2);
-  const num = parseInt(s.slice(2), 10);
-  if (isNaN(num)) return s;
-  return `${iata}${num}`;
+/** Normalize flight number: FR07146 → FR7146, FR00770 → FR770 */
+export function normalizeFlightNumber(raw: string): string {
+  return raw.trim().toUpperCase().replace(/^([A-Z]{2,3})0+([0-9])/, '$1$2');
 }
 
-/** Rimuove tutti i tag HTML e decodifica le entity comuni. */
-function extractText(html: string): string {
+function stripHTML(html: string): string {
   return html
-    .replace(/<br\s*\/?>/gi, '\n')  // converti <br> in newline prima di strippare i tag
     .replace(/<[^>]+>/g, '')
+    .replace(/°|&#176;/g, '')
     .replace(/&nbsp;/gi, ' ')
     .replace(/&amp;/gi, '&')
     .replace(/&lt;/gi, '<')
     .replace(/&gt;/gi, '>')
-    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
-    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
     .trim();
 }
 
-/**
- * Estrae il contenuto di ogni TD da un blocco TR.
- * Normalizza i TD self-closing (<TD ... />) prima del parsing.
- */
-function extractCells(rowHtml: string): string[] {
-  const normalised = rowHtml.replace(/<TD(\s[^>]*)?\s*\/>/gi, '<TD$1></TD>');
+function extractTDCells(trHTML: string): string[] {
   const cells: string[] = [];
-  const tdRe = /<TD(?:\s[^>]*)?>([\s\S]*?)<\/TD>/gi;
+  const regex = /<td[^>]*>([\s\S]*?)<\/td>/gi;
   let m: RegExpExecArray | null;
-  while ((m = tdRe.exec(normalised)) !== null) {
-    cells.push(m[1]);
+  while ((m = regex.exec(trHTML)) !== null) {
+    cells.push(stripHTML(m[1]));
   }
   return cells;
 }
 
 /**
- * Parsa una riga della tabella (array di celle) estraendo:
- *   - colonna 1:  numero volo (class="clsFlight")
- *   - colonna 12: stand
- *   - colonna 13: banco/i check-in
- *   - colonna 14: gate
- */
-function parseRow(cells: string[]): { flightNumber: string; info: StaffMonitorInfo } | null {
-  if (cells.length < 15) return null;
-
-  const rawFlight = extractText(cells[1]);
-  if (!rawFlight || rawFlight.length < 3) return null;
-  // Solo righe con codice IATA valido (2 alfanumerici + cifre)
-  if (!/^[A-Z0-9]{2}\d+$/i.test(rawFlight)) return null;
-
-  const flightNumber = normalizeFlightNumber(rawFlight);
-
-  const stand = extractText(cells[12]).replace(/°/g, '').trim();
-
-  // Il banco CI può avere più valori su righe separate, es. "33°\n34°"
-  const checkin = extractText(cells[13])
-    .split(/[\n\r]+/)
-    .map(d => d.replace(/°/g, '').trim())
-    .filter(d => d.length > 0)
-    .join(' / ');
-
-  const gate = extractText(cells[14]).replace(/°/g, '').trim();
-
-  return { flightNumber, info: { stand, checkin, gate } };
-}
-
-/** Parsa una pagina HTML del monitor in una Map flightNumber → StaffMonitorInfo. */
-function parseHtml(html: string): Map<string, StaffMonitorInfo> {
-  const result = new Map<string, StaffMonitorInfo>();
-  const trRe = /<TR(?:\s[^>]*)?>([\s\S]*?)<\/TR>/gi;
-  let trMatch: RegExpExecArray | null;
-  while ((trMatch = trRe.exec(html)) !== null) {
-    const parsed = parseRow(extractCells(trMatch[1]));
-    if (parsed) result.set(parsed.flightNumber, parsed.info);
-  }
-  return result;
-}
-
-async function fetchPage(nature: 'D' | 'A', signal: AbortSignal): Promise<string> {
-  const res = await fetch(`${BASE_URL}?trans=true&nature=${nature}`, { signal });
-  if (!res.ok) throw new Error(`staffMonitor ${nature}: HTTP ${res.status}`);
-  return res.text();
-}
-
-/**
- * Fetcha e parsa le pagine partenze (D) e arrivi (A) dello StaffMonitor di Pisa in parallelo.
+ * Fetch and parse stand/gate/check-in data from the Pisa Airport staffMonitor.
  *
- * Restituisce una Map keyed per numero volo normalizzato (es. "FR8973") con
- * i dati operativi reali: stand, banco check-in, gate.
+ * Departures columns (0-indexed):
+ *   0=logo, 1=flight, 2=ACtype, 3=TRtype, 4=REG, 5=dest, 6=SLOT, 7=SCHED,
+ *   8=EXP, 9=BLKOFF, 10=TKOFF, 11=STATUS, 12=STAND, 13=CHECKIN, 14=GATE
  *
- * Non rigetta mai — restituisce Map vuota in caso di qualsiasi errore.
+ * Arrivals columns (0-indexed):
+ *   0=logo, 1=flight, 2=ACtype, 3=TRtype, 4=REG, 5=origin, 6=SCHED,
+ *   7=EXP, 8=LAND, 9=BLKON, 10=STATUS, 11=STAND, 12=BELT
  */
-export async function fetchStaffMonitorData(): Promise<Map<string, StaffMonitorInfo>> {
-  const controller = new AbortController();
-  const tid = setTimeout(() => controller.abort(), TIMEOUT_MS);
+export async function fetchStaffMonitorData(nature: 'D' | 'A'): Promise<StaffMonitorFlight[]> {
   try {
-    const [depHtml, arrHtml] = await Promise.all([
-      fetchPage('D', controller.signal),
-      fetchPage('A', controller.signal),
-    ]);
-    // Arrival data ha precedenza sulle departure per voli in transito/turnaround (intenzionale)
-    return new Map<string, StaffMonitorInfo>([
-      ...parseHtml(depHtml),
-      ...parseHtml(arrHtml),
-    ]);
-  } catch (err) {
-    controller.abort(); // cancella l'eventuale fetch gemella ancora in volo
-    if (__DEV__) console.warn('[staffMonitor] fetch failed:', err);
-    return new Map();
-  } finally {
-    clearTimeout(tid);
+    const url = `https://servizi.pisa-airport.com/staffMonitor/staffMonitor?trans=true&nature=${nature}`;
+    const resp = await fetch(url);
+    if (!resp.ok) {
+      console.warn(`[staffMonitor] HTTP error for nature=${nature}: ${resp.status} ${resp.statusText}`);
+      return [];
+    }
+    const html = await resp.text();
+
+    const results: StaffMonitorFlight[] = [];
+    const trRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+    let match: RegExpExecArray | null;
+
+    while ((match = trRegex.exec(html)) !== null) {
+      const rowHTML = match[1];
+      // Only rows that carry a flight number cell (match clsFlight as a substring of the class attribute)
+      if (!/class\s*=\s*["'][^"']*clsFlight[^"']*["']/i.test(rowHTML)) continue;
+
+      const cells = extractTDCells(rowHTML);
+      if (cells.length < 2) continue;
+
+      const rawFlight = cells[1];
+      if (!rawFlight) continue;
+
+      const flightNumber = normalizeFlightNumber(rawFlight);
+
+      if (nature === 'D') {
+        results.push({
+          flightNumber,
+          stand: cells[12] || undefined,
+          checkin: cells[13] || undefined,
+          gate: cells[14] || undefined,
+        });
+      } else {
+        results.push({
+          flightNumber,
+          stand: cells[11] || undefined,
+          belt: cells[12] || undefined,
+        });
+      }
+    }
+
+    if (__DEV__) {
+      console.log(`[staffMonitor] nature=${nature} parsed ${results.length} flights.`, results.slice(0, 5).map(r => r.flightNumber));
+    }
+
+    return results;
+  } catch (e) {
+    console.error(`[staffMonitor] fetch/parse error for nature=${nature}:`, e);
+    return [];
   }
 }

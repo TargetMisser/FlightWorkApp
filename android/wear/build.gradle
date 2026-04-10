@@ -1,6 +1,26 @@
+import java.util.Properties
+
 apply plugin: 'com.android.application'
 apply plugin: 'org.jetbrains.kotlin.android'
 apply plugin: 'org.jetbrains.kotlin.plugin.compose'
+
+def keystoreProperties = new Properties()
+def localKeystorePropertiesFile = rootProject.file('keystore.properties')
+def sharedKeystorePropertiesFile = new File(System.getProperty('user.home'), '.flightwork/keystore.properties')
+def keystorePropertiesFile = localKeystorePropertiesFile.exists() ? localKeystorePropertiesFile : sharedKeystorePropertiesFile
+
+if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.withInputStream { stream ->
+        keystoreProperties.load(stream)
+    }
+}
+
+def releaseStoreFilePath = keystoreProperties.getProperty('storeFile') ?: System.getenv('FLIGHTWORKAPP_RELEASE_STORE_FILE')
+def releaseStorePassword = keystoreProperties.getProperty('storePassword') ?: System.getenv('FLIGHTWORKAPP_RELEASE_STORE_PASSWORD')
+def releaseKeyAlias = keystoreProperties.getProperty('keyAlias') ?: System.getenv('FLIGHTWORKAPP_RELEASE_KEY_ALIAS')
+def releaseKeyPassword = keystoreProperties.getProperty('keyPassword') ?: System.getenv('FLIGHTWORKAPP_RELEASE_KEY_PASSWORD')
+def normalizedReleaseStoreFilePath = releaseStoreFilePath?.replace('\\', '/')
+def hasReleaseSigningConfig = [normalizedReleaseStoreFilePath, releaseStorePassword, releaseKeyAlias, releaseKeyPassword].every { it }
 
 android {
     namespace 'com.anonymous.flightworkapp.wear'
@@ -10,7 +30,7 @@ android {
         applicationId 'com.anonymous.FlightWorkApp'
         minSdkVersion 30
         targetSdkVersion 36
-        versionCode 3
+        versionCode 5
         versionName "2.1.0"
     }
 
@@ -21,11 +41,25 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+        if (hasReleaseSigningConfig) {
+            release {
+                storeFile file(normalizedReleaseStoreFilePath)
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+                enableV1Signing true
+                enableV2Signing true
+                enableV3Signing true
+            }
+        }
     }
 
     buildTypes {
         release {
-            signingConfig signingConfigs.debug
+            if (!hasReleaseSigningConfig) {
+                throw new GradleException('Release signing is not configured. Add android/keystore.properties or FLIGHTWORKAPP_RELEASE_* env vars.')
+            }
+            signingConfig signingConfigs.release
         }
     }
 

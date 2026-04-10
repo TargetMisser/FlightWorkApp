@@ -2,16 +2,18 @@ import React from 'react';
 import { FlexWidget, TextWidget, ListWidget } from 'react-native-android-widget';
 import type { WidgetData, WidgetFlight } from './widgetTaskHandler';
 
-const BG = '#0F172A';
-const HEADER_BG = '#1E293B';
-const TEXT = '#F1F5F9';
-const MUTED = '#94A3B8';
-const ORANGE = '#F59E0B';
-const BLUE = '#3B82F6';
-
-const PILL_RADIUS = 10;
-const ORANGE_BG = '#3D2800'; // dark amber for CI pill background
-const BLUE_BG = '#0C1F3D';  // dark blue for Gate pill background
+// ── Brand colours ─────────────────────────────────────────────────────────────
+const BG          = '#120700';   // deep warm dark
+const HEADER_BG   = '#1E0E02';   // slightly lighter warm dark
+const CARD_ODD    = '#1E0E02';
+const CARD_EVEN   = '#160900';
+const TEXT        = '#FFF5EE';   // warm white
+const MUTED       = '#A07850';   // warm muted
+const ORANGE      = '#F47B16';   // app primary
+const ORANGE_DARK = '#3A1800';   // pill backgrounds
+const BLUE        = '#60A5FA';   // gate accent (kept complementary)
+const BLUE_BG     = '#0C1830';
+const PILL_R      = 10;
 
 function FlightRow({ flight, index }: { flight: WidgetFlight; index: number }) {
   const pinned = flight.isPinned === true;
@@ -20,14 +22,14 @@ function FlightRow({ flight, index }: { flight: WidgetFlight; index: number }) {
       style={{
         width: 'match_parent',
         paddingVertical: 8,
-        paddingHorizontal: 10,
-        backgroundColor: pinned ? '#3D2800' : (index % 2 === 0 ? '#1E293B' : '#162032'),
+        paddingHorizontal: 12,
+        backgroundColor: pinned ? '#2A1000' : (index % 2 === 0 ? CARD_ODD : CARD_EVEN),
         flexDirection: 'column',
         ...(pinned ? { borderLeftWidth: 3, borderLeftColor: ORANGE } : {}),
       }}
       clickAction="OPEN_APP"
     >
-      {/* Top row: airline pill + destination pill + departure time */}
+      {/* Top row: flight pill + destination + time */}
       <FlexWidget
         style={{
           width: 'match_parent',
@@ -37,11 +39,11 @@ function FlightRow({ flight, index }: { flight: WidgetFlight; index: number }) {
         }}
       >
         <FlexWidget style={{ flexDirection: 'row', alignItems: 'center' }}>
-          {/* Flight number pill with airline color */}
+          {/* Flight number pill */}
           <FlexWidget
             style={{
               backgroundColor: flight.airlineColor,
-              borderRadius: PILL_RADIUS,
+              borderRadius: PILL_R,
               paddingHorizontal: 8,
               paddingVertical: 3,
             }}
@@ -54,8 +56,8 @@ function FlightRow({ flight, index }: { flight: WidgetFlight; index: number }) {
           {/* Destination IATA pill */}
           <FlexWidget
             style={{
-              backgroundColor: '#334155',
-              borderRadius: PILL_RADIUS,
+              backgroundColor: '#2A1800',
+              borderRadius: PILL_R,
               paddingHorizontal: 7,
               paddingVertical: 3,
               marginLeft: 6,
@@ -70,7 +72,7 @@ function FlightRow({ flight, index }: { flight: WidgetFlight; index: number }) {
         {/* Departure time */}
         <TextWidget
           text={flight.departureTime}
-          style={{ fontSize: 15, fontWeight: 'bold', color: TEXT }}
+          style={{ fontSize: 15, fontWeight: 'bold', color: pinned ? ORANGE : TEXT }}
         />
       </FlexWidget>
 
@@ -81,8 +83,8 @@ function FlightRow({ flight, index }: { flight: WidgetFlight; index: number }) {
         {/* CI pill */}
         <FlexWidget
           style={{
-            backgroundColor: ORANGE_BG,
-            borderRadius: PILL_RADIUS,
+            backgroundColor: ORANGE_DARK,
+            borderRadius: PILL_R,
             paddingHorizontal: 8,
             paddingVertical: 3,
             flexDirection: 'row',
@@ -102,7 +104,7 @@ function FlightRow({ flight, index }: { flight: WidgetFlight; index: number }) {
         <FlexWidget
           style={{
             backgroundColor: BLUE_BG,
-            borderRadius: PILL_RADIUS,
+            borderRadius: PILL_R,
             paddingHorizontal: 8,
             paddingVertical: 3,
             marginLeft: 6,
@@ -124,7 +126,80 @@ function FlightRow({ flight, index }: { flight: WidgetFlight; index: number }) {
   );
 }
 
+// ── Header strip with orange accent ──────────────────────────────────────────
+function Header({ label }: { label?: string }) {
+  return (
+    <FlexWidget
+      style={{
+        width: 'match_parent',
+        flexDirection: 'column',
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        overflow: 'hidden',
+      }}
+      clickAction="OPEN_APP"
+    >
+      {/* Orange accent bar */}
+      <FlexWidget
+        style={{
+          width: 'match_parent',
+          height: 3,
+          backgroundColor: ORANGE,
+        }}
+      />
+      <FlexWidget
+        style={{
+          width: 'match_parent',
+          backgroundColor: HEADER_BG,
+          paddingVertical: 10,
+          paddingHorizontal: 14,
+          flexDirection: 'row',
+          alignItems: 'center',
+        }}
+      >
+        <TextWidget
+          text="✈"
+          style={{ fontSize: 14, color: ORANGE, marginRight: 6 }}
+        />
+        <TextWidget
+          text={label ? `Turno  ${label}` : 'AeroStaff Pro'}
+          style={{ fontSize: 14, fontWeight: 'bold', color: TEXT }}
+        />
+      </FlexWidget>
+    </FlexWidget>
+  );
+}
+
+function Footer({ updatedAt }: { updatedAt: string }) {
+  return (
+    <FlexWidget
+      style={{
+        width: 'match_parent',
+        backgroundColor: HEADER_BG,
+        paddingVertical: 6,
+        paddingHorizontal: 14,
+        borderBottomLeftRadius: 20,
+        borderBottomRightRadius: 20,
+        flexDirection: 'row',
+        alignItems: 'center',
+      }}
+      clickAction="OPEN_APP"
+    >
+      <TextWidget
+        text="🔶"
+        style={{ fontSize: 8, marginRight: 5 }}
+      />
+      <TextWidget
+        text={`Aggiornato: ${updatedAt}`}
+        style={{ fontSize: 10, color: MUTED }}
+      />
+    </FlexWidget>
+  );
+}
+
+// ── Root widget ───────────────────────────────────────────────────────────────
 export function ShiftWidget({ data }: { data: WidgetData }) {
+
   // ── Rest day ──
   if (data.state === 'rest') {
     return (
@@ -132,15 +207,20 @@ export function ShiftWidget({ data }: { data: WidgetData }) {
         style={{
           height: 'match_parent', width: 'match_parent',
           backgroundColor: BG, borderRadius: 20,
-          justifyContent: 'center', alignItems: 'center', flexDirection: 'column',
+          flexDirection: 'column', overflow: 'hidden',
         }}
         clickAction="OPEN_APP"
       >
-        <TextWidget text="🌴" style={{ fontSize: 40 }} />
-        <TextWidget
-          text="Giorno di Riposo"
-          style={{ fontSize: 18, fontWeight: 'bold', color: TEXT, marginTop: 8 }}
-        />
+        <FlexWidget style={{ width: 'match_parent', height: 3, backgroundColor: ORANGE }} />
+        <FlexWidget
+          style={{ flex: 1, justifyContent: 'center', alignItems: 'center', flexDirection: 'column' }}
+        >
+          <TextWidget text="🌴" style={{ fontSize: 40 }} />
+          <TextWidget
+            text="Giorno di Riposo"
+            style={{ fontSize: 18, fontWeight: 'bold', color: TEXT, marginTop: 8 }}
+          />
+        </FlexWidget>
       </FlexWidget>
     );
   }
@@ -152,14 +232,19 @@ export function ShiftWidget({ data }: { data: WidgetData }) {
         style={{
           height: 'match_parent', width: 'match_parent',
           backgroundColor: BG, borderRadius: 20,
-          justifyContent: 'center', alignItems: 'center', flexDirection: 'column',
+          flexDirection: 'column', overflow: 'hidden',
         }}
         clickAction="OPEN_APP"
       >
-        <TextWidget
-          text="Nessun turno oggi"
-          style={{ fontSize: 16, color: MUTED }}
-        />
+        <FlexWidget style={{ width: 'match_parent', height: 3, backgroundColor: ORANGE }} />
+        <FlexWidget
+          style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}
+        >
+          <TextWidget
+            text="Nessun turno oggi"
+            style={{ fontSize: 16, color: MUTED }}
+          />
+        </FlexWidget>
       </FlexWidget>
     );
   }
@@ -171,18 +256,23 @@ export function ShiftWidget({ data }: { data: WidgetData }) {
         style={{
           height: 'match_parent', width: 'match_parent',
           backgroundColor: BG, borderRadius: 20,
-          justifyContent: 'center', alignItems: 'center', flexDirection: 'column',
+          flexDirection: 'column', overflow: 'hidden',
         }}
         clickAction="REFRESH"
       >
-        <TextWidget
-          text="Aggiornamento fallito"
-          style={{ fontSize: 14, color: '#EF4444' }}
-        />
-        <TextWidget
-          text="Tocca per riprovare"
-          style={{ fontSize: 12, color: MUTED, marginTop: 4 }}
-        />
+        <FlexWidget style={{ width: 'match_parent', height: 3, backgroundColor: '#EF4444' }} />
+        <FlexWidget
+          style={{ flex: 1, justifyContent: 'center', alignItems: 'center', flexDirection: 'column' }}
+        >
+          <TextWidget
+            text="Aggiornamento fallito"
+            style={{ fontSize: 14, color: '#EF4444' }}
+          />
+          <TextWidget
+            text="Tocca per riprovare"
+            style={{ fontSize: 12, color: MUTED, marginTop: 4 }}
+          />
+        </FlexWidget>
       </FlexWidget>
     );
   }
@@ -198,35 +288,13 @@ export function ShiftWidget({ data }: { data: WidgetData }) {
         }}
         clickAction="OPEN_APP"
       >
-        <FlexWidget
-          style={{
-            width: 'match_parent', backgroundColor: HEADER_BG,
-            paddingVertical: 10, paddingHorizontal: 14,
-            borderTopLeftRadius: 20, borderTopRightRadius: 20,
-          }}
-        >
-          <TextWidget
-            text={`✈  Turno Lavoro  ${data.shiftLabel}`}
-            style={{ fontSize: 14, fontWeight: 'bold', color: TEXT }}
-          />
-        </FlexWidget>
+        <Header label={data.shiftLabel} />
         <FlexWidget
           style={{ flex: 1, width: 'match_parent', justifyContent: 'center', alignItems: 'center' }}
         >
           <TextWidget text="Nessuna partenza" style={{ fontSize: 14, color: MUTED }} />
         </FlexWidget>
-        <FlexWidget
-          style={{
-            width: 'match_parent', backgroundColor: HEADER_BG,
-            paddingVertical: 6, paddingHorizontal: 14,
-            borderBottomLeftRadius: 20, borderBottomRightRadius: 20,
-          }}
-        >
-          <TextWidget
-            text={`Ultimo aggiornamento: ${data.updatedAt}`}
-            style={{ fontSize: 10, color: MUTED }}
-          />
-        </FlexWidget>
+        <Footer updatedAt={data.updatedAt} />
       </FlexWidget>
     );
   }
@@ -240,42 +308,13 @@ export function ShiftWidget({ data }: { data: WidgetData }) {
         flexDirection: 'column', overflow: 'hidden',
       }}
     >
-      {/* Header */}
-      <FlexWidget
-        style={{
-          width: 'match_parent', backgroundColor: HEADER_BG,
-          paddingVertical: 10, paddingHorizontal: 14,
-          borderTopLeftRadius: 20, borderTopRightRadius: 20,
-        }}
-        clickAction="OPEN_APP"
-      >
-        <TextWidget
-          text={`✈  Turno Lavoro  ${data.shiftLabel}`}
-          style={{ fontSize: 14, fontWeight: 'bold', color: TEXT }}
-        />
-      </FlexWidget>
-
-      {/* Scrollable flight list */}
+      <Header label={data.shiftLabel} />
       <ListWidget style={{ height: 'match_parent', width: 'match_parent' }}>
         {data.flights.map((flight, i) => (
           <FlightRow key={`${flight.flightNumber}-${i}`} flight={flight} index={i} />
         ))}
       </ListWidget>
-
-      {/* Footer */}
-      <FlexWidget
-        style={{
-          width: 'match_parent', backgroundColor: HEADER_BG,
-          paddingVertical: 6, paddingHorizontal: 14,
-          borderBottomLeftRadius: 20, borderBottomRightRadius: 20,
-        }}
-        clickAction="OPEN_APP"
-      >
-        <TextWidget
-          text={`Ultimo aggiornamento: ${data.updatedAt}`}
-          style={{ fontSize: 10, color: MUTED }}
-        />
-      </FlexWidget>
+      <Footer updatedAt={data.updatedAt} />
     </FlexWidget>
   );
 }

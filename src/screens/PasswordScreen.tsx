@@ -6,7 +6,8 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useAppTheme } from '../context/ThemeContext';
+import { useAppTheme, type ThemeColors } from '../context/ThemeContext';
+import { useLanguage } from '../context/LanguageContext';
 
 const PASSWORDS_KEY = 'aerostaff_passwords_v1';
 const PIN_KEY       = 'aerostaff_pin_v1';
@@ -50,6 +51,7 @@ const EMPTY_MODAL: ModalState = {
 // ─── PIN Overlay ─────────────────────────────────────────────────────────────
 function PinOverlay({ onUnlock, onCancel, title }: { onUnlock: (pin: string) => void; onCancel?: () => void; title: string }) {
   const { colors } = useAppTheme();
+  const { t } = useLanguage();
   const s = useMemo(() => makePinStyles(colors), [colors]);
   const [digits, setDigits] = useState('');
 
@@ -132,6 +134,7 @@ function PasswordRow({ item, onEdit, onDelete }: { item: PasswordEntry; onEdit: 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function PasswordScreen() {
   const { colors } = useAppTheme();
+  const { t } = useLanguage();
   const s = useMemo(() => makeStyles(colors), [colors]);
 
   const [entries, setEntries]       = useState<PasswordEntry[]>([]);
@@ -160,14 +163,14 @@ export default function PasswordScreen() {
   // PIN toggle
   const togglePin = useCallback(async () => {
     if (pinEnabled) {
-      Alert.alert('Disattiva PIN', 'Vuoi rimuovere la protezione PIN?', [
+      Alert.alert(t('pinDisableTitle'), t('pinDisableMsg'), [
         { text: 'Annulla', style: 'cancel' },
-        { text: 'Disattiva', style: 'destructive', onPress: async () => {
+        { text: t('pinDisableBtn'), style: 'destructive', onPress: async () => {
           try {
             setPinEnabled(false);
             await AsyncStorage.setItem(PIN_ENABLED_KEY, 'false');
             await deleteSecurePin();
-          } catch (e) { console.error('[pin] disable error', e); }
+          } catch (e) { if (__DEV__) console.error('[pin] disable error', e); }
         }},
       ]);
     } else {
@@ -181,10 +184,10 @@ export default function PasswordScreen() {
       await AsyncStorage.setItem(PIN_ENABLED_KEY, 'true');
       setPinEnabled(true);
       setPinMode(null);
-      Alert.alert('PIN impostato', 'La schermata password è ora protetta.');
+      Alert.alert(t('pinSetTitle'), t('pinSetMsg'));
     } catch (e) {
-      console.error('[pin] setup error', e);
-      Alert.alert('Errore', 'Impossibile impostare il PIN. Riprova.');
+      if (__DEV__) console.error('[pin] setup error', e);
+      Alert.alert('Errore', t('pinErrMsg'));
     }
   }, []);
 
@@ -194,11 +197,11 @@ export default function PasswordScreen() {
       if (pin === stored) {
         setPinMode(null);
       } else {
-        Alert.alert('PIN errato', 'Riprova.');
+        Alert.alert(t('pinWrong'), t('pinWrongMsg'));
       }
     } catch (e) {
-      console.error('[pin] unlock error', e);
-      Alert.alert('Errore', 'Impossibile verificare il PIN. Riprova.');
+      if (__DEV__) console.error('[pin] unlock error', e);
+      Alert.alert('Errore', t('pinVerifyErr'));
     }
   }, []);
 
@@ -210,8 +213,8 @@ export default function PasswordScreen() {
   }, []);
 
   const saveModal = useCallback(async () => {
-    if (!modal.name.trim()) { Alert.alert('Errore', 'Il nome è obbligatorio.'); return; }
-    if (!modal.password.trim()) { Alert.alert('Errore', 'La password è obbligatoria.'); return; }
+    if (!modal.name.trim()) { Alert.alert('Errore', t('passwordErrName')); return; }
+    if (!modal.password.trim()) { Alert.alert('Errore', t('passwordErrPw')); return; }
     let next: PasswordEntry[];
     if (modal.editingId) {
       next = entries.map(e => e.id === modal.editingId
@@ -233,7 +236,7 @@ export default function PasswordScreen() {
   }, [modal, entries, persist]);
 
   const deleteEntry = useCallback((id: string) => {
-    Alert.alert('Elimina', 'Vuoi eliminare questa voce?', [
+    Alert.alert(t('passwordDeleteTitle'), t('passwordDeleteMsg'), [
       { text: 'Annulla', style: 'cancel' },
       { text: 'Elimina', style: 'destructive', onPress: async () => {
         await persist(entries.filter(e => e.id !== id));
@@ -255,7 +258,7 @@ export default function PasswordScreen() {
       <View style={s.toolbar}>
         <View style={s.titleRow}>
           <MaterialIcons name="lock" size={22} color={colors.primary} />
-          <Text style={s.title}>Password</Text>
+          <Text style={s.title}>{t('passwordTitle')}</Text>
         </View>
         <View style={s.toolbarActions}>
           <TouchableOpacity
@@ -269,7 +272,7 @@ export default function PasswordScreen() {
           </TouchableOpacity>
           <TouchableOpacity onPress={openAdd} style={s.addBtn}>
             <MaterialIcons name="add" size={20} color="#fff" />
-            <Text style={s.addBtnTxt}>Aggiungi</Text>
+            <Text style={s.addBtnTxt}>{t('passwordAdd')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -289,8 +292,8 @@ export default function PasswordScreen() {
         ListEmptyComponent={
           <View style={s.empty}>
             <MaterialIcons name="lock-open" size={48} color={colors.border} />
-            <Text style={s.emptyTxt}>Nessuna password salvata.</Text>
-            <Text style={s.emptySubTxt}>Premi "Aggiungi" per iniziare.</Text>
+            <Text style={s.emptyTxt}>{t('passwordEmptyTxt')}</Text>
+            <Text style={s.emptySubTxt}>{t('passwordEmptySubTxt')}</Text>
           </View>
         }
         showsVerticalScrollIndicator={false}
@@ -305,15 +308,15 @@ export default function PasswordScreen() {
         >
           <ScrollView contentContainerStyle={s.modalScrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
             <View style={s.modalBox}>
-            <Text style={s.modalTitle}>{modal.editingId ? 'Modifica voce' : 'Nuova voce'}</Text>
+            <Text style={s.modalTitle}>{modal.editingId ? t('passwordModalEdit') : t('passwordModalNew')}</Text>
 
-            <Text style={s.label}>Nome *</Text>
-            <TextInput style={s.input} value={modal.name} onChangeText={v => setModal(m => ({ ...m, name: v }))} placeholder="es. Portale HR EasyJet" placeholderTextColor={colors.textMuted} />
+            <Text style={s.label}>{t('passwordNameLabel')}</Text>
+            <TextInput style={s.input} value={modal.name} onChangeText={v => setModal(m => ({ ...m, name: v }))} placeholder={t('passwordNamePh')} placeholderTextColor={colors.textMuted} />
 
-            <Text style={s.label}>Username / Email</Text>
-            <TextInput style={s.input} value={modal.username} onChangeText={v => setModal(m => ({ ...m, username: v }))} placeholder="es. mario.rossi@easyjet.com" placeholderTextColor={colors.textMuted} autoCapitalize="none" keyboardType="email-address" />
+            <Text style={s.label}>{t('passwordUsernameLabel')}</Text>
+            <TextInput style={s.input} value={modal.username} onChangeText={v => setModal(m => ({ ...m, username: v }))} placeholder={t('passwordUsernamePh')} placeholderTextColor={colors.textMuted} autoCapitalize="none" keyboardType="email-address" />
 
-            <Text style={s.label}>Password *</Text>
+            <Text style={s.label}>{t('passwordPwLabel')}</Text>
             <View style={s.pwInputRow}>
               <TextInput
                 style={[s.input, { flex: 1, marginBottom: 0 }]}
@@ -329,7 +332,7 @@ export default function PasswordScreen() {
               </TouchableOpacity>
             </View>
 
-            <Text style={[s.label, { marginTop: 12 }]}>Note</Text>
+            <Text style={[s.label, { marginTop: 12 }]}>{t('passwordNotesLabel')}</Text>
             <TextInput style={[s.input, s.inputMulti]} value={modal.notes} onChangeText={v => setModal(m => ({ ...m, notes: v }))} placeholder="es. scade ogni 90 giorni…" placeholderTextColor={colors.textMuted} multiline numberOfLines={3} textAlignVertical="top" />
 
             <View style={s.modalBtns}>
@@ -349,7 +352,7 @@ export default function PasswordScreen() {
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
-function makePinStyles(c: any) {
+function makePinStyles(c: ThemeColors) {
   return StyleSheet.create({
     overlay: { flex: 1, backgroundColor: c.bg, justifyContent: 'center', alignItems: 'center' },
     box:     { alignItems: 'center', padding: 32, width: '100%', maxWidth: 320 },
@@ -364,9 +367,9 @@ function makePinStyles(c: any) {
   });
 }
 
-function makeRowStyles(c: any) {
+function makeRowStyles(c: ThemeColors) {
   return StyleSheet.create({
-    card:    { backgroundColor: c.card, borderRadius: 14, padding: 14, marginBottom: 10, flexDirection: 'row', alignItems: 'flex-start', borderWidth: 1, borderColor: c.border, shadowColor: '#000', shadowOpacity: c.isDark ? 0 : 0.05, shadowRadius: 6, elevation: c.isDark ? 0 : 2 },
+    card:    { backgroundColor: c.card, borderRadius: 16, padding: 14, marginBottom: 10, flexDirection: 'row', alignItems: 'flex-start', borderWidth: 1, borderColor: c.glassBorder, shadowColor: c.primary, shadowOpacity: c.isDark ? 0 : 0.08, shadowRadius: 8, elevation: c.isDark ? 0 : 3 },
     cardLeft:{ flex: 1 },
     name:    { fontSize: 15, fontWeight: '700', color: c.primaryDark, marginBottom: 2 },
     username:{ fontSize: 12, color: c.textSub, marginBottom: 4 },
@@ -380,7 +383,7 @@ function makeRowStyles(c: any) {
   });
 }
 
-function makeStyles(c: any) {
+function makeStyles(c: ThemeColors) {
   return StyleSheet.create({
     root:         { flex: 1, backgroundColor: c.bg },
     toolbar:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: c.card, borderBottomWidth: 1, borderBottomColor: c.border },

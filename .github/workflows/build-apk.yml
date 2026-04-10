@@ -1,0 +1,166 @@
+name: Build APK & Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release tag (e.g. v1.2.0)'
+        required: false
+        default: ''
+  push:
+    branches:
+      - main
+    paths:
+      - 'app.json'
+      - 'src/**'
+      - 'App.tsx'
+      - 'package.json'
+      - 'android/**'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      tag:     ${{ steps.meta.outputs.tag }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('android/**/*.gradle*', 'android/gradle.properties') }}
+          restore-keys: gradle-
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install SDK components
+        run: |
+          echo "y" | sdkmanager \
+            "ndk;27.1.12297006" \
+            "build-tools;36.0.0" \
+            "platforms;android-36" \
+            "cmake;3.22.1"
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Fix expo-modules-core Gradle bugs
+        run: |
+          FILE="node_modules/expo-modules-core/android/build.gradle"
+          sed -i "s|apply plugin: 'com.android.library'|// Fix: project-level re-declaration\ndef _coreFeatures = project.findProperty(\"coreFeatures\") ?: []\next.shouldIncludeCompose = _coreFeatures.contains(\"compose\")\n\napply plugin: 'com.android.library'|" "$FILE"
+          sed -i 's/^\s*compose shouldIncludeCompose\s*$/    compose = shouldIncludeCompose/' "$FILE"
+
+      - name: Read version & compute tag
+        id: meta
+        run: |
+          VERSION=$(node -p "require('./app.json').expo.version")
+          TAG="${{ github.event.inputs.release_tag }}"
+          if [ -z "$TAG" ]; then
+            TAG="v${VERSION}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG"         >> "$GITHUB_OUTPUT"
+          echo "Building AeroStaff Pro $VERSION (tag: $TAG)"
+
+      - name: Make gradlew executable
+        run: chmod +x android/gradlew
+
+      - name: Generate debug keystore (used by release signing config)
+        run: |
+          mkdir -p android/app
+          keytool -genkey -v \
+            -keystore android/app/debug.keystore \
+            -storepass android \
+            -alias androiddebugkey \
+            -keypass android \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -dname "CN=Android Debug,O=Android,C=US"
+
+      - name: Build release APK (standalone, JS bundle embedded)
+        run: |
+          cd android
+          ./gradlew :app:assembleRelease \
+            --no-daemon \
+            -Pandroid.overridePathCheck=true
+        env:
+          ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
+          GRADLE_OPTS: "-Xmx4g -XX:MaxMetaspaceSize=512m"
+
+      - name: Find & rename APK
+        id: apk
+        run: |
+          APK=$(find android/app/build/outputs/apk/release -name "*.apk" -type f | head -1)
+          echo "Found: $APK"
+          VERSION=${{ steps.meta.outputs.version }}
+          DEST="AeroStaffPro-v${VERSION}.apk"
+          mkdir -p artifacts
+          cp "$APK" "artifacts/$DEST"
+          echo "apk_path=artifacts/$DEST" >> "$GITHUB_OUTPUT"
+          echo "apk_name=$DEST"           >> "$GITHUB_OUTPUT"
+          ls -lh artifacts/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AeroStaffPro-v${{ steps.meta.outputs.version }}
+          path: ${{ steps.apk.outputs.apk_path }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download APK artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: AeroStaffPro-v${{ needs.build.outputs.version }}
+          path: artifacts/
+
+      - name: Create or update GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.build.outputs.tag }}
+          name: "AeroStaff Pro ${{ needs.build.outputs.version }} — Liquid Glass + Orange"
+          body: |
+            ## 🍊 AeroStaff Pro ${{ needs.build.outputs.version }}
+
+            ### Design Overhaul: Liquid Glass + Orange
+            - Nuovo colore primario arancione `#F47B16`
+            - Stile iOS 26 liquid glass (BlurView + shimmer cards)
+            - Nuovo logo AeroStaff PRO con gradiente arancione
+            - GlassCard component con fallback Android
+            - Tab bar, AppBar e DrawerMenu aggiornati
+            - Tutti gli hardcoded blue rimossi
+
+            ### ✅ APK Standalone
+            Bundle JavaScript incorporato — funziona senza Metro dev server.
+
+            ### Download
+            Installa `AeroStaffPro-v${{ needs.build.outputs.version }}.apk` sul tuo dispositivo Android.
+          prerelease: true
+          files: artifacts/*.apk

@@ -3,6 +3,11 @@ import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getAirlineOps } from './airlineOps';
 import { fetchAirportScheduleRaw } from './fr24api';
+import {
+  showShiftOngoingNotification,
+  dismissShiftOngoingNotification,
+  syncShiftOngoingExpiry,
+} from './shiftOngoingNotification';
 
 const NOTIF_IDS_KEY = 'aerostaff_notif_ids_v1';
 const LAST_SCHEDULE_KEY = 'aerostaff_notif_last_schedule';
@@ -22,6 +27,9 @@ async function cancelPrevious() {
  */
 export async function autoScheduleNotifications(): Promise<number> {
   try {
+    // Dismiss ongoing shift notification if shift has ended
+    await syncShiftOngoingExpiry();
+
     // Skip if already scheduled today
     const todayKey = new Date().toISOString().split('T')[0];
     const lastSchedule = await AsyncStorage.getItem(LAST_SCHEDULE_KEY);
@@ -43,7 +51,10 @@ export async function autoScheduleNotifications(): Promise<number> {
     const endOfDay = new Date(today); endOfDay.setHours(23, 59, 59, 999);
     const events = await Calendar.getEventsAsync([cal.id], today, endOfDay);
     const shiftEvent = events.find(e => e.title.includes('Lavoro'));
-    if (!shiftEvent) return 0;
+    if (!shiftEvent) {
+      await dismissShiftOngoingNotification();
+      return 0;
+    }
 
     const shiftStart = new Date(shiftEvent.startDate).getTime() / 1000;
     const shiftEnd = new Date(shiftEvent.endDate).getTime() / 1000;
@@ -63,9 +74,39 @@ export async function autoScheduleNotifications(): Promise<number> {
       return ts && ts >= shiftStart && ts <= shiftEnd;
     });
 
+    // ── Persistent ongoing shift notification ──────────────────────────────────
+    const now = Date.now() / 1000;
+    const shiftStartDate = new Date(shiftStart * 1000);
+    const shiftEndDate   = new Date(shiftEnd   * 1000);
+    const fmt = (d: Date) => d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+    const shiftLabel = `${fmt(shiftStartDate)}–${fmt(shiftEndDate)}`;
+
+    if (now >= shiftStart && now <= shiftEnd) {
+      const upcoming = shiftDepartures
+        .filter((f: any) => (f.flight?.time?.scheduled?.departure ?? 0) > now)
+        .sort((a: any, b: any) =>
+          (a.flight?.time?.scheduled?.departure ?? 0) - (b.flight?.time?.scheduled?.departure ?? 0),
+        );
+      const next = upcoming[0];
+      let flightInfo: string;
+      if (next) {
+        const depTs = next.flight?.time?.scheduled?.departure as number;
+        const fn    = next.flight?.identification?.number?.default ?? '';
+        const dest  = next.flight?.airport?.destination?.code?.iata ?? '';
+        const time  = new Date(depTs * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+        flightInfo  = `Prossima: ${fn} ✈ ${dest} alle ${time} · ${shiftDepartures.length} voli oggi`;
+      } else {
+        flightInfo = `${shiftDepartures.length} voli · Nessuna partenza imminente`;
+      }
+      await showShiftOngoingNotification(shiftLabel, flightInfo, shiftEnd);
+    } else if (now > shiftEnd) {
+      await dismissShiftOngoingNotification();
+    }
+    // ───────────────────────────────────────────────────────────────────────────
+
+
     // Cancel old and schedule new
     await cancelPrevious();
-    const now = Date.now() / 1000;
     const newIds: string[] = [];
 
     // ── Arrival notifications: 15 min before landing ──
@@ -93,7 +134,7 @@ export async function autoScheduleNotifications(): Promise<number> {
         });
         newIds.push(id);
       } catch (err) {
-        console.error('Failed to schedule arrival notification:', err);
+        if (__DEV__) console.error('Failed to schedule arrival notification:', err);
       }
     }
 
@@ -146,7 +187,7 @@ export async function autoScheduleNotifications(): Promise<number> {
           newIds.push(id);
         }
       } catch (err) {
-        console.error('Failed to schedule departure notification:', err);
+        if (__DEV__) console.error('Failed to schedule departure notification:', err);
       }
     }
 
@@ -170,7 +211,7 @@ export async function autoScheduleNotifications(): Promise<number> {
     await AsyncStorage.setItem(LAST_SCHEDULE_KEY, todayKey);
     return newIds.length;
   } catch (e) {
-    console.error('autoScheduleNotifications error:', e);
+    if (__DEV__) console.error('autoScheduleNotifications error:', e);
     return 0;
   }
 }

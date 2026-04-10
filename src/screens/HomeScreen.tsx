@@ -10,8 +10,9 @@ import { WebView } from 'react-native-webview';
 import * as ImagePicker from 'expo-image-picker';
 import * as Calendar from 'expo-calendar';
 import * as Location from 'expo-location';
-import { useAppTheme } from '../context/ThemeContext';
+import { useAppTheme, type ThemeColors } from '../context/ThemeContext';
 import ShiftTimeline from '../components/ShiftTimeline';
+import TimeCarouselPicker from '../components/TimeCarouselPicker';
 
 import { getAirlineOps, getAirlineColor } from '../utils/airlineOps';
 import {
@@ -19,6 +20,7 @@ import {
   replaceShiftForDate,
   replaceShiftsForRange,
 } from '../utils/shiftCalendar';
+import { useLanguage } from '../context/LanguageContext';
 
 const GOLD = '#F59E0B';
 
@@ -27,7 +29,6 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 }
 
 const PINNED_FLIGHT_KEY = 'pinned_flight_v1';
-const HOME_SHIFT_TITLES = { work: 'Turno Lavoro ✈️', rest: '🌴 Riposo' };
 const HOME_REST_TIMING = { startHour: 12, startMinute: 0, endHour: 14, endMinute: 0, allDay: true };
 
 const weatherMap: Record<number, { text: string; icon: string }> = {
@@ -37,7 +38,7 @@ const weatherMap: Record<number, { text: string; icon: string }> = {
   63: { text: 'Pioggia', icon: '🌧️' }, 80: { text: 'Rovesci', icon: '🌧️' },
 };
 
-const MONTHS_IT = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+// months comes from useLanguage() context
 
 const engineHtml = `<!DOCTYPE html><html lang="it"><head>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script></head>
@@ -58,6 +59,7 @@ window.runTesseract = async function(base64JsonStr) {
 </script></body></html>`;
 
 function PinnedFlightCard({ item, colors }: { item: any; colors: any }) {
+  const { t, locale } = useLanguage();
   const tab = item._pinTab || 'departures';
   const flightNumber = item.flight?.identification?.number?.default || 'N/A';
   const airline = item.flight?.airline?.name || 'Sconosciuta';
@@ -72,18 +74,18 @@ function PinnedFlightCard({ item, colors }: { item: any; colors: any }) {
   const ts = tab === 'arrivals'
     ? item.flight?.time?.scheduled?.arrival
     : item.flight?.time?.scheduled?.departure;
-  const depTime = ts ? new Date(ts * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : 'N/A';
+  const depTime = ts ? new Date(ts * 1000).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }) : 'N/A';
 
   const ops = getAirlineOps(airline);
   const fmt = (offsetMin: number) =>
-    ts ? new Date((ts - offsetMin * 60) * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : '';
+    ts ? new Date((ts - offsetMin * 60) * 1000).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }) : '';
 
   return (
     <View style={{
       marginHorizontal: 16, marginTop: 16,
       borderRadius: 16, overflow: 'hidden',
       backgroundColor: colors.card,
-      shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 12, elevation: 6,
+      shadowColor: colors.isDark ? '#000000' : colors.primary, shadowOpacity: 0.15, shadowRadius: 12, elevation: 6,
       borderWidth: colors.isDark ? 1 : 0, borderColor: colors.border,
     }}>
       {/* Compact header: airline color bar + flight info */}
@@ -98,7 +100,7 @@ function PinnedFlightCard({ item, colors }: { item: any; colors: any }) {
           </View>
           <View>
             <Text style={{ color: '#fff', fontWeight: '600', fontSize: 12 }}>{airline}</Text>
-            <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10 }}>{tab === 'arrivals' ? 'Arrivo' : 'Partenza'}</Text>
+            <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10 }}>{tab === 'arrivals' ? t('homeArrival') : t('homeDeparture')}</Text>
           </View>
         </View>
         <View style={{ alignItems: 'flex-end' }}>
@@ -111,14 +113,14 @@ function PinnedFlightCard({ item, colors }: { item: any; colors: any }) {
       <View style={{ padding: 12 }}>
         {tab === 'departures' ? (
           <View style={{ flexDirection: 'row', gap: 8 }}>
-            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.isDark ? 'rgba(37,99,235,0.12)' : colors.primaryLight, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8 }}>
+            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.primaryLight, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8 }}>
               <MaterialIcons name="desktop-windows" size={15} color={colors.primary} />
               <View>
                 <Text style={{ fontSize: 9, fontWeight: '600', color: colors.textSub, letterSpacing: 0.3 }}>CHECK-IN</Text>
                 <Text style={{ fontSize: 13, fontWeight: '800', color: colors.primaryDark }}>{fmt(ops.checkInOpen)} – {fmt(ops.checkInClose)}</Text>
               </View>
             </View>
-            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.isDark ? 'rgba(37,99,235,0.12)' : colors.primaryLight, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8 }}>
+            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.primaryLight, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8 }}>
               <MaterialIcons name="meeting-room" size={15} color={colors.primary} />
               <View>
                 <Text style={{ fontSize: 9, fontWeight: '600', color: colors.textSub, letterSpacing: 0.3 }}>GATE</Text>
@@ -138,7 +140,7 @@ function PinnedFlightCard({ item, colors }: { item: any; colors: any }) {
           </View>
           <View style={{ backgroundColor: '#F59E0B22', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
             <MaterialIcons name="push-pin" size={12} color="#F59E0B" />
-            <Text style={{ fontSize: 10, fontWeight: '700', color: '#F59E0B' }}>Pinnato</Text>
+            <Text style={{ fontSize: 10, fontWeight: '700', color: '#F59E0B' }}>{t('homePinned')}</Text>
           </View>
         </View>
       </View>
@@ -148,6 +150,8 @@ function PinnedFlightCard({ item, colors }: { item: any; colors: any }) {
 
 export default function HomeScreen() {
   const { colors } = useAppTheme();
+  const { t, months, locale, weatherMap } = useLanguage();
+  const HOME_SHIFT_TITLES = { work: t('homeShiftWork'), rest: '🌴 Riposo' };
   const today = new Date();
   const [shiftEvent, setShiftEvent] = useState<any>(null);
   const [weather, setWeather] = useState<{ text: string; icon: string; temp: number } | null>(null);
@@ -159,10 +163,10 @@ export default function HomeScreen() {
 
   const [shiftModalOpen, setShiftModalOpen] = useState(false);
   const [newShiftType, setNewShiftType] = useState<'Lavoro' | 'Riposo'>('Lavoro');
-  const [newStartH, setNewStartH] = useState('08');
-  const [newStartM, setNewStartM] = useState('00');
-  const [newEndH, setNewEndH] = useState('16');
-  const [newEndM, setNewEndM] = useState('00');
+  const [newStartH, setNewStartH] = useState(8);
+  const [newStartM, setNewStartM] = useState(0);
+  const [newEndH, setNewEndH] = useState(16);
+  const [newEndM, setNewEndM] = useState(0);
   const [uploadMode, setUploadMode] = useState<'image' | 'manual' | null>(null);
   const [pinnedFlight, setPinnedFlight] = useState<any>(null);
 
@@ -200,23 +204,23 @@ export default function HomeScreen() {
       setNewShiftType(isRest ? 'Riposo' : 'Lavoro');
       const start = new Date(shiftEvent.startDate);
       const end = new Date(shiftEvent.endDate);
-      setNewStartH(start.getHours().toString().padStart(2, '0'));
-      setNewStartM(start.getMinutes().toString().padStart(2, '0'));
-      setNewEndH(end.getHours().toString().padStart(2, '0'));
-      setNewEndM(end.getMinutes().toString().padStart(2, '0'));
+      setNewStartH(start.getHours());
+      setNewStartM(start.getMinutes());
+      setNewEndH(end.getHours());
+      setNewEndM(end.getMinutes());
     } else {
       setNewShiftType('Lavoro');
-      setNewStartH('08'); setNewStartM('00'); setNewEndH('16'); setNewEndM('00');
+      setNewStartH(8); setNewStartM(0); setNewEndH(16); setNewEndM(0);
     }
     setShiftModalOpen(true);
   };
 
   const saveManualShift = async () => {
     const { status } = await Calendar.requestCalendarPermissionsAsync();
-    if (status !== 'granted') { Alert.alert('Permesso negato', 'Autorizza il calendario.'); return; }
+    if (status !== 'granted') { Alert.alert(t('homePermDenied'), t('homeCalendarAuth')); return; }
     try {
       const calendarId = await getWritableCalendarId();
-      if (!calendarId) { Alert.alert('Errore', 'Nessun calendario scrivibile.'); return; }
+      if (!calendarId) { Alert.alert('Errore', t('homeNoWritableCalendar')); return; }
 
       const todayDate = new Date();
       const y = todayDate.getFullYear();
@@ -228,8 +232,8 @@ export default function HomeScreen() {
         calendarId,
         date,
         type: newShiftType === 'Riposo' ? 'rest' : 'work',
-        startTime: newShiftType === 'Lavoro' ? `${newStartH.padStart(2, '0')}:${newStartM.padStart(2, '0')}` : undefined,
-        endTime: newShiftType === 'Lavoro' ? `${newEndH.padStart(2, '0')}:${newEndM.padStart(2, '0')}` : undefined,
+        startTime: newShiftType === 'Lavoro' ? `${String(newStartH).padStart(2, '0')}:${String(newStartM).padStart(2, '0')}` : undefined,
+        endTime: newShiftType === 'Lavoro' ? `${String(newEndH).padStart(2, '0')}:${String(newEndM).padStart(2, '0')}` : undefined,
         titles: HOME_SHIFT_TITLES,
         restTiming: HOME_REST_TIMING,
       });
@@ -253,7 +257,7 @@ export default function HomeScreen() {
       const events = await Calendar.getEventsAsync([cal.id], d, dEnd);
       const shift = events.find(e => e.title.includes('Lavoro') || e.title.includes('Riposo'));
       setShiftEvent(shift || null);
-    } catch (e) { console.error('[shift]', e); } finally { setLoadingShift(false); }
+    } catch (e) { if (__DEV__) console.error('[shift]', e); } finally { setLoadingShift(false); }
   };
 
   const fetchWeather = async () => {
@@ -267,7 +271,7 @@ export default function HomeScreen() {
       const temp = Math.round(json.current?.temperature_2m ?? 0);
       const w = weatherMap[code] || { text: 'Sereno', icon: '☀️' };
       setWeather({ ...w, temp });
-    } catch (e) { console.warn('[weather]', e); }
+    } catch (e) { if (__DEV__) console.warn('[weather]', e); }
   };
 
   const pickImage = async () => {
@@ -291,7 +295,7 @@ export default function HomeScreen() {
           true;
         `);
       }
-    } catch (e) { console.error('[imagePicker]', e); setProcessing(false); }
+    } catch (e) { if (__DEV__) console.error('[imagePicker]', e); setProcessing(false); }
   };
 
   const handleWebViewMessage = (event: any) => {
@@ -299,7 +303,7 @@ export default function HomeScreen() {
       const r = JSON.parse(event.nativeEvent.data);
       if (r.success) setOcrText(r.text);
       else Alert.alert('Errore riconoscimento testo', r.error || 'Prova con un\'immagine più nitida o meglio illuminata.');
-    } catch (e) { console.error('[ocrMessage]', e); } finally { setProcessing(false); }
+    } catch (e) { if (__DEV__) console.error('[ocrMessage]', e); } finally { setProcessing(false); }
   };
 
   const parseAndSave = async () => {
@@ -345,9 +349,9 @@ export default function HomeScreen() {
         restTiming: HOME_REST_TIMING,
       });
 
-      Alert.alert(saved > 0 ? '✅ Turni Sincronizzati!' : 'Nessun orario trovato', saved > 0 ? `${saved} turni salvati.` : `Date: ${dates.length}, Orari: ${shifts.length}`);
+      Alert.alert(saved > 0 ? t('homeShiftSynced') : t('homeNoSchedule'), saved > 0 ? `${saved} turni salvati.` : `Date: ${dates.length}, Orari: ${shifts.length}`);
       if (saved > 0) fetchShift(true);
-    } catch (e: any) { Alert.alert('Errore Calendario', e.message); }
+    } catch (e: any) { Alert.alert(t('homeCalErr'), e.message); }
   };
 
   const isRest = shiftEvent?.title?.includes('Riposo');
@@ -368,16 +372,16 @@ export default function HomeScreen() {
             <>
               <Text style={s.weatherEmoji}>{weather.icon}</Text>
               <Text style={s.weatherTemp}>{weather.temp}°</Text>
-              <Text style={s.weatherDesc}>Meteo locale • {weather.text}</Text>
+              <Text style={s.weatherDesc}>{t('homeWeatherLocal')} • {weather.text}</Text>
             </>
           ) : (
             <ActivityIndicator color={colors.primary} />
           )}
         </View>
         <View style={s.dateCard}>
-          <Text style={s.dateToday}>OGGI</Text>
+          <Text style={s.dateToday}>{t('homeToday')}</Text>
           <Text style={s.dateNum}>{today.getDate()}</Text>
-          <Text style={s.dateMonth}>{MONTHS_IT[today.getMonth()]}</Text>
+          <Text style={s.dateMonth}>{months[today.getMonth()]}</Text>
         </View>
       </View>
 
@@ -385,7 +389,7 @@ export default function HomeScreen() {
       {pinnedFlight && <PinnedFlightCard item={pinnedFlight} colors={colors} />}
 
       {/* Turno Attuale */}
-      <Text style={s.sectionTitle}>Turno Attuale</Text>
+      <Text style={s.sectionTitle}>{t('homeCurrentShift')}</Text>
 
       <View style={s.shiftCard}>
         {loadingShift ? (
@@ -395,23 +399,32 @@ export default function HomeScreen() {
             <View style={s.shiftStrip} />
             <View style={{ flex: 1 }}>
               <View style={s.shiftBadgeRow}>
-                <View style={s.inProgressBadge}><Text style={s.inProgressText}>IN CORSO</Text></View>
+                <View style={s.inProgressBadge}><Text style={s.inProgressText}>{t('homeInProgress')}</Text></View>
               </View>
-              <Text style={s.shiftTitle}>Turno Lavoro ✈️</Text>
+              <Text style={s.shiftTitle}>{t('homeShiftWork')}</Text>
               <Text style={s.shiftTime}>
-                {new Date(shiftEvent.startDate).toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})} – {new Date(shiftEvent.endDate).toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})}
+                {new Date(shiftEvent.startDate).toLocaleTimeString(locale,{hour:'2-digit',minute:'2-digit'})} – {new Date(shiftEvent.endDate).toLocaleTimeString(locale,{hour:'2-digit',minute:'2-digit'})}
               </Text>
             </View>
           </>
         ) : isRest ? (
           <View style={s.restRow}>
             <Text style={{ fontSize: 28, marginRight: 12 }}>🌴</Text>
-            <Text style={s.restText}>Giorno di Riposo</Text>
+            <Text style={s.restText}>{t('homeRestDay')}</Text>
           </View>
         ) : (
-          <Text style={s.emptyShift}>Nessun turno per oggi</Text>
+          <Text style={s.emptyShift}>{t('homeNoShift')}</Text>
         )}
       </View>
+
+      {/* Pulsante modifica turno */}
+      <TouchableOpacity
+        style={[s.modeBtn, { marginHorizontal: 16, marginTop: 10 }]}
+        onPress={openModifyModal}
+      >
+        <MaterialIcons name="edit" size={18} color="#fff" />
+        <Text style={s.modeBtnText}>{shiftEvent ? 'Modifica turno' : 'Aggiungi turno'}</Text>
+      </TouchableOpacity>
 
       {/* Timeline voli nel turno — inline */}
       {shiftEvent && isWork && (
@@ -425,56 +438,121 @@ export default function HomeScreen() {
           />
         </View>
       )}
+
+      {/* ─── Manual Shift Modal ─── */}
+      <Modal visible={shiftModalOpen} transparent animationType="slide" statusBarTranslucent onRequestClose={() => setShiftModalOpen(false)}>
+        <View style={s.modalOverlay}>
+          <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => setShiftModalOpen(false)} />
+          <View style={[s.modalContent, { backgroundColor: colors.isDark ? '#1E293B' : '#FFFFFF' }]}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <Text style={[s.modalTitle, { color: colors.text }]}>{shiftEvent ? 'Modifica turno' : 'Aggiungi turno'}</Text>
+              <TouchableOpacity onPress={() => setShiftModalOpen(false)}>
+                <MaterialIcons name="close" size={24} color={colors.textSub} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Tipo */}
+            <Text style={[s.inputLabel, { color: colors.textSub }]}>Tipo turno</Text>
+            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 16 }}>
+              {(['Lavoro', 'Riposo'] as const).map(st => (
+                <TouchableOpacity
+                  key={st}
+                  style={[s.typeBtn, { borderColor: colors.border, borderWidth: 1 }, newShiftType === st && { backgroundColor: colors.primary, borderColor: colors.primary }]}
+                  onPress={() => setNewShiftType(st)}
+                >
+                  <Text style={{ color: newShiftType === st ? '#fff' : colors.text, fontWeight: '700' }}>
+                    {st === 'Lavoro' ? 'Lavoro' : 'Riposo'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Orari (solo lavoro) */}
+            {newShiftType === 'Lavoro' && (
+              <>
+                <Text style={[s.inputLabel, { color: colors.textSub }]}>Inizio</Text>
+                <TimeCarouselPicker
+                  hour={newStartH}
+                  minute={newStartM}
+                  onHourChange={setNewStartH}
+                  onMinuteChange={setNewStartM}
+                  accentColor={colors.primary}
+                  textColor={colors.text}
+                  mutedColor={colors.textMuted}
+                  bgColor={colors.isDark ? '#1E293B' : '#F3F4F6'}
+                  borderColor={colors.border}
+                />
+                <Text style={[s.inputLabel, { color: colors.textSub, marginTop: 16 }]}>Fine</Text>
+                <TimeCarouselPicker
+                  hour={newEndH}
+                  minute={newEndM}
+                  onHourChange={setNewEndH}
+                  onMinuteChange={setNewEndM}
+                  accentColor={colors.primary}
+                  textColor={colors.text}
+                  mutedColor={colors.textMuted}
+                  bgColor={colors.isDark ? '#1E293B' : '#F3F4F6'}
+                  borderColor={colors.border}
+                />
+              </>
+            )}
+
+            <TouchableOpacity style={[s.modalBtn, { backgroundColor: colors.primary, marginTop: 16 }]} onPress={saveManualShift}>
+              <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>Salva turno</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
 
-function makeStyles(c: any) {
+function makeStyles(c: ThemeColors) {
   return StyleSheet.create({
     hiddenWV: { height: 1, width: 1, opacity: 0, position: 'absolute', top: -100 },
     topRow: { flexDirection: 'row', gap: 12, padding: 16, paddingBottom: 8 },
-    weatherCard: { flex: 1, backgroundColor: c.card, borderRadius: 14, padding: 16, alignItems: 'center', shadowColor: '#000', shadowOpacity: c.isDark ? 0 : 0.06, shadowRadius: 8, elevation: c.isDark ? 0 : 3, borderWidth: c.isDark ? 1 : 0, borderColor: c.border },
+    weatherCard: { flex: 1, backgroundColor: c.card, borderRadius: 18, padding: 16, alignItems: 'center', shadowColor: c.isDark ? '#000000' : c.primary, shadowOpacity: 0.12, shadowRadius: 12, elevation: 4, borderWidth: 1, borderColor: c.glassBorder },
     weatherEmoji: { fontSize: 28, marginBottom: 4 },
-    weatherTemp: { fontSize: 28, fontWeight: 'bold', color: c.primaryDark },
+    weatherTemp: { fontSize: 28, fontWeight: '700', color: c.primaryDark },
     weatherDesc: { fontSize: 11, color: c.textSub, textAlign: 'center', marginTop: 2 },
-    dateCard: { width: 90, backgroundColor: c.primaryDark, borderRadius: 14, padding: 14, alignItems: 'center', justifyContent: 'center' },
+    dateCard: { width: 90, backgroundColor: c.primaryDark, borderRadius: 18, padding: 14, alignItems: 'center', justifyContent: 'center', shadowColor: c.isDark ? '#000000' : c.primary, shadowOpacity: 0.30, shadowRadius: 12, elevation: 6 },
     dateToday: { fontSize: 10, color: 'rgba(255,255,255,0.6)', letterSpacing: 1.5, fontWeight: '700' },
-    dateNum: { fontSize: 36, fontWeight: 'bold', color: '#fff', lineHeight: 40 },
+    dateNum: { fontSize: 36, fontWeight: '700', color: '#fff', lineHeight: 40 },
     dateMonth: { fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 2 },
     sectionTitle: { fontSize: 13, fontWeight: '700', color: c.textSub, letterSpacing: 0.5, marginHorizontal: 16, marginTop: 16, marginBottom: 8 },
-    shiftCard: { backgroundColor: c.card, borderRadius: 14, marginHorizontal: 16, padding: 16, flexDirection: 'row', gap: 14, shadowColor: '#000', shadowOpacity: c.isDark ? 0 : 0.06, shadowRadius: 8, elevation: c.isDark ? 0 : 3, minHeight: 90, borderWidth: c.isDark ? 1 : 0, borderColor: c.border },
-    shiftStrip: { width: 4, borderRadius: 2, backgroundColor: GOLD, marginRight: 2 },
+    shiftCard: { backgroundColor: c.card, borderRadius: 18, marginHorizontal: 16, padding: 16, flexDirection: 'row', gap: 14, shadowColor: c.isDark ? '#000000' : c.primary, shadowOpacity: 0.10, shadowRadius: 12, elevation: 4, minHeight: 90, borderWidth: 1, borderColor: c.glassBorder },
+    shiftStrip: { width: 4, borderRadius: 2, backgroundColor: c.primary, marginRight: 2 },
     shiftBadgeRow: { flexDirection: 'row', marginBottom: 8 },
     inProgressBadge: { backgroundColor: '#D1FAE5', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 20 },
     inProgressText: { fontSize: 10, fontWeight: '700', color: '#059669' },
-    shiftTitle: { fontSize: 17, fontWeight: 'bold', color: c.primaryDark, marginBottom: 4 },
-    shiftTime: { fontSize: 22, fontWeight: 'bold', color: c.primary, marginBottom: 4 },
-    timelineCard: { backgroundColor: c.card, borderRadius: 14, marginHorizontal: 16, marginTop: 12, padding: 16, shadowColor: '#000', shadowOpacity: c.isDark ? 0 : 0.06, shadowRadius: 8, elevation: c.isDark ? 0 : 3, borderWidth: c.isDark ? 1 : 0, borderColor: c.border },
+    shiftTitle: { fontSize: 17, fontWeight: '700', color: c.primaryDark, marginBottom: 4 },
+    shiftTime: { fontSize: 22, fontWeight: '700', color: c.primary, marginBottom: 4 },
+    timelineCard: { backgroundColor: c.card, borderRadius: 18, marginHorizontal: 16, marginTop: 12, padding: 16, shadowColor: c.isDark ? '#000000' : c.primary, shadowOpacity: 0.08, shadowRadius: 10, elevation: 3, borderWidth: 1, borderColor: c.glassBorder },
     restRow: { flexDirection: 'row', alignItems: 'center' },
-    restText: { fontSize: 18, fontWeight: 'bold', color: '#10b981' },
+    restText: { fontSize: 18, fontWeight: '700', color: '#10b981' },
     emptyShift: { color: c.textSub, fontSize: 15, lineHeight: 24, textAlign: 'center', flex: 1 },
-    uploadToggle: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 16, marginTop: 16, backgroundColor: c.card, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14, shadowColor: '#000', shadowOpacity: c.isDark ? 0 : 0.05, shadowRadius: 6, elevation: c.isDark ? 0 : 2, borderWidth: c.isDark ? 1 : 0, borderColor: c.border },
+    uploadToggle: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 16, marginTop: 16, backgroundColor: c.card, borderRadius: 18, paddingHorizontal: 16, paddingVertical: 14, shadowColor: c.isDark ? '#000000' : c.primary, shadowOpacity: 0.08, shadowRadius: 8, elevation: 3, borderWidth: 1, borderColor: c.glassBorder },
     uploadToggleText: { flex: 1, fontSize: 15, fontWeight: '600', color: c.primaryDark },
-    uploadSection: { marginHorizontal: 16, backgroundColor: c.card, borderRadius: 14, padding: 16, marginTop: 2, shadowColor: '#000', shadowOpacity: c.isDark ? 0 : 0.04, shadowRadius: 4, elevation: c.isDark ? 0 : 1, borderWidth: c.isDark ? 1 : 0, borderColor: c.border },
+    uploadSection: { marginHorizontal: 16, backgroundColor: c.card, borderRadius: 18, padding: 16, marginTop: 2, shadowColor: c.isDark ? '#000000' : c.primary, shadowOpacity: 0.06, shadowRadius: 6, elevation: 2, borderWidth: 1, borderColor: c.glassBorder },
     uploadDesc: { fontSize: 13, color: c.textSub, lineHeight: 19, marginBottom: 14 },
     scanBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: c.primaryDark, borderRadius: 12, paddingVertical: 13, paddingHorizontal: 20 },
-    scanBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
+    scanBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
     imagesRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
     thumb: { width: '47%', height: 120, borderRadius: 10, resizeMode: 'cover' },
-    ocrResult: { backgroundColor: c.cardSecondary, borderRadius: 10, padding: 12, marginTop: 12 },
+    ocrResult: { backgroundColor: c.cardSecondary, borderRadius: 12, padding: 12, marginTop: 12 },
     ocrTitle: { fontSize: 12, fontWeight: '700', color: c.textSub, marginBottom: 6 },
     ocrText: { fontSize: 12, color: c.text, lineHeight: 18 },
     syncBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: c.primary, borderRadius: 12, paddingVertical: 13, marginTop: 12 },
-    syncBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
-    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 },
-    modalContent: { backgroundColor: c.isDark ? c.bg : c.card, width: '100%', borderRadius: 16, padding: 20, shadowColor: '#000', shadowOpacity: c.isDark ? 0 : 0.1, shadowRadius: 10, elevation: c.isDark ? 0 : 5, borderWidth: c.isDark ? 1 : 0, borderColor: c.border },
-    modalTitle: { fontSize: 17, fontWeight: 'bold', color: c.primaryDark, marginBottom: 14 },
+    syncBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+    modalContent: { backgroundColor: c.isDark ? c.bg : c.card, width: '100%', borderRadius: 20, padding: 20, shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 14, elevation: 8, borderWidth: 1, borderColor: c.glassBorder },
+    modalTitle: { fontSize: 17, fontWeight: '700', color: c.primaryDark, marginBottom: 14 },
     modalLabel: { fontSize: 12, fontWeight: '700', color: c.textSub, marginBottom: 8 },
     modalInput: { borderWidth: 1, borderColor: c.border, borderRadius: 10, padding: 12, marginBottom: 10, fontSize: 14, color: c.text },
     modalBtn: { flex: 1, padding: 14, borderRadius: 10, alignItems: 'center' },
     typeBtn: { flex: 1, padding: 12, borderRadius: 10, backgroundColor: c.bg, alignItems: 'center' },
     inputLabel: { fontSize: 11, color: c.textSub, fontWeight: '700', marginBottom: 4, letterSpacing: 0.5 },
-    modeBtn: { flex: 1, backgroundColor: c.primary, borderRadius: 12, paddingVertical: 20, alignItems: 'center', justifyContent: 'center', gap: 8, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 1 },
+    modeBtn: { flex: 1, backgroundColor: c.primary, borderRadius: 14, paddingVertical: 20, alignItems: 'center', justifyContent: 'center', gap: 8, shadowColor: c.primary, shadowOpacity: 0.25, shadowRadius: 8, elevation: 4 },
     modeBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
   });
 }
