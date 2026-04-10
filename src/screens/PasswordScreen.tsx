@@ -14,6 +14,16 @@ const PIN_KEY       = 'aerostaff_pin_v1';
 const PIN_ENABLED_KEY = 'aerostaff_pin_enabled_v1';
 
 // Secure helpers — PIN is stored in the OS keychain, not plain AsyncStorage.
+async function getSecurePassword(id: string): Promise<string> {
+  try { return await SecureStore.getItemAsync(`aerostaff_pwd_${id}`) || ''; }
+  catch { return ''; }
+}
+async function setSecurePassword(id: string, pw: string): Promise<void> {
+  await SecureStore.setItemAsync(`aerostaff_pwd_${id}`, pw);
+}
+async function deleteSecurePassword(id: string): Promise<void> {
+  await SecureStore.deleteItemAsync(`aerostaff_pwd_${id}`).catch(() => {});
+}
 async function getSecurePin(): Promise<string | null> {
   try { return await SecureStore.getItemAsync(PIN_KEY); }
   catch { return AsyncStorage.getItem(PIN_KEY); } // fallback for older installs
@@ -147,7 +157,27 @@ export default function PasswordScreen() {
   useEffect(() => {
     (async () => {
       const raw = await AsyncStorage.getItem(PASSWORDS_KEY);
-      if (raw) setEntries(JSON.parse(raw));
+      if (raw) {
+        const parsed = JSON.parse(raw) as PasswordEntry[];
+        let needsMigration = false;
+
+        const populated = await Promise.all(parsed.map(async (e) => {
+          if (e.password === '***') {
+            const securePw = await getSecurePassword(e.id);
+            return { ...e, password: securePw };
+          } else {
+            await setSecurePassword(e.id, e.password);
+            needsMigration = true;
+            return e;
+          }
+        }));
+        setEntries(populated);
+
+        if (needsMigration) {
+          const masked = populated.map(e => ({ ...e, password: '***' }));
+          await AsyncStorage.setItem(PASSWORDS_KEY, JSON.stringify(masked));
+        }
+      }
       const enabled = await AsyncStorage.getItem(PIN_ENABLED_KEY);
       const isEnabled = enabled === 'true';
       setPinEnabled(isEnabled);
@@ -157,7 +187,9 @@ export default function PasswordScreen() {
 
   const persist = useCallback(async (next: PasswordEntry[]) => {
     setEntries(next);
-    await AsyncStorage.setItem(PASSWORDS_KEY, JSON.stringify(next));
+    await Promise.all(next.map(e => setSecurePassword(e.id, e.password)));
+    const masked = next.map(e => ({ ...e, password: '***' }));
+    await AsyncStorage.setItem(PASSWORDS_KEY, JSON.stringify(masked));
   }, []);
 
   // PIN toggle
@@ -239,6 +271,7 @@ export default function PasswordScreen() {
     Alert.alert(t('passwordDeleteTitle'), t('passwordDeleteMsg'), [
       { text: 'Annulla', style: 'cancel' },
       { text: 'Elimina', style: 'destructive', onPress: async () => {
+        await deleteSecurePassword(id);
         await persist(entries.filter(e => e.id !== id));
       }},
     ]);
