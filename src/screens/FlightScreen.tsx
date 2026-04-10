@@ -17,6 +17,7 @@ import { requestWidgetUpdate } from 'react-native-android-widget';
 import { WIDGET_CACHE_KEY } from '../widgets/widgetTaskHandler';
 import type { WidgetData, WidgetFlight } from '../widgets/widgetTaskHandler';
 import { ShiftWidget } from '../widgets/ShiftWidget';
+import { fetchStaffMonitor, lookupStaff, type StaffMonitorData } from '../utils/staffMonitor';
 
 const WearDataSender = Platform.OS === 'android' ? NativeModules.WearDataSender : null;
 
@@ -304,10 +305,25 @@ export default function FlightScreen() {
   const [scheduledCount, setScheduledCount] = useState(0);
   const [pinnedFlightId, setPinnedFlightId] = useState<string | null>(null);
   const [inboundArrivals, setInboundArrivals] = useState<Record<string, number>>({});
+  const [staffData, setStaffData] = useState<StaffMonitorData | null>(null);
 
   // Carica preferenza notifiche salvata
   useEffect(() => {
     AsyncStorage.getItem(NOTIF_ENABLED_KEY).then(v => setNotifsEnabled(v === 'true'));
+  }, []);
+
+  // StaffMonitor: fetch immediato + polling 60s
+  useEffect(() => {
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const data = await fetchStaffMonitor();
+        if (!cancelled) setStaffData(data);
+      } catch { /* rete aeroporto non raggiungibile — silenzioso */ }
+    };
+    poll();
+    const interval = setInterval(poll, 60_000);
+    return () => { cancelled = true; clearInterval(interval); };
   }, []);
 
   const fetchAll = useCallback(async () => {
@@ -762,11 +778,39 @@ export default function FlightScreen() {
               <Text style={[s.statusText, { color: statusColor }]}>{statusText}</Text>
             </View>
           )}
+          {/* ── StaffMonitor live pills ── */}
+          {(() => {
+            if (!staffData) return null;
+            const sf = lookupStaff(staffData, flightNumber, activeTab);
+            if (!sf) return null;
+            const pills: { icon: string; label: string; value: string }[] = [];
+            if (activeTab === 'departures') {
+              if (sf.checkIn) pills.push({ icon: 'desktop-windows', label: 'CI', value: sf.checkIn });
+              if (sf.gate)    pills.push({ icon: 'meeting-room',    label: 'Gate', value: sf.gate });
+              if (sf.stand)   pills.push({ icon: 'local-parking',   label: 'Stand', value: sf.stand });
+            } else {
+              if (sf.stand)   pills.push({ icon: 'local-parking',   label: 'Stand', value: sf.stand });
+              if (sf.belt)    pills.push({ icon: 'luggage',         label: 'Nastro', value: sf.belt });
+            }
+            if (pills.length === 0) return null;
+            return (
+              <View style={s.staffRow}>
+                {pills.map(p => (
+                  <View key={p.label} style={s.staffPill}>
+                    <MaterialIcons name={p.icon as any} size={13} color={colors.primary} />
+                    <Text style={[s.staffPillText, { color: colors.primary }]}>
+                      {p.label}: <Text style={{ fontWeight: 'bold' }}>{p.value}</Text>
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            );
+          })()}
         </View>
       </View>
       </SwipeableFlightCard>
     );
-  }, [activeTab, userShift, s, pinnedFlightId, pinFlight, unpinFlight, inboundArrivals, colors]);
+  }, [activeTab, userShift, s, pinnedFlightId, pinFlight, unpinFlight, inboundArrivals, colors, staffData]);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
@@ -860,6 +904,9 @@ function makeStyles(c: any) {
     pinBannerText: { color: '#fff', fontWeight: 'bold', fontSize: 11, letterSpacing: 0.5 },
     statusPill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20, marginTop: 5 },
     statusText: { fontSize: 10, fontWeight: '700' },
+    staffRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
+    staffPill: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: c.primaryLight, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
+    staffPillText: { fontSize: 11 },
     cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 14 },
     headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
     headerFlightNum: { color: '#fff', fontWeight: '900', fontSize: 15, lineHeight: 18 },
