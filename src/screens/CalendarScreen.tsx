@@ -220,15 +220,13 @@ export default function CalendarScreen() {
     try {
       const { arrivals, departures } = await fetchAirportScheduleRaw(airportCode);
       const allF = [...arrivals, ...departures];
+      const allTs = allF.map(f => f.flight?.time?.scheduled?.arrival || f.flight?.time?.scheduled?.departure).filter(ts => ts != null) as number[];
       Object.keys(localData).forEach(iso => {
         const sh = localData[iso].find(e => e.title.includes('Lavoro'));
         if (sh) {
           const sTS = new Date(sh.startDate).getTime() / 1000;
           const eTS = new Date(sh.endDate).getTime() / 1000;
-          const cnt = allF.filter(f => {
-            const ts = f.flight?.time?.scheduled?.arrival || f.flight?.time?.scheduled?.departure;
-            return ts && ts >= sTS && ts <= eTS;
-          }).length;
+          const cnt = allTs.filter(ts => ts >= sTS && ts <= eTS).length;
           if (dict[iso]) dict[iso].flightCount = cnt; else dict[iso] = { weatherText: 'N/A', weatherIcon: '❓', flightCount: cnt };
         }
       });
