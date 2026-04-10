@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import * as Calendar from 'expo-calendar';
 import * as Notifications from 'expo-notifications';
+import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../context/ThemeContext';
@@ -68,6 +69,7 @@ function SwipeableFlightCard({
   onToggle: () => void;
 }) {
   const translateX = useRef(new Animated.Value(0)).current;
+  const hasTriggeredSelectionHaptic = useRef(false);
   const onToggleRef = useRef(onToggle);
   onToggleRef.current = onToggle;
 
@@ -75,10 +77,20 @@ function SwipeableFlightCard({
     onMoveShouldSetPanResponder: (_, g) =>
       Math.abs(g.dx) > 15 && Math.abs(g.dx) > Math.abs(g.dy) * 1.5,
     onPanResponderMove: (_, g) => {
-      if (g.dx < 0) translateX.setValue(g.dx);
+      if (g.dx < 0) {
+        translateX.setValue(g.dx);
+        if (g.dx < -SWIPE_THRESHOLD && !hasTriggeredSelectionHaptic.current) {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          hasTriggeredSelectionHaptic.current = true;
+        } else if (g.dx >= -SWIPE_THRESHOLD && hasTriggeredSelectionHaptic.current) {
+          hasTriggeredSelectionHaptic.current = false;
+        }
+      }
     },
     onPanResponderRelease: (_, g) => {
+      hasTriggeredSelectionHaptic.current = false;
       if (g.dx < -SWIPE_THRESHOLD) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         Animated.timing(translateX, { toValue: -SWIPE_THRESHOLD, duration: 100, useNativeDriver: true }).start(() => {
           onToggleRef.current();
           Animated.spring(translateX, { toValue: 0, useNativeDriver: true, tension: 120, friction: 10 }).start();
@@ -88,6 +100,7 @@ function SwipeableFlightCard({
       }
     },
     onPanResponderTerminate: () => {
+      hasTriggeredSelectionHaptic.current = false;
       Animated.spring(translateX, { toValue: 0, useNativeDriver: true }).start();
     },
   }), []);
@@ -758,7 +771,7 @@ export default function FlightScreen() {
           onPress={toggleNotifications}
           activeOpacity={0.8}
           accessible
-          accessibilityLabel={notifsEnabled ? 'Disattiva notifiche voli' : 'Attiva notifiche voli'}
+          accessibilityLabel={notifsEnabled ? t('flightNotifAccessDisable') : t('flightNotifAccessEnable')}
           accessibilityRole="button"
         >
           <MaterialIcons
