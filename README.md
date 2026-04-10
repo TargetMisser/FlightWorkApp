@@ -89,8 +89,8 @@ APK files are also published in GitHub Releases when available.
 
 Expected assets:
 
-- `FlightWorkApp-v1.1.0-release.apk`: main Android app
-- `FlightWorkApp-Wear-v1.1.0.apk`: Wear OS companion
+- `FlightWorkApp-v2.1.0-release.apk`: main Android app
+- `FlightWorkApp-Wear-v2.1.0.apk`: Wear OS companion
 
 To install a release:
 

@@ -4,6 +4,7 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAppTheme } from '../context/ThemeContext';
+import { APP_NAME, APP_VERSION } from '../constants/appInfo';
 
 type DrawerItem = {
   id: string;
@@ -68,7 +69,7 @@ export default function DrawerMenu({ visible, onClose, onSelect }: Props) {
               <MaterialIcons name="flight-takeoff" size={22} color="#fff" />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.appName}>AeroStaff Pro</Text>
+              <Text style={styles.appName}>{APP_NAME}</Text>
               <Text style={styles.appSub}>Strumenti</Text>
             </View>
             <TouchableOpacity onPress={onClose} style={styles.closeIconBtn}>
@@ -103,7 +104,7 @@ export default function DrawerMenu({ visible, onClose, onSelect }: Props) {
           {/* Divider */}
           <View style={styles.divider} />
 
-          <Text style={styles.version}>AeroStaff Pro · v1.0</Text>
+          <Text style={styles.version}>{`${APP_NAME} · v${APP_VERSION}`}</Text>
         </Animated.View>
       </View>
     </Modal>

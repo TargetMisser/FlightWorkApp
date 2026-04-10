@@ -7,6 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAppTheme, ThemeMode } from '../context/ThemeContext';
 import { useAirport } from '../context/AirportContext';
+import { APP_NAME, APP_VERSION } from '../constants/appInfo';
 import {
   AIRPORT_PRESETS,
   formatAirportSettingLabel,
@@ -207,7 +208,7 @@ export default function SettingsScreen() {
         </View>
         <View>
           <Text style={[styles.bannerTitle, { color: colors.primaryDark }]}>Impostazioni</Text>
-          <Text style={[styles.bannerSub, { color: colors.textMuted }]}>AeroStaff Pro · v1.1.0</Text>
+          <Text style={[styles.bannerSub, { color: colors.textMuted }]}>{`${APP_NAME} · v${APP_VERSION}`}</Text>
         </View>
       </View>
 
@@ -268,7 +269,7 @@ export default function SettingsScreen() {
       {/* ── Info app ── */}
       <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>APP</Text>
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }, colors.isDark && { elevation: 0, shadowOpacity: 0, borderWidth: 1 }]}>
-        <SettingRow icon="info-outline"    label="Versione"         sublabel="1.1.0"                    type="info" />
+        <SettingRow icon="info-outline"    label="Versione"         sublabel={APP_VERSION}              type="info" />
       </View>
 
         <View style={{ height: 32 }} />
