@@ -12,8 +12,6 @@ import * as Calendar from 'expo-calendar';
 import * as Location from 'expo-location';
 import { useAppTheme, type ThemeColors } from '../context/ThemeContext';
 import ShiftTimeline from '../components/ShiftTimeline';
-import TimeCarouselPicker from '../components/TimeCarouselPicker';
-
 import { getAirlineOps, getAirlineColor } from '../utils/airlineOps';
 import {
   getWritableCalendarId,
@@ -161,12 +159,6 @@ export default function HomeScreen() {
   const [ocrText, setOcrText] = useState('');
   const [processing, setProcessing] = useState(false);
 
-  const [shiftModalOpen, setShiftModalOpen] = useState(false);
-  const [newShiftType, setNewShiftType] = useState<'Lavoro' | 'Riposo'>('Lavoro');
-  const [newStartH, setNewStartH] = useState(8);
-  const [newStartM, setNewStartM] = useState(0);
-  const [newEndH, setNewEndH] = useState(16);
-  const [newEndM, setNewEndM] = useState(0);
   const [uploadMode, setUploadMode] = useState<'image' | 'manual' | null>(null);
   const [pinnedFlight, setPinnedFlight] = useState<any>(null);
 
@@ -198,50 +190,6 @@ export default function HomeScreen() {
     const interval = setInterval(loadPinned, 30_000);
     return () => clearInterval(interval);
   }, []);
-
-  const openModifyModal = () => {
-    if (shiftEvent) {
-      setNewShiftType(isRest ? 'Riposo' : 'Lavoro');
-      const start = new Date(shiftEvent.startDate);
-      const end = new Date(shiftEvent.endDate);
-      setNewStartH(start.getHours());
-      setNewStartM(start.getMinutes());
-      setNewEndH(end.getHours());
-      setNewEndM(end.getMinutes());
-    } else {
-      setNewShiftType('Lavoro');
-      setNewStartH(8); setNewStartM(0); setNewEndH(16); setNewEndM(0);
-    }
-    setShiftModalOpen(true);
-  };
-
-  const saveManualShift = async () => {
-    const { status } = await Calendar.requestCalendarPermissionsAsync();
-    if (status !== 'granted') { Alert.alert(t('homePermDenied'), t('homeCalendarAuth')); return; }
-    try {
-      const calendarId = await getWritableCalendarId();
-      if (!calendarId) { Alert.alert('Errore', t('homeNoWritableCalendar')); return; }
-
-      const todayDate = new Date();
-      const y = todayDate.getFullYear();
-      const m = todayDate.getMonth() + 1;
-      const d = todayDate.getDate();
-      const date = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-
-      await replaceShiftForDate({
-        calendarId,
-        date,
-        type: newShiftType === 'Riposo' ? 'rest' : 'work',
-        startTime: newShiftType === 'Lavoro' ? `${String(newStartH).padStart(2, '0')}:${String(newStartM).padStart(2, '0')}` : undefined,
-        endTime: newShiftType === 'Lavoro' ? `${String(newEndH).padStart(2, '0')}:${String(newEndM).padStart(2, '0')}` : undefined,
-        titles: HOME_SHIFT_TITLES,
-        restTiming: HOME_REST_TIMING,
-      });
-
-      setShiftModalOpen(false);
-      fetchShift(true);
-    } catch (e: any) { Alert.alert('Errore', e.message); }
-  };
 
   const fetchShift = async (silent = false) => {
     if (!silent) setLoadingShift(true);
@@ -417,15 +365,6 @@ export default function HomeScreen() {
         )}
       </View>
 
-      {/* Pulsante modifica turno */}
-      <TouchableOpacity
-        style={[s.modeBtn, { marginHorizontal: 16, marginTop: 10 }]}
-        onPress={openModifyModal}
-      >
-        <MaterialIcons name="edit" size={18} color="#fff" />
-        <Text style={s.modeBtnText}>{shiftEvent ? 'Modifica turno' : 'Aggiungi turno'}</Text>
-      </TouchableOpacity>
-
       {/* Timeline voli nel turno — inline */}
       {shiftEvent && isWork && (
         <View style={s.timelineCard}>
@@ -439,70 +378,6 @@ export default function HomeScreen() {
         </View>
       )}
 
-      {/* ─── Manual Shift Modal ─── */}
-      <Modal visible={shiftModalOpen} transparent animationType="slide" statusBarTranslucent onRequestClose={() => setShiftModalOpen(false)}>
-        <View style={s.modalOverlay}>
-          <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => setShiftModalOpen(false)} />
-          <View style={[s.modalContent, { backgroundColor: colors.isDark ? '#1E293B' : '#FFFFFF' }]}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <Text style={[s.modalTitle, { color: colors.text }]}>{shiftEvent ? 'Modifica turno' : 'Aggiungi turno'}</Text>
-              <TouchableOpacity onPress={() => setShiftModalOpen(false)}>
-                <MaterialIcons name="close" size={24} color={colors.textSub} />
-              </TouchableOpacity>
-            </View>
-
-            {/* Tipo */}
-            <Text style={[s.inputLabel, { color: colors.textSub }]}>Tipo turno</Text>
-            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 16 }}>
-              {(['Lavoro', 'Riposo'] as const).map(st => (
-                <TouchableOpacity
-                  key={st}
-                  style={[s.typeBtn, { borderColor: colors.border, borderWidth: 1 }, newShiftType === st && { backgroundColor: colors.primary, borderColor: colors.primary }]}
-                  onPress={() => setNewShiftType(st)}
-                >
-                  <Text style={{ color: newShiftType === st ? '#fff' : colors.text, fontWeight: '700' }}>
-                    {st === 'Lavoro' ? 'Lavoro' : 'Riposo'}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            {/* Orari (solo lavoro) */}
-            {newShiftType === 'Lavoro' && (
-              <>
-                <Text style={[s.inputLabel, { color: colors.textSub }]}>Inizio</Text>
-                <TimeCarouselPicker
-                  hour={newStartH}
-                  minute={newStartM}
-                  onHourChange={setNewStartH}
-                  onMinuteChange={setNewStartM}
-                  accentColor={colors.primary}
-                  textColor={colors.text}
-                  mutedColor={colors.textMuted}
-                  bgColor={colors.isDark ? '#1E293B' : '#F3F4F6'}
-                  borderColor={colors.border}
-                />
-                <Text style={[s.inputLabel, { color: colors.textSub, marginTop: 16 }]}>Fine</Text>
-                <TimeCarouselPicker
-                  hour={newEndH}
-                  minute={newEndM}
-                  onHourChange={setNewEndH}
-                  onMinuteChange={setNewEndM}
-                  accentColor={colors.primary}
-                  textColor={colors.text}
-                  mutedColor={colors.textMuted}
-                  bgColor={colors.isDark ? '#1E293B' : '#F3F4F6'}
-                  borderColor={colors.border}
-                />
-              </>
-            )}
-
-            <TouchableOpacity style={[s.modalBtn, { backgroundColor: colors.primary, marginTop: 16 }]} onPress={saveManualShift}>
-              <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>Salva turno</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </ScrollView>
   );
 }

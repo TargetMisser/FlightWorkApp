@@ -496,6 +496,7 @@ export default function CalendarScreen() {
               </TouchableOpacity>
             </View>
 
+            <ScrollView nestedScrollEnabled bounces={false} showsVerticalScrollIndicator={false}>
             {/* Data */}
             <Text style={[s.manualLabel, { color: colors.textSub }]}>{t('calDataLabel')}</Text>
             <TextInput
@@ -556,6 +557,7 @@ export default function CalendarScreen() {
             <TouchableOpacity style={[s.primaryBtn, { backgroundColor: colors.primary, marginTop: 16 }]} onPress={saveManualShift}>
               <Text style={s.primaryBtnText}>{t('calSaveShift')}</Text>
             </TouchableOpacity>
+            </ScrollView>
             </View>
           </View>
         </View>
