@@ -9,24 +9,83 @@ import {
 } from './airportSettings';
 
 const FETCH_TIMEOUT = 10000; // 10 seconds
+const CACHE_TTL = 120_000; // 2 minutes
 
+// In-memory cache to avoid duplicate FR24 requests (e.g. FlightScreen + autoNotifications)
+let _cache: { data: FR24ScheduleRaw; ts: number; code: string } | null = null;
+
+// ─── FR24 flight data types ──────────────────────────────────────────────────
+export type FR24FlightTime = {
+  scheduled?: { departure?: number; arrival?: number };
+  real?: { departure?: number; arrival?: number };
+  estimated?: { departure?: number; arrival?: number };
+};
+
+export type FR24AirportCode = {
+  iata?: string;
+  icao?: string;
+};
+
+export type FR24FlightAirport = {
+  code?: FR24AirportCode;
+  name?: string;
+  position?: { latitude?: number; longitude?: number };
+};
+
+export type FR24FlightStatus = {
+  text?: string;
+  type?: string;
+  generic?: { status?: { text?: string; color?: string } };
+};
+
+export type FR24FlightIdentification = {
+  number?: { default?: string; alternative?: string };
+  callsign?: string;
+};
+
+export type FR24FlightAirline = {
+  name?: string;
+  code?: { iata?: string; icao?: string };
+};
+
+export type FR24FlightAircraft = {
+  model?: { code?: string; text?: string };
+  registration?: string;
+  hex?: string;
+};
+
+export type FR24FlightData = {
+  flight?: {
+    identification?: FR24FlightIdentification;
+    status?: FR24FlightStatus;
+    airline?: FR24FlightAirline;
+    airport?: {
+      origin?: FR24FlightAirport;
+      destination?: FR24FlightAirport;
+    };
+    time?: FR24FlightTime;
+    aircraft?: FR24FlightAircraft;
+  };
+};
+
+// ─── Schedule result types ───────────────────────────────────────────────────
 export type FR24Schedule = {
-  arrivals: any[];
-  departures: any[];
+  arrivals: FR24FlightData[];
+  departures: FR24FlightData[];
   airportCode: string;
   airport: AirportInfo;
 };
 
 export type FR24ScheduleRaw = {
-  allArrivals: any[];
-  allDepartures: any[];
-  arrivals: any[];
-  departures: any[];
+  allArrivals: FR24FlightData[];
+  allDepartures: FR24FlightData[];
+  arrivals: FR24FlightData[];
+  departures: FR24FlightData[];
   airportCode: string;
   airport: AirportInfo;
 };
 
-function filterAirlines(data: any[]) {
+function filterAirlines(data: FR24FlightData[]) {
   return data.filter(item =>
     ALLOWED_AIRLINES.some(key => (item.flight?.airline?.name || '').toLowerCase().includes(key)),
   );
@@ -72,11 +131,17 @@ export async function fetchAirportSchedule(code?: string): Promise<FR24Schedule>
  * (e.g. inbound arrival map by registration).
  */
 export async function fetchAirportScheduleRaw(code?: string): Promise<FR24ScheduleRaw> {
+  const airportCode = await resolveAirportCode(code);
+
+  // Return cached data if fresh enough
+  if (_cache && _cache.code === airportCode && Date.now() - _cache.ts < CACHE_TTL) {
+    return _cache.data;
+  }
+
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
 
   try {
-    const airportCode = await resolveAirportCode(code);
     const res = await fetch(buildFr24ScheduleUrl(airportCode), {
       headers: { 'User-Agent': 'Mozilla/5.0' },
       signal: controller.signal,
@@ -86,7 +151,7 @@ export async function fetchAirportScheduleRaw(code?: string): Promise<FR24Schedu
     const allArrivals = json.result?.response?.airport?.pluginData?.schedule?.arrivals?.data || [];
     const allDepartures = json.result?.response?.airport?.pluginData?.schedule?.departures?.data || [];
 
-    return {
+    const data: FR24ScheduleRaw = {
       allArrivals,
       allDepartures,
       arrivals: filterAirlines(allArrivals),
@@ -94,6 +159,9 @@ export async function fetchAirportScheduleRaw(code?: string): Promise<FR24Schedu
       airportCode,
       airport: getAirportInfo(airportCode),
     };
+
+    _cache = { data, ts: Date.now(), code: airportCode };
+    return data;
   } finally {
     clearTimeout(timer);
   }

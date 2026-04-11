@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useDynamicTheme } from '../hooks/useDynamicTheme';
 
@@ -156,18 +156,19 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     await AsyncStorage.setItem(STORAGE_KEY, m);
   }, []);
 
-  // Calcola colori attivi
-  let colors: ThemeColors = LIGHT;
-  if (mode === 'dark') {
-    colors = DARK;
-  } else if (mode === 'weather') {
-    colors = weatherToColors(weatherTheme.background, weatherTheme.icon, weatherTheme.description);
-  }
+  // Calcola colori attivi (memoizzato per evitare re-render a cascata)
+  const colors = useMemo<ThemeColors>(() => {
+    if (mode === 'dark') return DARK;
+    if (mode === 'weather') return weatherToColors(weatherTheme.background, weatherTheme.icon, weatherTheme.description);
+    return LIGHT;
+  }, [mode, weatherTheme]);
 
   const isLoading = !ready || (mode === 'weather' && loadingTheme);
 
+  const value = useMemo(() => ({ mode, colors, setMode, isLoading }), [mode, colors, setMode, isLoading]);
+
   return (
-    <ThemeContext.Provider value={{ mode, colors, setMode, isLoading }}>
+    <ThemeContext.Provider value={value}>
       {children}
     </ThemeContext.Provider>
   );

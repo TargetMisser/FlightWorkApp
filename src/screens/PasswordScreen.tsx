@@ -9,11 +9,12 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
 
-const PASSWORDS_KEY = 'aerostaff_passwords_v1';
+const PASSWORDS_KEY = 'aerostaff_passwords_v2'; // v2: migrated to SecureStore
+const PASSWORDS_KEY_LEGACY = 'aerostaff_passwords_v1'; // v1: was plain AsyncStorage
 const PIN_KEY       = 'aerostaff_pin_v1';
 const PIN_ENABLED_KEY = 'aerostaff_pin_enabled_v1';
 
-// Secure helpers — PIN is stored in the OS keychain, not plain AsyncStorage.
+// Secure helpers — passwords and PIN are stored in the OS keychain.
 async function getSecurePin(): Promise<string | null> {
   try { return await SecureStore.getItemAsync(PIN_KEY); }
   catch { return AsyncStorage.getItem(PIN_KEY); } // fallback for older installs
@@ -24,6 +25,56 @@ async function setSecurePin(pin: string): Promise<void> {
 async function deleteSecurePin(): Promise<void> {
   await SecureStore.deleteItemAsync(PIN_KEY).catch(() => {});
   await AsyncStorage.removeItem(PIN_KEY).catch(() => {}); // clean up legacy
+}
+
+// SecureStore has a 2KB limit per key — chunk if needed
+const CHUNK_SIZE = 1800; // safe limit per SecureStore value
+
+async function getSecurePasswords(): Promise<string | null> {
+  try {
+    // Try single key first
+    const single = await SecureStore.getItemAsync(PASSWORDS_KEY);
+    if (single) return single;
+    // Try chunked
+    const chunk0 = await SecureStore.getItemAsync(`${PASSWORDS_KEY}_0`);
+    if (!chunk0) {
+      // Migrate from legacy AsyncStorage (v1)
+      const legacy = await AsyncStorage.getItem(PASSWORDS_KEY_LEGACY);
+      if (legacy) {
+        await setSecurePasswords(legacy);
+        await AsyncStorage.removeItem(PASSWORDS_KEY_LEGACY);
+        return legacy;
+      }
+      return null;
+    }
+    let full = '';
+    for (let i = 0; ; i++) {
+      const chunk = await SecureStore.getItemAsync(`${PASSWORDS_KEY}_${i}`);
+      if (!chunk) break;
+      full += chunk;
+    }
+    return full;
+  } catch {
+    // Last resort fallback
+    return AsyncStorage.getItem(PASSWORDS_KEY_LEGACY);
+  }
+}
+
+async function setSecurePasswords(json: string): Promise<void> {
+  if (json.length <= CHUNK_SIZE) {
+    await SecureStore.setItemAsync(PASSWORDS_KEY, json);
+    // Clean up old chunks if any
+    for (let i = 0; ; i++) {
+      try { await SecureStore.deleteItemAsync(`${PASSWORDS_KEY}_${i}`); } catch { break; }
+    }
+  } else {
+    // Chunk mode
+    await SecureStore.deleteItemAsync(PASSWORDS_KEY).catch(() => {});
+    const chunks = Math.ceil(json.length / CHUNK_SIZE);
+    for (let i = 0; i < chunks; i++) {
+      await SecureStore.setItemAsync(`${PASSWORDS_KEY}_${i}`, json.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE));
+    }
+  }
 }
 
 type PasswordEntry = {
@@ -143,10 +194,10 @@ export default function PasswordScreen() {
   const [pinEnabled, setPinEnabled] = useState(false);
   const [pinMode, setPinMode]       = useState<'unlock' | 'setup' | null>(null);
 
-  // Load on mount
+  // Load on mount (from SecureStore, with legacy AsyncStorage migration)
   useEffect(() => {
     (async () => {
-      const raw = await AsyncStorage.getItem(PASSWORDS_KEY);
+      const raw = await getSecurePasswords();
       if (raw) setEntries(JSON.parse(raw));
       const enabled = await AsyncStorage.getItem(PIN_ENABLED_KEY);
       const isEnabled = enabled === 'true';
@@ -157,7 +208,7 @@ export default function PasswordScreen() {
 
   const persist = useCallback(async (next: PasswordEntry[]) => {
     setEntries(next);
-    await AsyncStorage.setItem(PASSWORDS_KEY, JSON.stringify(next));
+    await setSecurePasswords(JSON.stringify(next));
   }, []);
 
   // PIN toggle

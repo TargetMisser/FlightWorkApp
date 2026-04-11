@@ -3,6 +3,7 @@ import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getAirlineOps } from './airlineOps';
 import { fetchAirportScheduleRaw } from './fr24api';
+import { getWritableCalendarId } from './shiftCalendar';
 import {
   showShiftOngoingNotification,
   dismissShiftOngoingNotification,
@@ -43,13 +44,12 @@ export async function autoScheduleNotifications(): Promise<number> {
     const { status: calStatus } = await Calendar.requestCalendarPermissionsAsync();
     if (calStatus !== 'granted') return 0;
 
-    const cals = await Calendar.getCalendarsAsync(Calendar.EntityTypes.EVENT);
-    const cal = cals.find(c => c.allowsModifications && c.isPrimary) || cals.find(c => c.allowsModifications);
-    if (!cal) return 0;
+    const calId = await getWritableCalendarId();
+    if (!calId) return 0;
 
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const endOfDay = new Date(today); endOfDay.setHours(23, 59, 59, 999);
-    const events = await Calendar.getEventsAsync([cal.id], today, endOfDay);
+    const events = await Calendar.getEventsAsync([calId], today, endOfDay);
     const shiftEvent = events.find(e => e.title.includes('Lavoro'));
     if (!shiftEvent) {
       await dismissShiftOngoingNotification();

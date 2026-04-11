@@ -1,60 +1,24 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  ActivityIndicator, Alert, Image, Modal, TextInput,
+  ActivityIndicator,
   Platform, UIManager
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialIcons } from '@expo/vector-icons';
-import { WebView } from 'react-native-webview';
-import * as ImagePicker from 'expo-image-picker';
 import * as Calendar from 'expo-calendar';
 import * as Location from 'expo-location';
 import { useAppTheme, type ThemeColors } from '../context/ThemeContext';
 import ShiftTimeline from '../components/ShiftTimeline';
 import { getAirlineOps, getAirlineColor } from '../utils/airlineOps';
-import {
-  getWritableCalendarId,
-  replaceShiftForDate,
-  replaceShiftsForRange,
-} from '../utils/shiftCalendar';
+import { getWritableCalendarId } from '../utils/shiftCalendar';
 import { useLanguage } from '../context/LanguageContext';
-
-const GOLD = '#F59E0B';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
 const PINNED_FLIGHT_KEY = 'pinned_flight_v1';
-const HOME_REST_TIMING = { startHour: 12, startMinute: 0, endHour: 14, endMinute: 0, allDay: true };
-
-const weatherMap: Record<number, { text: string; icon: string }> = {
-  0: { text: 'Sereno', icon: '☀️' }, 1: { text: 'Poco Nuvoloso', icon: '🌤️' },
-  2: { text: 'Nuvoloso', icon: '⛅' }, 3: { text: 'Coperto', icon: '☁️' },
-  45: { text: 'Nebbia', icon: '🌫️' }, 61: { text: 'Pioggia Leggera', icon: '🌦️' },
-  63: { text: 'Pioggia', icon: '🌧️' }, 80: { text: 'Rovesci', icon: '🌧️' },
-};
-
-// months comes from useLanguage() context
-
-const engineHtml = `<!DOCTYPE html><html lang="it"><head>
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script></head>
-<body style="background-color:transparent;"><script>
-window.runTesseract = async function(base64JsonStr) {
-  try {
-    const images = JSON.parse(base64JsonStr);
-    let combinedText = '';
-    for (let i = 0; i < images.length; i++) {
-      const ret = await Tesseract.recognize(images[i], 'ita+eng');
-      combinedText += ret.data.text + '\\n\\n';
-    }
-    window.ReactNativeWebView.postMessage(JSON.stringify({ success: true, text: combinedText }));
-  } catch (e) {
-    window.ReactNativeWebView.postMessage(JSON.stringify({ success: false, error: e.message || e.toString() }));
-  }
-};
-</script></body></html>`;
 
 function PinnedFlightCard({ item, colors }: { item: any; colors: any }) {
   const { t, locale } = useLanguage();
@@ -149,20 +113,11 @@ function PinnedFlightCard({ item, colors }: { item: any; colors: any }) {
 export default function HomeScreen() {
   const { colors } = useAppTheme();
   const { t, months, locale, weatherMap } = useLanguage();
-  const HOME_SHIFT_TITLES = { work: t('homeShiftWork'), rest: '🌴 Riposo' };
   const today = new Date();
   const [shiftEvent, setShiftEvent] = useState<any>(null);
   const [weather, setWeather] = useState<{ text: string; icon: string; temp: number } | null>(null);
   const [loadingShift, setLoadingShift] = useState(true);
-  const [uploadOpen, setUploadOpen] = useState(false);
-  const [imageList, setImageList] = useState<string[]>([]);
-  const [ocrText, setOcrText] = useState('');
-  const [processing, setProcessing] = useState(false);
-
-  const [uploadMode, setUploadMode] = useState<'image' | 'manual' | null>(null);
   const [pinnedFlight, setPinnedFlight] = useState<any>(null);
-
-  const webViewRef = useRef<WebView>(null);
 
   useEffect(() => { fetchShift(); }, []);
   useEffect(() => { fetchWeather(); }, []);
@@ -196,13 +151,12 @@ export default function HomeScreen() {
     try {
       const { status } = await Calendar.requestCalendarPermissionsAsync();
       if (status !== 'granted') { setLoadingShift(false); return; }
-      const cals = await Calendar.getCalendarsAsync(Calendar.EntityTypes.EVENT);
-      const cal = cals.find(c => c.allowsModifications && c.isPrimary) || cals.find(c => c.allowsModifications);
-      if (!cal) { setLoadingShift(false); return; }
+      const calId = await getWritableCalendarId();
+      if (!calId) { setLoadingShift(false); return; }
       const d = new Date();
       d.setHours(0, 0, 0, 0);
       const dEnd = new Date(); dEnd.setHours(23, 59, 59, 999);
-      const events = await Calendar.getEventsAsync([cal.id], d, dEnd);
+      const events = await Calendar.getEventsAsync([calId], d, dEnd);
       const shift = events.find(e => e.title.includes('Lavoro') || e.title.includes('Riposo'));
       setShiftEvent(shift || null);
     } catch (e) { if (__DEV__) console.error('[shift]', e); } finally { setLoadingShift(false); }
@@ -222,97 +176,12 @@ export default function HomeScreen() {
     } catch (e) { if (__DEV__) console.warn('[weather]', e); }
   };
 
-  const pickImage = async () => {
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsMultipleSelection: true, quality: 1, base64: true,
-      });
-      if (!result.canceled && result.assets?.length > 0) {
-        setImageList(result.assets.map(a => a.uri));
-        setProcessing(true); setOcrText('');
-        const base64List = result.assets.map(a => `data:image/jpeg;base64,${a.base64}`);
-        const base64Json = JSON.stringify(base64List);
-        // Use postMessage pattern to avoid script-injection risks with injectJavaScript
-        webViewRef.current?.injectJavaScript(`
-          if(window.runTesseract){
-            window.runTesseract(${JSON.stringify(base64Json)});
-          } else {
-            window.ReactNativeWebView.postMessage(JSON.stringify({success:false,error:'OCR non pronto'}));
-          }
-          true;
-        `);
-      }
-    } catch (e) { if (__DEV__) console.error('[imagePicker]', e); setProcessing(false); }
-  };
-
-  const handleWebViewMessage = (event: any) => {
-    try {
-      const r = JSON.parse(event.nativeEvent.data);
-      if (r.success) setOcrText(r.text);
-      else Alert.alert('Errore riconoscimento testo', r.error || 'Prova con un\'immagine più nitida o meglio illuminata.');
-    } catch (e) { if (__DEV__) console.error('[ocrMessage]', e); } finally { setProcessing(false); }
-  };
-
-  const parseAndSave = async () => {
-    const { status } = await Calendar.requestCalendarPermissionsAsync();
-    if (status !== 'granted') { Alert.alert('Permesso negato', 'Autorizza il calendario.'); return; }
-    try {
-      const calendarId = await getWritableCalendarId();
-      if (!calendarId) { Alert.alert('Errore', 'Nessun calendario scrivibile.'); return; }
-      const norText = ocrText.replace(/[OoQ]/g, '0').replace(/[Il|]/g, '1');
-      const dateRegex = /\b(\d{2})[\/\-](\d{2})[\/\-](\d{4})\b/g;
-      const dates: any[] = []; let m;
-      while ((m = dateRegex.exec(norText)) !== null) dates.push({ day: +m[1], month: +m[2]-1, year: +m[3], raw: m[0] });
-      const safeText = norText.replace(/\b20\d{2}\b/g, ' ANNO ');
-      const shiftRegex = /\b([01]?\d|2\d)[.,:]?(\d{2})\s*[-–—_~|]+\s*([01]?\d|2\d)[.,:]?(\d{2})\b|\b(R|RIP|RIP0S0|R1P0S0|R1POSO)\b/g;
-      const shifts: any[] = [];
-      while ((m = shiftRegex.exec(safeText)) !== null) {
-        if (m[5]) shifts.push({ isRest: true, raw: m[0] });
-        else shifts.push({ isRest: false, startH: +m[1], startM: +m[2], endH: +m[3], endM: +m[4], raw: m[0] });
-      }
-
-      const parsedShifts = [];
-      for (let i = 0; i < Math.min(dates.length, shifts.length); i++) {
-        const d = dates[i];
-        const s = shifts[i];
-        const date = `${d.year}-${String(d.month + 1).padStart(2, '0')}-${String(d.day).padStart(2, '0')}`;
-
-        if (s.isRest) {
-          parsedShifts.push({ date, type: 'rest' as const });
-        } else {
-          parsedShifts.push({
-            date,
-            type: 'work' as const,
-            startTime: `${String(s.startH).padStart(2, '0')}:${String(s.startM).padStart(2, '0')}`,
-            endTime: `${String(s.endH).padStart(2, '0')}:${String(s.endM).padStart(2, '0')}`,
-          });
-        }
-      }
-
-      const saved = await replaceShiftsForRange({
-        calendarId,
-        shifts: parsedShifts,
-        titles: HOME_SHIFT_TITLES,
-        restTiming: HOME_REST_TIMING,
-      });
-
-      Alert.alert(saved > 0 ? t('homeShiftSynced') : t('homeNoSchedule'), saved > 0 ? `${saved} turni salvati.` : `Date: ${dates.length}, Orari: ${shifts.length}`);
-      if (saved > 0) fetchShift(true);
-    } catch (e: any) { Alert.alert(t('homeCalErr'), e.message); }
-  };
-
   const isRest = shiftEvent?.title?.includes('Riposo');
   const isWork = shiftEvent?.title?.includes('Lavoro');
   const s = useMemo(() => makeStyles(colors), [colors]);
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ paddingBottom: 96 }}>
-      {/* Hidden OCR WebView */}
-      <View style={s.hiddenWV}>
-        <WebView ref={webViewRef} source={{ html: engineHtml }} onMessage={handleWebViewMessage} javaScriptEnabled />
-      </View>
-
       {/* Top cards row: Weather + Date */}
       <View style={s.topRow}>
         <View style={s.weatherCard}>
@@ -384,7 +253,6 @@ export default function HomeScreen() {
 
 function makeStyles(c: ThemeColors) {
   return StyleSheet.create({
-    hiddenWV: { height: 1, width: 1, opacity: 0, position: 'absolute', top: -100 },
     topRow: { flexDirection: 'row', gap: 12, padding: 16, paddingBottom: 8 },
     weatherCard: { flex: 1, backgroundColor: c.card, borderRadius: 18, padding: 16, alignItems: 'center', shadowColor: c.isDark ? '#000000' : c.primary, shadowOpacity: 0.12, shadowRadius: 12, elevation: 4, borderWidth: 1, borderColor: c.glassBorder },
     weatherEmoji: { fontSize: 28, marginBottom: 4 },
@@ -406,28 +274,5 @@ function makeStyles(c: ThemeColors) {
     restRow: { flexDirection: 'row', alignItems: 'center' },
     restText: { fontSize: 18, fontWeight: '700', color: '#10b981' },
     emptyShift: { color: c.textSub, fontSize: 15, lineHeight: 24, textAlign: 'center', flex: 1 },
-    uploadToggle: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 16, marginTop: 16, backgroundColor: c.card, borderRadius: 18, paddingHorizontal: 16, paddingVertical: 14, shadowColor: c.isDark ? '#000000' : c.primary, shadowOpacity: 0.08, shadowRadius: 8, elevation: 3, borderWidth: 1, borderColor: c.glassBorder },
-    uploadToggleText: { flex: 1, fontSize: 15, fontWeight: '600', color: c.primaryDark },
-    uploadSection: { marginHorizontal: 16, backgroundColor: c.card, borderRadius: 18, padding: 16, marginTop: 2, shadowColor: c.isDark ? '#000000' : c.primary, shadowOpacity: 0.06, shadowRadius: 6, elevation: 2, borderWidth: 1, borderColor: c.glassBorder },
-    uploadDesc: { fontSize: 13, color: c.textSub, lineHeight: 19, marginBottom: 14 },
-    scanBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: c.primaryDark, borderRadius: 12, paddingVertical: 13, paddingHorizontal: 20 },
-    scanBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
-    imagesRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
-    thumb: { width: '47%', height: 120, borderRadius: 10, resizeMode: 'cover' },
-    ocrResult: { backgroundColor: c.cardSecondary, borderRadius: 12, padding: 12, marginTop: 12 },
-    ocrTitle: { fontSize: 12, fontWeight: '700', color: c.textSub, marginBottom: 6 },
-    ocrText: { fontSize: 12, color: c.text, lineHeight: 18 },
-    syncBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: c.primary, borderRadius: 12, paddingVertical: 13, marginTop: 12 },
-    syncBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
-    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center', padding: 20 },
-    modalContent: { backgroundColor: c.isDark ? c.bg : c.card, width: '100%', borderRadius: 20, padding: 20, shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 14, elevation: 8, borderWidth: 1, borderColor: c.glassBorder },
-    modalTitle: { fontSize: 17, fontWeight: '700', color: c.primaryDark, marginBottom: 14 },
-    modalLabel: { fontSize: 12, fontWeight: '700', color: c.textSub, marginBottom: 8 },
-    modalInput: { borderWidth: 1, borderColor: c.border, borderRadius: 10, padding: 12, marginBottom: 10, fontSize: 14, color: c.text },
-    modalBtn: { flex: 1, padding: 14, borderRadius: 10, alignItems: 'center' },
-    typeBtn: { flex: 1, padding: 12, borderRadius: 10, backgroundColor: c.bg, alignItems: 'center' },
-    inputLabel: { fontSize: 11, color: c.textSub, fontWeight: '700', marginBottom: 4, letterSpacing: 0.5 },
-    modeBtn: { flex: 1, backgroundColor: c.primary, borderRadius: 14, paddingVertical: 20, alignItems: 'center', justifyContent: 'center', gap: 8, shadowColor: c.primary, shadowOpacity: 0.25, shadowRadius: 8, elevation: 4 },
-    modeBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
   });
 }

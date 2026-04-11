@@ -371,7 +371,7 @@ export default function FlightScreen() {
               return (ciO <= shiftToday!.end && ciC >= shiftToday!.start) || (gO <= shiftToday!.end && gC >= shiftToday!.start);
             })
             .map(item => {
-              const ts = item.flight.time.scheduled.departure;
+              const ts = item.flight?.time?.scheduled?.departure ?? 0;
               const airline = item.flight?.airline?.name || 'Sconosciuta';
               const ops = getAirlineOps(airline);
               const fn = item.flight?.identification?.number?.default || 'N/A';

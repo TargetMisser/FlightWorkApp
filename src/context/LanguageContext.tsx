@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   translations, MONTHS, WEEKDAYS_SHORT, WEEKDAYS_LONG, LOCALE_MAP, LANGUAGES, WEATHER_MAP,
@@ -43,7 +43,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     [lang]
   );
 
-  const value: LanguageContextValue = {
+  const value = useMemo<LanguageContextValue>(() => ({
     lang, setLang, t,
     months: MONTHS[lang],
     weekDaysShort: WEEKDAYS_SHORT[lang],
@@ -51,7 +51,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     locale: LOCALE_MAP[lang],
     weatherMap: WEATHER_MAP[lang],
     languages: LANGUAGES,
-  };
+  }), [lang, setLang, t]);
 
   return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;
 }
