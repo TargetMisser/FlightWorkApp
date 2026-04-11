@@ -230,7 +230,13 @@ export default function HomeScreen() {
             <Text style={s.restText}>{t('homeRestDay')}</Text>
           </View>
         ) : (
-          <Text style={s.emptyShift}>{t('homeNoShift')}</Text>
+          <View style={s.emptyShiftWrap}>
+            <View style={s.emptyIconCircle}>
+              <MaterialIcons name="event-busy" size={32} color={colors.primary} />
+            </View>
+            <Text style={s.emptyShiftTitle}>{t('homeNoShift')}</Text>
+            <Text style={s.emptyShiftSub}>Controlla la pagina Turni per aggiornamenti</Text>
+          </View>
         )}
       </View>
 
@@ -254,25 +260,28 @@ export default function HomeScreen() {
 function makeStyles(c: ThemeColors) {
   return StyleSheet.create({
     topRow: { flexDirection: 'row', gap: 12, padding: 16, paddingBottom: 8 },
-    weatherCard: { flex: 1, backgroundColor: c.card, borderRadius: 18, padding: 16, alignItems: 'center', shadowColor: c.isDark ? '#000000' : c.primary, shadowOpacity: 0.12, shadowRadius: 12, elevation: 4, borderWidth: 1, borderColor: c.glassBorder },
+    weatherCard: { flex: 1, backgroundColor: c.card, borderRadius: 18, padding: 16, alignItems: 'center', shadowColor: c.isDark ? '#000000' : c.primary, shadowOpacity: c.isDark ? 0 : 0.15, shadowRadius: 16, shadowOffset: { width: 0, height: 4 }, elevation: c.isDark ? 0 : 6, borderWidth: 1, borderColor: c.glassBorder },
     weatherEmoji: { fontSize: 28, marginBottom: 4 },
     weatherTemp: { fontSize: 28, fontWeight: '700', color: c.primaryDark },
     weatherDesc: { fontSize: 11, color: c.textSub, textAlign: 'center', marginTop: 2 },
-    dateCard: { width: 90, backgroundColor: c.primaryDark, borderRadius: 18, padding: 14, alignItems: 'center', justifyContent: 'center', shadowColor: c.isDark ? '#000000' : c.primary, shadowOpacity: 0.30, shadowRadius: 12, elevation: 6 },
+    dateCard: { width: 90, backgroundColor: c.primaryDark, borderRadius: 18, padding: 14, alignItems: 'center', justifyContent: 'center', shadowColor: c.isDark ? '#000000' : c.primary, shadowOpacity: c.isDark ? 0 : 0.15, shadowRadius: 16, shadowOffset: { width: 0, height: 4 }, elevation: c.isDark ? 0 : 6 },
     dateToday: { fontSize: 10, color: 'rgba(255,255,255,0.6)', letterSpacing: 1.5, fontWeight: '700' },
     dateNum: { fontSize: 36, fontWeight: '700', color: '#fff', lineHeight: 40 },
     dateMonth: { fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 2 },
-    sectionTitle: { fontSize: 13, fontWeight: '700', color: c.textSub, letterSpacing: 0.5, marginHorizontal: 16, marginTop: 16, marginBottom: 8 },
-    shiftCard: { backgroundColor: c.card, borderRadius: 18, marginHorizontal: 16, padding: 16, flexDirection: 'row', gap: 14, shadowColor: c.isDark ? '#000000' : c.primary, shadowOpacity: 0.10, shadowRadius: 12, elevation: 4, minHeight: 90, borderWidth: 1, borderColor: c.glassBorder },
+    sectionTitle: { fontSize: 11, fontWeight: '800', color: c.textSub, letterSpacing: 1.5, textTransform: 'uppercase' as const, marginHorizontal: 16, marginTop: 20, marginBottom: 10 },
+    shiftCard: { backgroundColor: c.card, borderRadius: 18, marginHorizontal: 16, padding: 16, flexDirection: 'row', gap: 14, shadowColor: c.isDark ? '#000000' : c.primary, shadowOpacity: c.isDark ? 0 : 0.08, shadowRadius: 10, shadowOffset: { width: 0, height: 2 }, elevation: c.isDark ? 0 : 3, minHeight: 140, borderWidth: 1, borderColor: c.glassBorder },
     shiftStrip: { width: 4, borderRadius: 2, backgroundColor: c.primary, marginRight: 2 },
     shiftBadgeRow: { flexDirection: 'row', marginBottom: 8 },
     inProgressBadge: { backgroundColor: '#D1FAE5', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 20 },
     inProgressText: { fontSize: 10, fontWeight: '700', color: '#059669' },
     shiftTitle: { fontSize: 17, fontWeight: '700', color: c.primaryDark, marginBottom: 4 },
     shiftTime: { fontSize: 22, fontWeight: '700', color: c.primary, marginBottom: 4 },
-    timelineCard: { backgroundColor: c.card, borderRadius: 18, marginHorizontal: 16, marginTop: 12, padding: 16, shadowColor: c.isDark ? '#000000' : c.primary, shadowOpacity: 0.08, shadowRadius: 10, elevation: 3, borderWidth: 1, borderColor: c.glassBorder },
+    timelineCard: { backgroundColor: c.card, borderRadius: 18, marginHorizontal: 16, marginTop: 12, padding: 16, shadowColor: c.isDark ? '#000000' : c.primary, shadowOpacity: c.isDark ? 0 : 0.08, shadowRadius: 10, shadowOffset: { width: 0, height: 2 }, elevation: c.isDark ? 0 : 3, borderWidth: 1, borderColor: c.glassBorder },
     restRow: { flexDirection: 'row', alignItems: 'center' },
     restText: { fontSize: 18, fontWeight: '700', color: '#10b981' },
-    emptyShift: { color: c.textSub, fontSize: 15, lineHeight: 24, textAlign: 'center', flex: 1 },
+    emptyShiftWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 24 },
+    emptyIconCircle: { width: 64, height: 64, borderRadius: 32, backgroundColor: c.primaryLight, justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
+    emptyShiftTitle: { fontSize: 16, fontWeight: '700', color: c.text, textAlign: 'center', marginBottom: 4 },
+    emptyShiftSub: { fontSize: 13, color: c.textSub, textAlign: 'center', lineHeight: 18, paddingHorizontal: 16 },
   });
 }

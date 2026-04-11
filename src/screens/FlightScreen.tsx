@@ -805,7 +805,17 @@ export default function FlightScreen() {
           renderItem={renderFlight}
           contentContainerStyle={{ padding: 16, paddingBottom: 96 }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchAll(); }} tintColor={colors.primary} />}
-          ListEmptyComponent={<Text style={{ textAlign: 'center', marginTop: 40, color: '#9CA3AF', fontSize: 15 }}>{t('flightNoFlights')}</Text>}
+          ListEmptyComponent={
+            <View style={{ alignItems: 'center', paddingTop: 64, paddingHorizontal: 32 }}>
+              <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: colors.primaryLight, justifyContent: 'center', alignItems: 'center', marginBottom: 16 }}>
+                <MaterialIcons name="flight" size={28} color={colors.primary} />
+              </View>
+              <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text, textAlign: 'center', marginBottom: 6 }}>{t('flightNoFlights')}</Text>
+              <Text style={{ fontSize: 13, color: colors.textSub, textAlign: 'center', lineHeight: 18 }}>
+                {activeTab === 'arrivals' ? 'Nessun arrivo previsto per questo giorno' : 'Nessuna partenza prevista per questo giorno'}
+              </Text>
+            </View>
+          }
           showsVerticalScrollIndicator={false}
         />
       )}
@@ -863,18 +873,18 @@ export default function FlightScreen() {
 
 function makeStyles(c: ThemeColors) {
   return StyleSheet.create({
-    pageHeader: { backgroundColor: c.card, paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: c.border, flexDirection: 'row', alignItems: 'center' },
+    pageHeader: { backgroundColor: c.card, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border, flexDirection: 'row', alignItems: 'center' },
     notifBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: c.cardSecondary, justifyContent: 'center', alignItems: 'center' },
     notifBtnActive: { backgroundColor: c.primary, shadowColor: c.primary, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.35, shadowRadius: 6, elevation: 5 },
     notifBadge: { position: 'absolute', top: -2, right: -2, width: 16, height: 16, borderRadius: 8, backgroundColor: '#EF4444', justifyContent: 'center', alignItems: 'center', borderWidth: 1.5, borderColor: c.card },
     notifBadgeTxt: { fontSize: 9, fontWeight: '800', color: '#fff' },
     pageTitle: { fontSize: 22, fontWeight: 'bold', color: c.primaryDark },
     pageSub: { fontSize: 13, color: c.textSub, marginTop: 2 },
-    controlsRow: { flexDirection: 'row', gap: 8, padding: 12, backgroundColor: c.card, borderBottomWidth: 1, borderBottomColor: c.border },
-    segment: { flex: 1, flexDirection: 'row', backgroundColor: c.bg, borderRadius: 8, padding: 3 },
-    segBtn: { flex: 1, paddingVertical: 7, alignItems: 'center', borderRadius: 6 },
-    segBtnActive: { backgroundColor: c.card, borderWidth: 1, borderColor: c.primaryLight },
-    segBtnText: { fontSize: 12, fontWeight: '500', color: c.textSub },
+    controlsRow: { flexDirection: 'row', gap: 10, paddingHorizontal: 16, paddingVertical: 10, backgroundColor: c.card, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border },
+    segment: { flex: 1, flexDirection: 'row', backgroundColor: c.bg, borderRadius: 10, padding: 3 },
+    segBtn: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 8 },
+    segBtnActive: { backgroundColor: c.card, borderWidth: 1, borderColor: c.primaryLight, shadowColor: c.primary, shadowOpacity: 0.1, shadowRadius: 4, shadowOffset: { width: 0, height: 1 }, elevation: 2 },
+    segBtnText: { fontSize: 13, fontWeight: '600', color: c.textSub },
     segBtnTextActive: { color: c.primary, fontWeight: '700' },
     card: { backgroundColor: c.card, borderRadius: 16, marginBottom: 10, overflow: 'hidden', shadowColor: c.primary, shadowOpacity: c.isDark ? 0 : 0.08, shadowRadius: 10, elevation: c.isDark ? 0 : 3, borderWidth: c.isDark ? 1 : 0, borderColor: c.glassBorder },
     cardShift: { borderWidth: 1.5, borderColor: '#F59E0B' },

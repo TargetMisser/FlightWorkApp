@@ -450,7 +450,13 @@ export default function CalendarScreen() {
                 <Text style={s.restText}>{t('calRestDay')}</Text>
               </View>
             ) : (
-              <Text style={s.emptyText}>{t('calNoShift')}{'\n'}{selectedDay.split('-').reverse().join('/')}</Text>
+              <View style={s.emptyWrap}>
+                <View style={s.emptyIconCircle}>
+                  <MaterialIcons name="event-available" size={28} color={colors.primary} />
+                </View>
+                <Text style={s.emptyTitle}>{t('calNoShift')}</Text>
+                <Text style={s.emptyDate}>{selectedDay.split('-').reverse().join('/')}</Text>
+              </View>
             )}
           </View>
         )}
@@ -688,22 +694,22 @@ export default function CalendarScreen() {
 
 function makeStyles(c: ThemeColors) {
   return StyleSheet.create({
-    pageHeader: { backgroundColor: c.card, paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: c.border },
+    pageHeader: { backgroundColor: c.card, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border },
     pageTitle: { fontSize: 22, fontWeight: 'bold', color: c.primaryDark },
     pageSub: { fontSize: 11, color: c.textSub, letterSpacing: 1.5, marginTop: 3 },
     importBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 },
     importBtnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
-    weekRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: c.card, paddingVertical: 12, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: c.border },
-    navBtn: { paddingHorizontal: 8, paddingVertical: 6 },
+    weekRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: c.card, paddingVertical: 12, paddingHorizontal: 4, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border },
+    navBtn: { paddingHorizontal: 6, paddingVertical: 8, minWidth: 28, alignItems: 'center' as const },
     navArrow: { color: c.textSub, fontSize: 13, fontWeight: 'bold' },
     dayChipWrap: { flex: 1, alignItems: 'center' },
-    dayChip: { alignItems: 'center', paddingVertical: 6, paddingHorizontal: 2, borderRadius: 20, width: 36 },
+    dayChip: { alignItems: 'center', paddingVertical: 8, paddingHorizontal: 4, borderRadius: 22, width: 42, minHeight: 52 },
     dayChipSelected: { backgroundColor: c.primary },
-    dayChipName: { fontSize: 10, color: c.textSub, marginBottom: 3 },
+    dayChipName: { fontSize: 11, color: c.textSub, marginBottom: 4, fontWeight: '500', letterSpacing: 0.3 },
     dayChipNameSel: { color: '#fff' },
-    dayChipNum: { fontSize: 15, fontWeight: '600', color: c.text },
+    dayChipNum: { fontSize: 16, fontWeight: '700', color: c.text },
     dayChipNumSel: { color: '#fff', fontWeight: 'bold' },
-    dot: { width: 5, height: 5, borderRadius: 3, marginTop: 3 },
+    dot: { width: 6, height: 6, borderRadius: 3, marginTop: 4 },
     mainCard: {
       backgroundColor: c.card, borderRadius: 14,
       marginHorizontal: 16, marginTop: 16,
@@ -730,6 +736,10 @@ function makeStyles(c: ThemeColors) {
     restRow: { flexDirection: 'row', alignItems: 'center', marginTop: 10 },
     restText: { fontSize: 20, fontWeight: 'bold', color: '#10b981' },
     emptyText: { textAlign: 'center', color: c.textSub, fontSize: 15, marginTop: 20, lineHeight: 24 },
+    emptyWrap: { alignItems: 'center', justifyContent: 'center', paddingVertical: 16 },
+    emptyIconCircle: { width: 56, height: 56, borderRadius: 28, backgroundColor: c.primaryLight, justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
+    emptyTitle: { fontSize: 16, fontWeight: '700', color: c.text, textAlign: 'center', marginBottom: 4 },
+    emptyDate: { fontSize: 13, fontWeight: '600', color: c.textSub, textAlign: 'center' },
     // Modal
     modalOverlay: { flex: 1, justifyContent: 'flex-end' },
     modalBg: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)' },

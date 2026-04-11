@@ -337,12 +337,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     overflow: 'hidden',
     borderWidth: 0.75,
-    borderColor: 'rgba(255,255,255,0.22)',
+    borderColor: 'rgba(0,0,0,0.08)',
   },
   glassTab: {
     alignItems: 'center',
     justifyContent: 'center',
-    width: 68,
+    width: 74,
     height: 56,
   },
   glassLabel: {
@@ -354,8 +354,13 @@ const styles = StyleSheet.create({
   glassIndicator: {
     position: 'absolute',
     bottom: 4,
-    width: 18,
-    height: 3,
+    width: 22,
+    height: 3.5,
     borderRadius: 999,
+    shadowColor: '#F47B16',
+    shadowOpacity: 0.5,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 4,
   },
 });

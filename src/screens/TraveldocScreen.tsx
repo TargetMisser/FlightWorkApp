@@ -53,9 +53,9 @@ export default function TraveldocScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: { paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1 },
-  title: { fontSize: 22, fontWeight: 'bold' },
-  sub: { fontSize: 12, marginTop: 2 },
+  header: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 14, borderBottomWidth: StyleSheet.hairlineWidth },
+  title: { fontSize: 22, fontWeight: '700', letterSpacing: -0.3 },
+  sub: { fontSize: 12, marginTop: 3, letterSpacing: 0.3 },
   loadingWrap: { position: 'absolute', top: 60, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center', zIndex: 10 },
   loadingText: { marginTop: 12, fontSize: 14 },
 });
