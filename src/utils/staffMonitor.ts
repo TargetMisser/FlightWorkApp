@@ -14,11 +14,13 @@ export function normalizeFlightNumber(raw: string): string {
 function stripHTML(html: string): string {
   return html
     .replace(/<[^>]+>/g, '')
-    .replace(/°|&#176;/g, '')
+    .replace(/&#176;/g, '')
     .replace(/&nbsp;/gi, ' ')
     .replace(/&amp;/gi, '&')
     .replace(/&lt;/gi, '<')
     .replace(/&gt;/gi, '>')
+    .replace(/[^\x20-\x7E]/g, ' ')
+    .replace(/\s+/g, ' ')
     .trim();
 }
 
