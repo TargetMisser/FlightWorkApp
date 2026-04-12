@@ -1,0 +1,3 @@
+## 2025-05-14 - Haptic Feedback and Screen Reader Labels for Flight Operations
+**Learning:** In React Native gesture-based interactions like swiping, haptic feedback should be throttled using a ref (e.g., `hasTriggeredHaptic`) to avoid continuous vibration while moving. For complex UI components like flight cards, making the entire card an "accessibility leaf" requires a highly descriptive `accessibilityLabel` that includes dynamic state (Pinned, Status) to ensure zero information loss for screen reader users.
+**Action:** Always use a toggle ref for threshold-crossing haptics. Ensure accessibility labels for compound components explicitly include all visual status indicators and persistent states.
