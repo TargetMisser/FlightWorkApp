@@ -154,6 +154,7 @@ const it = {
   flightFilterMineSub: 'Wizz, EasyJet e altri operatori configurati',
   flightFilterAll: 'Tutti i voli',
   flightFilterAllSub: 'Mostra tutti gli operatori presenti',
+  flightSwipeHint: 'Scorri a sinistra per fissare o rimuovere il volo dalle notifiche.',
 };
 
 const en: typeof it = {
@@ -310,6 +311,7 @@ const en: typeof it = {
   flightFilterMineSub: 'Wizz, EasyJet and other configured operators',
   flightFilterAll: 'All flights',
   flightFilterAllSub: 'Show all operators at this airport',
+  flightSwipeHint: 'Swipe left to pin or unpin the flight for notifications.',
 };
 
 export const translations: Record<Lang, typeof it> = { it, en };
