@@ -257,6 +257,13 @@ export default function FlightScreen() {
   const [staffMonitorDeps, setStaffMonitorDeps] = useState<StaffMonitorFlight[]>([]);
   const [staffMonitorArrs, setStaffMonitorArrs] = useState<StaffMonitorFlight[]>([]);
 
+  // Accumulated flights seen today — persist until end of day even if FR24 drops them
+  const seenArrivalsRef = useRef<Map<string, any>>(new Map());
+  const seenDeparturesRef = useRef<Map<string, any>>(new Map());
+  const seenAllArrivalsRef = useRef<Map<string, any>>(new Map());
+  const seenAllDeparturesRef = useRef<Map<string, any>>(new Map());
+  const seenDateRef = useRef<string>(new Date().toDateString());
+
   // Carica preferenza notifiche salvata
   useEffect(() => {
     AsyncStorage.getItem(NOTIF_ENABLED_KEY).then(v => setNotifsEnabled(v === 'true'));
@@ -273,12 +280,37 @@ export default function FlightScreen() {
         departures: fetchedDepartures,
         arrivals: fetchedArrivals,
       } = await fetchAirportScheduleRaw(airportCode);
-      setAllArrivalsFull(allArrivals);
-      setAllDeparturesFull(allDepartures);
+
+      // Reset accumulated cache at midnight
+      const todayStr = new Date().toDateString();
+      if (seenDateRef.current !== todayStr) {
+        seenArrivalsRef.current.clear();
+        seenDeparturesRef.current.clear();
+        seenAllArrivalsRef.current.clear();
+        seenAllDeparturesRef.current.clear();
+        seenDateRef.current = todayStr;
+      }
+
+      // Merge fresh data into accumulated maps (fresh wins, old entries persist)
+      const mergeFlights = (seen: Map<string, any>, fresh: any[]) => {
+        for (const f of fresh) {
+          const id = f.flight?.identification?.number?.default;
+          if (id) seen.set(id, f);
+        }
+        return Array.from(seen.values());
+      };
+
+      const mergedArrivals = mergeFlights(seenArrivalsRef.current, fetchedArrivals);
+      const mergedDepartures = mergeFlights(seenDeparturesRef.current, fetchedDepartures);
+      const mergedAllArrivals = mergeFlights(seenAllArrivalsRef.current, allArrivals);
+      const mergedAllDepartures = mergeFlights(seenAllDeparturesRef.current, allDepartures);
+
+      setAllArrivalsFull(mergedAllArrivals);
+      setAllDeparturesFull(mergedAllDepartures);
 
       // Build inbound arrival map: registration → best known arrival timestamp
       const inboundMap: Record<string, number> = {};
-      for (const a of allArrivals) {
+      for (const a of mergedAllArrivals) {
         const reg = a.flight?.aircraft?.registration;
         if (!reg) continue;
         const t = a.flight?.time?.real?.arrival
@@ -288,22 +320,22 @@ export default function FlightScreen() {
       }
       setInboundArrivals(inboundMap);
 
-      setArrivals(fetchedArrivals);
-      setDepartures(fetchedDepartures);
+      setArrivals(mergedArrivals);
+      setDepartures(mergedDepartures);
 
-      // Auto-clear expired pinned flight or stale data from another airport
+      // Auto-clear pinned flight only at end of day or if from another airport
       const pinnedRaw = await AsyncStorage.getItem(PINNED_FLIGHT_KEY);
       if (pinnedRaw) {
         try {
           const pinned = JSON.parse(pinnedRaw);
-          const pinTab = pinned._pinTab || 'departures';
-          const pinTs = pinTab === 'arrivals'
+          const pinTs = (pinned._pinTab || 'departures') === 'arrivals'
             ? pinned.flight?.time?.scheduled?.arrival
             : pinned.flight?.time?.scheduled?.departure;
-          const pinId = pinned.flight?.identification?.number?.default;
-          const pool = pinTab === 'arrivals' ? fetchedArrivals : fetchedDepartures;
-          const stillPresent = !!pinId && pool.some(item => item.flight?.identification?.number?.default === pinId);
-          if ((pinTs && pinTs < Date.now() / 1000) || !stillPresent) {
+          // Expire at end of the flight's scheduled day, not at departure/arrival time
+          const endOfFlightDay = pinTs
+            ? new Date(pinTs * 1000).setHours(23, 59, 59, 999) / 1000
+            : 0;
+          if (endOfFlightDay && Date.now() / 1000 > endOfFlightDay) {
             await AsyncStorage.removeItem(PINNED_FLIGHT_KEY);
             await cancelPinnedNotifications();
             setPinnedFlightId(null);
@@ -360,7 +392,7 @@ export default function FlightScreen() {
           if (pinnedRawW) {
             try { pinnedFn = JSON.parse(pinnedRawW).flight?.identification?.number?.default || null; } catch {}
           }
-          const wFlights: WidgetFlight[] = fetchedDepartures
+          const wFlights: WidgetFlight[] = mergedDepartures
             .filter(item => {
               const ts = item.flight?.time?.scheduled?.departure;
               if (ts == null) return false;
@@ -401,7 +433,7 @@ export default function FlightScreen() {
       // Schedula notifiche se attive (solo turno di oggi)
       const enabled = (await AsyncStorage.getItem(NOTIF_ENABLED_KEY)) === 'true';
       if (enabled && shiftToday) {
-        const shiftFlights = fetchedArrivals.filter(item => {
+        const shiftFlights = mergedArrivals.filter(item => {
           const ts = item.flight?.time?.scheduled?.arrival;
           return ts && ts >= shiftToday!.start && ts <= shiftToday!.end;
         });
