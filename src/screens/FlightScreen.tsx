@@ -807,6 +807,11 @@ export default function FlightScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchAll(); }} tintColor={colors.primary} />}
           ListEmptyComponent={<Text style={{ textAlign: 'center', marginTop: 40, color: '#9CA3AF', fontSize: 15 }}>{t('flightNoFlights')}</Text>}
           showsVerticalScrollIndicator={false}
+          // ⚡ Bolt Optimization: Added windowing props to optimize FlatList performance for large datasets
+          initialNumToRender={10}
+          windowSize={5}
+          maxToRenderPerBatch={10}
+          removeClippedSubviews={Platform.OS === 'android'}
         />
       )}
 
