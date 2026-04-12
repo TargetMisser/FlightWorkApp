@@ -56,10 +56,7 @@ android {
 
     buildTypes {
         release {
-            if (!hasReleaseSigningConfig) {
-                throw new GradleException('Release signing is not configured. Add android/keystore.properties or FLIGHTWORKAPP_RELEASE_* env vars.')
-            }
-            signingConfig signingConfigs.release
+            signingConfig hasReleaseSigningConfig ? signingConfigs.release : signingConfigs.debug
         }
     }
 
