@@ -1,0 +1,20 @@
+# EAS Build ignore
+.git
+.claude
+.codex-tools
+.dual-graph
+.expo
+.gradle-user-home
+.superpowers
+.vscode
+.github
+android/.gradle
+android/.idea
+android/app/build
+android/app/build_old_*
+android/app/.cxx
+android/wear/build
+android/wear/.cxx
+ios/Pods
+*.apk
+*.aab
