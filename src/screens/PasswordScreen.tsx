@@ -147,7 +147,24 @@ export default function PasswordScreen() {
   useEffect(() => {
     (async () => {
       const raw = await AsyncStorage.getItem(PASSWORDS_KEY);
-      if (raw) setEntries(JSON.parse(raw));
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        let migrated = false;
+        const fullEntries = await Promise.all(parsed.map(async (e: PasswordEntry) => {
+          const securePw = await SecureStore.getItemAsync(`aerostaff_pwd_${e.id}`);
+          if (!securePw && e.password && e.password !== '***') {
+            await SecureStore.setItemAsync(`aerostaff_pwd_${e.id}`, e.password);
+            migrated = true;
+          }
+          return { ...e, password: securePw || e.password };
+        }));
+        setEntries(fullEntries);
+
+        if (migrated) {
+          const masked = fullEntries.map(e => ({ ...e, password: '***' }));
+          await AsyncStorage.setItem(PASSWORDS_KEY, JSON.stringify(masked));
+        }
+      }
       const enabled = await AsyncStorage.getItem(PIN_ENABLED_KEY);
       const isEnabled = enabled === 'true';
       setPinEnabled(isEnabled);
@@ -157,7 +174,8 @@ export default function PasswordScreen() {
 
   const persist = useCallback(async (next: PasswordEntry[]) => {
     setEntries(next);
-    await AsyncStorage.setItem(PASSWORDS_KEY, JSON.stringify(next));
+    const masked = next.map(e => ({ ...e, password: '***' }));
+    await AsyncStorage.setItem(PASSWORDS_KEY, JSON.stringify(masked));
   }, []);
 
   // PIN toggle
@@ -216,13 +234,15 @@ export default function PasswordScreen() {
     if (!modal.name.trim()) { Alert.alert('Errore', t('passwordErrName')); return; }
     if (!modal.password.trim()) { Alert.alert('Errore', t('passwordErrPw')); return; }
     let next: PasswordEntry[];
-    if (modal.editingId) {
-      next = entries.map(e => e.id === modal.editingId
+    let entryId = modal.editingId;
+    if (entryId) {
+      next = entries.map(e => e.id === entryId
         ? { ...e, name: modal.name.trim(), username: modal.username.trim(), password: modal.password.trim(), notes: modal.notes.trim() }
         : e);
     } else {
+      entryId = Date.now().toString();
       const entry: PasswordEntry = {
-        id: Date.now().toString(),
+        id: entryId,
         name: modal.name.trim(),
         username: modal.username.trim(),
         password: modal.password.trim(),
@@ -230,6 +250,7 @@ export default function PasswordScreen() {
       };
       next = [...entries, entry];
     }
+    await SecureStore.setItemAsync(`aerostaff_pwd_${entryId}`, modal.password.trim());
     await persist(next);
     setModal(EMPTY_MODAL);
     setShowPw(false);
@@ -240,6 +261,7 @@ export default function PasswordScreen() {
       { text: 'Annulla', style: 'cancel' },
       { text: 'Elimina', style: 'destructive', onPress: async () => {
         await persist(entries.filter(e => e.id !== id));
+        await SecureStore.deleteItemAsync(`aerostaff_pwd_${id}`).catch(() => {});
       }},
     ]);
   }, [entries, persist]);
