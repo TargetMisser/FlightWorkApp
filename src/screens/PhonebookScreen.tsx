@@ -240,7 +240,7 @@ interface ContactRowProps {
   onDelete: (id: string) => void;
 }
 
-function ContactRow({ contact, onEdit, onDelete }: ContactRowProps) {
+function ContactRowComponent({ contact, onEdit, onDelete }: ContactRowProps) {
   const { colors } = useAppTheme();
   const { t } = useLanguage();
   const rowStyles = useMemo(() => makeRowStyles(colors), [colors]);
@@ -285,6 +285,9 @@ function ContactRow({ contact, onEdit, onDelete }: ContactRowProps) {
     </View>
   );
 }
+
+// Performance optimization: memoize flatlist item to prevent unnecessary re-renders
+const ContactRow = React.memo(ContactRowComponent);
 
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────

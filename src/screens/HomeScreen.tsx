@@ -57,7 +57,7 @@ window.runTesseract = async function(base64JsonStr) {
 };
 </script></body></html>`;
 
-function PinnedFlightCard({ item, colors }: { item: any; colors: any }) {
+function PinnedFlightCardComponent({ item, colors }: { item: any; colors: any }) {
   const { t, locale } = useLanguage();
   const tab = item._pinTab || 'departures';
   const flightNumber = item.flight?.identification?.number?.default || 'N/A';
@@ -146,6 +146,9 @@ function PinnedFlightCard({ item, colors }: { item: any; colors: any }) {
     </View>
   );
 }
+
+// Performance optimization: memoize flatlist item to prevent unnecessary re-renders
+const PinnedFlightCard = React.memo(PinnedFlightCardComponent);
 
 export default function HomeScreen() {
   const { colors } = useAppTheme();
