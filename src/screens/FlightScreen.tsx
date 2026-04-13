@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import * as Calendar from 'expo-calendar';
 import * as Notifications from 'expo-notifications';
+import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../context/ThemeContext';
@@ -61,24 +62,37 @@ function LogoPill({ iataCode, airlineName, color }: { iataCode: string; airlineN
 const SWIPE_THRESHOLD = 80;
 
 function SwipeableFlightCard({
-  children, isPinned, onToggle,
+  children, isPinned, onToggle, ...rest
 }: {
   children: React.ReactNode;
   isPinned: boolean;
   onToggle: () => void;
+  [key: string]: any;
 }) {
+  const { t } = useLanguage();
   const translateX = useRef(new Animated.Value(0)).current;
   const onToggleRef = useRef(onToggle);
   onToggleRef.current = onToggle;
+  const hasTriggeredHaptic = useRef(false);
 
   const panResponder = useMemo(() => PanResponder.create({
     onMoveShouldSetPanResponder: (_, g) =>
       Math.abs(g.dx) > 15 && Math.abs(g.dx) > Math.abs(g.dy) * 1.5,
     onPanResponderMove: (_, g) => {
-      if (g.dx < 0) translateX.setValue(g.dx);
+      if (g.dx < 0) {
+        translateX.setValue(g.dx);
+        if (g.dx < -SWIPE_THRESHOLD && !hasTriggeredHaptic.current) {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          hasTriggeredHaptic.current = true;
+        } else if (g.dx >= -SWIPE_THRESHOLD && hasTriggeredHaptic.current) {
+          hasTriggeredHaptic.current = false;
+        }
+      }
     },
     onPanResponderRelease: (_, g) => {
+      hasTriggeredHaptic.current = false;
       if (g.dx < -SWIPE_THRESHOLD) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         Animated.timing(translateX, { toValue: -SWIPE_THRESHOLD, duration: 100, useNativeDriver: true }).start(() => {
           onToggleRef.current();
           Animated.spring(translateX, { toValue: 0, useNativeDriver: true, tension: 120, friction: 10 }).start();
@@ -88,13 +102,27 @@ function SwipeableFlightCard({
       }
     },
     onPanResponderTerminate: () => {
+      hasTriggeredHaptic.current = false;
       Animated.spring(translateX, { toValue: 0, useNativeDriver: true }).start();
     },
   }), []);
 
   return (
     <View style={{ marginBottom: 10 }}>
-      <Animated.View style={{ transform: [{ translateX }] }} {...panResponder.panHandlers}>
+      <Animated.View
+        style={{ transform: [{ translateX }] }}
+        {...panResponder.panHandlers}
+        {...rest}
+        accessibilityActions={[
+          { name: 'toggle_pin', label: isPinned ? t('flightAccessibilityUnpinHint') : t('flightAccessibilityPinHint') }
+        ]}
+        onAccessibilityAction={(event) => {
+          if (event.nativeEvent.actionName === 'toggle_pin') {
+            onToggleRef.current();
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          }
+        }}
+      >
         {children}
       </Animated.View>
     </View>
@@ -594,10 +622,14 @@ export default function FlightScreen() {
       console.log(`[FlightScreen] No staffMonitor match for "${normFn}" (stripped: "${normFnStripped}") in ${activeTab}`);
     }
 
+    const accessibilityLabel = `${isPinned ? t('flightPinnedLabel') + ', ' : ''}${flightNumber}, ${airline}, ${activeTab === 'arrivals' ? t('homeArrival') : t('homeDeparture')}, ${originDest}, ${time}, ${statusText}`;
+
     return (
       <SwipeableFlightCard
         isPinned={isPinned}
         onToggle={() => isPinned ? unpinFlight() : pinFlight(item)}
+        accessibilityLabel={accessibilityLabel}
+        accessibilityHint={isPinned ? t('flightAccessibilityUnpinHint') : t('flightAccessibilityPinHint')}
       >
         <View style={[s.card, isPinned && s.cardPinned, { marginBottom: 0 }]}>
           {isPinned && <View style={s.pinBanner}><Text style={s.pinBannerText}>{t('flightPinned')}</Text></View>}

@@ -109,12 +109,19 @@ export default function NotepadScreen() {
           <Text style={s.title}>{t('notepadTitle')}</Text>
         </View>
         <View style={s.actions}>
-          <TouchableOpacity onPress={clear} style={s.iconBtn}>
+          <TouchableOpacity
+            onPress={clear}
+            style={s.iconBtn}
+            accessibilityLabel={t('notepadAccessibilityClear')}
+            accessibilityRole="button"
+          >
             <MaterialIcons name="delete-outline" size={22} color="#EF4444" />
           </TouchableOpacity>
           <TouchableOpacity
             onPress={save}
             style={[s.saveBtn, saved && s.saveBtnDim]}
+            accessibilityLabel={t('notepadAccessibilitySave')}
+            accessibilityRole="button"
           >
             <MaterialIcons name="save" size={18} color="#fff" />
             <Text style={s.saveTxt}>{saved ? t('notepadSaved') : t('notepadSave')}</Text>
