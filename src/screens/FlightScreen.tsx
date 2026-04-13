@@ -270,8 +270,12 @@ export default function FlightScreen() {
   useEffect(() => {
     AsyncStorage.getItem(NOTIF_ENABLED_KEY).then(v => setNotifsEnabled(v === 'true'));
     AsyncStorage.getItem(FLIGHT_FILTER_KEY).then(v => { if (v === 'all' || v === 'mine') setFilterMode(v); });
-    getSelectedAirlines().then(setSelectedAirlinesState);
   }, []);
+
+  // Reload airline selection when airport changes
+  useEffect(() => {
+    if (airportCode) getSelectedAirlines(airportCode).then(setSelectedAirlinesState);
+  }, [airportCode]);
 
   const fetchAll = useCallback(async () => {
     if (airportLoading) return;
@@ -573,14 +577,22 @@ export default function FlightScreen() {
     return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
   }, [allArrivalsFull, allDeparturesFull]);
 
+  const isAirlineSelected = useCallback((airlineName: string) => {
+    const full = airlineName.toLowerCase();
+    return selectedAirlines.some(key => full.includes(key));
+  }, [selectedAirlines]);
+
   const toggleAirline = useCallback((airlineName: string) => {
-    const key = airlineName.toLowerCase();
+    const full = airlineName.toLowerCase();
     setSelectedAirlinesState(prev => {
-      const next = prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key];
-      setSelectedAirlines(next);
+      const matchIdx = prev.findIndex(key => full.includes(key));
+      const next = matchIdx >= 0
+        ? prev.filter((_, i) => i !== matchIdx)
+        : [...prev, full];
+      setSelectedAirlines(next, airportCode);
       return next;
     });
-  }, []);
+  }, [airportCode]);
 
   const userShift = activeDay === 'today' ? shifts.today : shifts.tomorrow;
   const selectedDate = activeDay === 'today' ? new Date() : (() => { const d = new Date(); d.setDate(d.getDate() + 1); return d; })();
@@ -925,7 +937,7 @@ export default function FlightScreen() {
                   {airportAirlines
                     .filter(a => !airlineSearchText || a.name.toLowerCase().includes(airlineSearchText.toLowerCase()))
                     .map(a => {
-                      const isSelected = selectedAirlines.includes(a.name.toLowerCase());
+                      const isSelected = isAirlineSelected(a.name);
                       return (
                         <TouchableOpacity
                           key={a.name}

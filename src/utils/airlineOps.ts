@@ -40,12 +40,23 @@ export const ALLOWED_AIRLINES = ['wizz', 'aer lingus', 'easyjet', 'british airwa
 // ─── Dynamic airline selection (persisted in AsyncStorage) ───────────────────
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const SELECTED_AIRLINES_KEY = 'aerostaff_selected_airlines_v1';
+const SELECTED_AIRLINES_PREFIX = 'aerostaff_selected_airlines_v1_';
 
-/** Read user-selected airlines. Falls back to ALLOWED_AIRLINES if never set. */
-export async function getSelectedAirlines(): Promise<string[]> {
+function airlineKey(airportCode: string) {
+  return `${SELECTED_AIRLINES_PREFIX}${airportCode.toUpperCase()}`;
+}
+
+async function resolveCode(airportCode?: string): Promise<string> {
+  if (airportCode) return airportCode;
+  const { getStoredAirportCode } = await import('./airportSettings');
+  return getStoredAirportCode();
+}
+
+/** Read user-selected airlines for a specific airport. Falls back to ALLOWED_AIRLINES if never set. */
+export async function getSelectedAirlines(airportCode?: string): Promise<string[]> {
   try {
-    const raw = await AsyncStorage.getItem(SELECTED_AIRLINES_KEY);
+    const code = await resolveCode(airportCode);
+    const raw = await AsyncStorage.getItem(airlineKey(code));
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) return parsed;
@@ -54,7 +65,8 @@ export async function getSelectedAirlines(): Promise<string[]> {
   return ALLOWED_AIRLINES;
 }
 
-/** Persist the user's airline selection (lowercase keys). */
-export async function setSelectedAirlines(airlines: string[]): Promise<void> {
-  await AsyncStorage.setItem(SELECTED_AIRLINES_KEY, JSON.stringify(airlines));
+/** Persist the user's airline selection for a specific airport (lowercase keys). */
+export async function setSelectedAirlines(airlines: string[], airportCode?: string): Promise<void> {
+  const code = await resolveCode(airportCode);
+  await AsyncStorage.setItem(airlineKey(code), JSON.stringify(airlines));
 }
