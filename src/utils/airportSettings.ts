@@ -70,7 +70,8 @@ export function formatAirportHeader(code: string | null | undefined): string {
 
 export function buildFr24ScheduleUrl(code: string | null | undefined): string {
   const normalized = isValidAirportCode(code) ? normalizeAirportCode(code) : DEFAULT_AIRPORT_CODE;
-  return `https://api.flightradar24.com/common/v1/airport.json?code=${normalized.toLowerCase()}&plugin[]=schedule&page=1&limit=100`;
+  const today = new Date().toISOString().split('T')[0];
+  return `https://api.flightradar24.com/common/v1/airport.json?code=${normalized.toLowerCase()}&plugin[]=schedule&page=1&limit=100&date=${today}`;
 }
 
 export async function getStoredAirportCode(): Promise<string> {
