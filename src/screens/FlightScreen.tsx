@@ -60,7 +60,7 @@ function LogoPill({ iataCode, airlineName, color }: { iataCode: string; airlineN
 
 const SWIPE_THRESHOLD = 80;
 
-function SwipeableFlightCard({
+function SwipeableFlightCardComponent({
   children, isPinned, onToggle,
 }: {
   children: React.ReactNode;
@@ -100,6 +100,9 @@ function SwipeableFlightCard({
     </View>
   );
 }
+
+// Performance optimization: memoize flatlist item to prevent unnecessary re-renders
+const SwipeableFlightCard = React.memo(SwipeableFlightCardComponent);
 
 // ─── Helpers notifiche ─────────────────────────────────────────────────────────
 async function cancelPreviousNotifications() {

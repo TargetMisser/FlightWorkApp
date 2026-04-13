@@ -101,7 +101,7 @@ function PinOverlay({ onUnlock, onCancel, title }: { onUnlock: (pin: string) => 
 }
 
 // ─── Password Row ─────────────────────────────────────────────────────────────
-function PasswordRow({ item, onEdit, onDelete }: { item: PasswordEntry; onEdit: () => void; onDelete: () => void }) {
+function PasswordRowComponent({ item, onEdit, onDelete }: { item: PasswordEntry; onEdit: () => void; onDelete: () => void }) {
   const { colors } = useAppTheme();
   const s = useMemo(() => makeRowStyles(colors), [colors]);
   const [revealed, setRevealed] = useState(false);
@@ -130,6 +130,9 @@ function PasswordRow({ item, onEdit, onDelete }: { item: PasswordEntry; onEdit: 
     </View>
   );
 }
+
+// Performance optimization: memoize flatlist item to prevent unnecessary re-renders
+const PasswordRow = React.memo(PasswordRowComponent);
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function PasswordScreen() {
