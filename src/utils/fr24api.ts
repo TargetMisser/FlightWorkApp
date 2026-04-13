@@ -106,7 +106,7 @@ export async function fetchAirportSchedule(code?: string): Promise<FR24Schedule>
 
   try {
     const airportCode = await resolveAirportCode(code);
-    const selected = await getSelectedAirlines();
+    const selected = await getSelectedAirlines(airportCode);
     const res = await fetch(buildFr24ScheduleUrl(airportCode), {
       headers: { 'User-Agent': 'Mozilla/5.0' },
       signal: controller.signal,
@@ -133,7 +133,7 @@ export async function fetchAirportSchedule(code?: string): Promise<FR24Schedule>
  */
 export async function fetchAirportScheduleRaw(code?: string): Promise<FR24ScheduleRaw> {
   const airportCode = await resolveAirportCode(code);
-  const selected = await getSelectedAirlines();
+  const selected = await getSelectedAirlines(airportCode);
 
   // Return cached data if fresh enough
   if (_cache && _cache.code === airportCode && Date.now() - _cache.ts < CACHE_TTL) {
