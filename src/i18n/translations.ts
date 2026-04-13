@@ -150,10 +150,12 @@ const it = {
   shiftUnknown: 'Sconosciuta',
   // FlightScreen filter menu
   flightFilterTitle: 'Mostra voli',
-  flightFilterMine: 'Solo mie compagnie',
+  flightFilterMine: 'Mie compagnie',
   flightFilterMineSub: 'Wizz, EasyJet e altri operatori configurati',
   flightFilterAll: 'Tutti i voli',
   flightFilterAllSub: 'Mostra tutti gli operatori presenti',
+  flightAirlineSearch: 'Cerca compagnia...',
+  flightAirlineEmpty: 'Apri la tab Voli per caricare le compagnie',
 };
 
 const en: typeof it = {
@@ -306,10 +308,12 @@ const en: typeof it = {
   shiftUnknown: 'Unknown',
   // FlightScreen filter menu
   flightFilterTitle: 'Show flights',
-  flightFilterMine: 'My airlines only',
+  flightFilterMine: 'My airlines',
   flightFilterMineSub: 'Wizz, EasyJet and other configured operators',
   flightFilterAll: 'All flights',
   flightFilterAllSub: 'Show all operators at this airport',
+  flightAirlineSearch: 'Search airline...',
+  flightAirlineEmpty: 'Open the Flights tab to load airlines',
 };
 
 export const translations: Record<Lang, typeof it> = { it, en };

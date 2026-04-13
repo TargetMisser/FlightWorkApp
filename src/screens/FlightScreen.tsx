@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
-  View, Text, StyleSheet, ActivityIndicator, Modal,
+  View, Text, StyleSheet, ActivityIndicator, Modal, TextInput, ScrollView,
   FlatList, TouchableOpacity, RefreshControl, Image, Alert,
   Animated, PanResponder, NativeModules, Platform,
 } from 'react-native';
@@ -10,7 +10,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../context/ThemeContext';
 import { useAirport } from '../context/AirportContext';
-import { getAirlineOps, getAirlineColor } from '../utils/airlineOps';
+import { getAirlineOps, getAirlineColor, getSelectedAirlines, setSelectedAirlines } from '../utils/airlineOps';
 import { fetchAirportScheduleRaw } from '../utils/fr24api';
 import { fetchStaffMonitorData, normalizeFlightNumber, type StaffMonitorFlight } from '../utils/staffMonitor';
 import { formatAirportHeader } from '../utils/airportSettings';
@@ -252,6 +252,8 @@ export default function FlightScreen() {
   const [inboundArrivals, setInboundArrivals] = useState<Record<string, number>>({});
   const [filterMode, setFilterMode] = useState<'mine' | 'all'>('mine');
   const [filterMenuVisible, setFilterMenuVisible] = useState(false);
+  const [selectedAirlines, setSelectedAirlinesState] = useState<string[]>([]);
+  const [airlineSearchText, setAirlineSearchText] = useState('');
   const [allArrivalsFull, setAllArrivalsFull] = useState<any[]>([]);
   const [allDeparturesFull, setAllDeparturesFull] = useState<any[]>([]);
   const [staffMonitorDeps, setStaffMonitorDeps] = useState<StaffMonitorFlight[]>([]);
@@ -264,10 +266,11 @@ export default function FlightScreen() {
   const seenAllDeparturesRef = useRef<Map<string, any>>(new Map());
   const seenDateRef = useRef<string>(new Date().toDateString());
 
-  // Carica preferenza notifiche salvata
+  // Carica preferenze salvate
   useEffect(() => {
     AsyncStorage.getItem(NOTIF_ENABLED_KEY).then(v => setNotifsEnabled(v === 'true'));
     AsyncStorage.getItem(FLIGHT_FILTER_KEY).then(v => { if (v === 'all' || v === 'mine') setFilterMode(v); });
+    getSelectedAirlines().then(setSelectedAirlinesState);
   }, []);
 
   const fetchAll = useCallback(async () => {
@@ -558,6 +561,27 @@ export default function FlightScreen() {
     } catch (e) { if (__DEV__) console.error('[unpin]', e); }
   }, []);
 
+  // Build unique sorted airline list from all flights at this airport
+  const airportAirlines = useMemo(() => {
+    const map = new Map<string, { name: string; iata: string }>();
+    for (const f of [...allArrivalsFull, ...allDeparturesFull]) {
+      const name = f.flight?.airline?.name;
+      if (!name) continue;
+      const key = name.toLowerCase();
+      if (!map.has(key)) map.set(key, { name, iata: f.flight?.airline?.code?.iata || '' });
+    }
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [allArrivalsFull, allDeparturesFull]);
+
+  const toggleAirline = useCallback((airlineName: string) => {
+    const key = airlineName.toLowerCase();
+    setSelectedAirlinesState(prev => {
+      const next = prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key];
+      setSelectedAirlines(next);
+      return next;
+    });
+  }, []);
+
   const userShift = activeDay === 'today' ? shifts.today : shifts.tomorrow;
   const selectedDate = activeDay === 'today' ? new Date() : (() => { const d = new Date(); d.setDate(d.getDate() + 1); return d; })();
   const isSameDay = (d1: Date, d2: Date) =>
@@ -777,13 +801,18 @@ export default function FlightScreen() {
           <Text style={s.pageSub}>{formatAirportHeader(airport.code)}</Text>
         </View>
         <TouchableOpacity
-          style={[s.filterBtn, filterMode === 'all' && s.filterBtnActive]}
+          style={[s.filterBtn, filterMode === 'mine' && s.filterBtnActive]}
           onPress={() => setFilterMenuVisible(true)}
           activeOpacity={0.8}
           accessibilityLabel={t('flightFilterTitle')}
           accessibilityRole="button"
         >
-          <MaterialIcons name="filter-list" size={20} color={filterMode === 'all' ? '#fff' : '#64748B'} />
+          <MaterialIcons name="filter-list" size={20} color={filterMode === 'mine' ? '#fff' : '#64748B'} />
+          {filterMode === 'mine' && selectedAirlines.length > 0 && (
+            <View style={s.notifBadge}>
+              <Text style={s.notifBadgeTxt}>{selectedAirlines.length}</Text>
+            </View>
+          )}
         </TouchableOpacity>
         <TouchableOpacity
           style={[s.notifBtn, notifsEnabled && s.notifBtnActive]}
@@ -852,52 +881,93 @@ export default function FlightScreen() {
         />
       )}
 
-      {/* Flight Filter Modal */}
+      {/* Airline Selector Modal */}
       <Modal
         visible={filterMenuVisible}
         transparent
-        animationType="fade"
-        onRequestClose={() => setFilterMenuVisible(false)}
+        animationType="slide"
+        onRequestClose={() => { setFilterMenuVisible(false); setAirlineSearchText(''); }}
       >
-        <TouchableOpacity
-          style={s.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setFilterMenuVisible(false)}
-        >
-          <View style={s.filterSheet}>
+        <View style={s.modalOverlay}>
+          <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => { setFilterMenuVisible(false); setAirlineSearchText(''); }} />
+          <View style={s.airlineSheet}>
             <View style={s.filterSheetHandle} />
             <Text style={s.filterSheetTitle}>{t('flightFilterTitle')}</Text>
-            {(['mine', 'all'] as const).map(mode => (
-              <TouchableOpacity
-                key={mode}
-                style={[s.filterOption, filterMode === mode && s.filterOptionActive]}
-                activeOpacity={0.8}
-                onPress={() => {
-                  setFilterMode(mode);
-                  AsyncStorage.setItem(FLIGHT_FILTER_KEY, mode);
-                  setFilterMenuVisible(false);
-                }}
-              >
-                <MaterialIcons
-                  name={filterMode === mode ? 'radio-button-checked' : 'radio-button-unchecked'}
-                  size={22}
-                  color={filterMode === mode ? colors.primary : '#9CA3AF'}
-                />
-                <View style={{ flex: 1 }}>
-                  <Text style={[s.filterOptionText, filterMode === mode && { color: colors.primary }]}>
+
+            {/* Mode toggle: mine / all */}
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
+              {(['mine', 'all'] as const).map(mode => (
+                <TouchableOpacity
+                  key={mode}
+                  style={[s.modeChip, filterMode === mode && s.modeChipActive]}
+                  onPress={() => { setFilterMode(mode); AsyncStorage.setItem(FLIGHT_FILTER_KEY, mode); }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[s.modeChipText, filterMode === mode && s.modeChipTextActive]}>
                     {mode === 'mine' ? t('flightFilterMine') : t('flightFilterAll')}
                   </Text>
-                  <Text style={s.filterOptionSub}>
-                    {mode === 'mine' ? t('flightFilterMineSub') : t('flightFilterAllSub')}
-                  </Text>
-                </View>
-                {filterMode === mode && (
-                  <MaterialIcons name="check-circle" size={20} color={colors.primary} />
-                )}
-              </TouchableOpacity>
-            ))}
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Airline search + list (only when mode=mine) */}
+            {filterMode === 'mine' && (
+              <>
+                <TextInput
+                  style={s.airlineSearch}
+                  placeholder={t('flightAirlineSearch')}
+                  placeholderTextColor="#9CA3AF"
+                  value={airlineSearchText}
+                  onChangeText={setAirlineSearchText}
+                  autoCorrect={false}
+                />
+                <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
+                  {airportAirlines
+                    .filter(a => !airlineSearchText || a.name.toLowerCase().includes(airlineSearchText.toLowerCase()))
+                    .map(a => {
+                      const isSelected = selectedAirlines.includes(a.name.toLowerCase());
+                      return (
+                        <TouchableOpacity
+                          key={a.name}
+                          style={[s.airlineRow, isSelected && s.airlineRowActive]}
+                          onPress={() => toggleAirline(a.name)}
+                          activeOpacity={0.7}
+                        >
+                          <View style={[s.airlineLogoPill, { backgroundColor: getAirlineColor(a.name) }]}>
+                            <Text style={{ color: '#fff', fontWeight: '800', fontSize: 10 }}>
+                              {a.iata || a.name.slice(0, 2).toUpperCase()}
+                            </Text>
+                          </View>
+                          <Text style={[s.airlineRowText, isSelected && { color: colors.primary }]} numberOfLines={1}>
+                            {a.name}
+                          </Text>
+                          <MaterialIcons
+                            name={isSelected ? 'check-box' : 'check-box-outline-blank'}
+                            size={22}
+                            color={isSelected ? colors.primary : '#9CA3AF'}
+                          />
+                        </TouchableOpacity>
+                      );
+                    })}
+                  {airportAirlines.length === 0 && (
+                    <Text style={{ color: colors.textSub, textAlign: 'center', paddingVertical: 20, fontSize: 13 }}>
+                      {t('flightAirlineEmpty')}
+                    </Text>
+                  )}
+                </ScrollView>
+              </>
+            )}
+
+            {/* Done button */}
+            <TouchableOpacity
+              style={[s.modeChip, s.modeChipActive, { alignSelf: 'center', marginTop: 16, paddingHorizontal: 32 }]}
+              onPress={() => { setFilterMenuVisible(false); setAirlineSearchText(''); fetchAll(); }}
+              activeOpacity={0.8}
+            >
+              <Text style={s.modeChipTextActive}>{t('ok')}</Text>
+            </TouchableOpacity>
           </View>
-        </TouchableOpacity>
+        </View>
       </Modal>
     </View>
   );
@@ -956,5 +1026,16 @@ function makeStyles(c: ThemeColors) {
     smFooter: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: 14, paddingBottom: 10, backgroundColor: c.card },
     smPill: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: c.primaryLight, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
     smPillText: { fontSize: 11, fontWeight: '700', color: c.primaryDark },
+    // Airline selector modal
+    airlineSheet: { backgroundColor: c.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 36, maxHeight: '80%' },
+    modeChip: { flex: 1, paddingVertical: 10, borderRadius: 12, backgroundColor: c.bg, alignItems: 'center' },
+    modeChipActive: { backgroundColor: c.primary },
+    modeChipText: { fontSize: 14, fontWeight: '600', color: c.textSub },
+    modeChipTextActive: { fontSize: 14, fontWeight: '700', color: '#fff' },
+    airlineSearch: { backgroundColor: c.bg, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, fontSize: 14, color: c.text, marginBottom: 10, borderWidth: 1, borderColor: c.border },
+    airlineRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 12, marginBottom: 4, backgroundColor: c.bg },
+    airlineRowActive: { backgroundColor: c.primaryLight },
+    airlineLogoPill: { width: 36, height: 24, borderRadius: 6, justifyContent: 'center', alignItems: 'center' },
+    airlineRowText: { flex: 1, fontSize: 14, fontWeight: '600', color: c.text },
   });
 }

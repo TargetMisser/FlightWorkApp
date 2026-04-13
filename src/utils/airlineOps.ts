@@ -36,3 +36,25 @@ export function getAirlineColor(name: string): HexColor {
 }
 
 export const ALLOWED_AIRLINES = ['wizz', 'aer lingus', 'easyjet', 'british airways', 'sas', 'scandinavian', 'flydubai'];
+
+// ─── Dynamic airline selection (persisted in AsyncStorage) ───────────────────
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const SELECTED_AIRLINES_KEY = 'aerostaff_selected_airlines_v1';
+
+/** Read user-selected airlines. Falls back to ALLOWED_AIRLINES if never set. */
+export async function getSelectedAirlines(): Promise<string[]> {
+  try {
+    const raw = await AsyncStorage.getItem(SELECTED_AIRLINES_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch {}
+  return ALLOWED_AIRLINES;
+}
+
+/** Persist the user's airline selection (lowercase keys). */
+export async function setSelectedAirlines(airlines: string[]): Promise<void> {
+  await AsyncStorage.setItem(SELECTED_AIRLINES_KEY, JSON.stringify(airlines));
+}

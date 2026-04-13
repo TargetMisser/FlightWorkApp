@@ -1,4 +1,4 @@
-import { ALLOWED_AIRLINES } from './airlineOps';
+import { getSelectedAirlines } from './airlineOps';
 import {
   buildFr24ScheduleUrl,
   getAirportInfo,
@@ -85,9 +85,9 @@ export type FR24ScheduleRaw = {
   airport: AirportInfo;
 };
 
-function filterAirlines(data: FR24FlightData[]) {
+function filterAirlines(data: FR24FlightData[], selected: string[]) {
   return data.filter(item =>
-    ALLOWED_AIRLINES.some(key => (item.flight?.airline?.name || '').toLowerCase().includes(key)),
+    selected.some(key => (item.flight?.airline?.name || '').toLowerCase().includes(key)),
   );
 }
 
@@ -106,6 +106,7 @@ export async function fetchAirportSchedule(code?: string): Promise<FR24Schedule>
 
   try {
     const airportCode = await resolveAirportCode(code);
+    const selected = await getSelectedAirlines();
     const res = await fetch(buildFr24ScheduleUrl(airportCode), {
       headers: { 'User-Agent': 'Mozilla/5.0' },
       signal: controller.signal,
@@ -116,8 +117,8 @@ export async function fetchAirportSchedule(code?: string): Promise<FR24Schedule>
     const allDepartures = json.result?.response?.airport?.pluginData?.schedule?.departures?.data || [];
 
     return {
-      arrivals: filterAirlines(allArrivals),
-      departures: filterAirlines(allDepartures),
+      arrivals: filterAirlines(allArrivals, selected),
+      departures: filterAirlines(allDepartures, selected),
       airportCode,
       airport: getAirportInfo(airportCode),
     };
@@ -132,10 +133,16 @@ export async function fetchAirportSchedule(code?: string): Promise<FR24Schedule>
  */
 export async function fetchAirportScheduleRaw(code?: string): Promise<FR24ScheduleRaw> {
   const airportCode = await resolveAirportCode(code);
+  const selected = await getSelectedAirlines();
 
   // Return cached data if fresh enough
   if (_cache && _cache.code === airportCode && Date.now() - _cache.ts < CACHE_TTL) {
-    return _cache.data;
+    // Re-filter with current selection (user may have changed airlines)
+    return {
+      ..._cache.data,
+      arrivals: filterAirlines(_cache.data.allArrivals, selected),
+      departures: filterAirlines(_cache.data.allDepartures, selected),
+    };
   }
 
   const controller = new AbortController();
@@ -154,8 +161,8 @@ export async function fetchAirportScheduleRaw(code?: string): Promise<FR24Schedu
     const data: FR24ScheduleRaw = {
       allArrivals,
       allDepartures,
-      arrivals: filterAirlines(allArrivals),
-      departures: filterAirlines(allDepartures),
+      arrivals: filterAirlines(allArrivals, selected),
+      departures: filterAirlines(allDepartures, selected),
       airportCode,
       airport: getAirportInfo(airportCode),
     };
