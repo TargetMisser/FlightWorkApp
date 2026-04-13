@@ -7,6 +7,7 @@ const it = {
   overlayManuals: 'Manuali DCS', overlaySettings: 'Impostazioni',
   // Common
   cancel: 'Annulla', save: 'Salva', delete: 'Elimina', error: 'Errore',
+  close: 'Chiudi',
   confirm: 'Conferma', ok: 'OK', add: 'Aggiungi',
   // Settings
   settingsTitle: 'Impostazioni',
@@ -162,6 +163,7 @@ const en: typeof it = {
   overlayNotepad: 'Notepad', overlayPhonebook: 'Phonebook', overlayPasswords: 'Password',
   overlayManuals: 'DCS Manuals', overlaySettings: 'Settings',
   // Common
+  close: 'Close',
   cancel: 'Cancel', save: 'Save', delete: 'Delete', error: 'Error',
   confirm: 'Confirm', ok: 'OK', add: 'Add',
   // Settings
