@@ -82,7 +82,7 @@ export default function NotepadScreen() {
       t('notepadClearTitle'),
       t('notepadClearMsg'),
       [
-        { text: 'Annulla', style: 'cancel' },
+        { text: t('cancel'), style: 'cancel' },
         {
           text: t('notepadClearConfirm'),
           style: 'destructive',
@@ -109,12 +109,21 @@ export default function NotepadScreen() {
           <Text style={s.title}>{t('notepadTitle')}</Text>
         </View>
         <View style={s.actions}>
-          <TouchableOpacity onPress={clear} style={s.iconBtn}>
+          <TouchableOpacity
+            onPress={clear}
+            style={s.iconBtn}
+            accessible
+            accessibilityLabel={t('notepadAccessibilityClear')}
+            accessibilityRole="button"
+          >
             <MaterialIcons name="delete-outline" size={22} color="#EF4444" />
           </TouchableOpacity>
           <TouchableOpacity
             onPress={save}
             style={[s.saveBtn, saved && s.saveBtnDim]}
+            accessible
+            accessibilityLabel={t('notepadAccessibilitySave')}
+            accessibilityRole="button"
           >
             <MaterialIcons name="save" size={18} color="#fff" />
             <Text style={s.saveTxt}>{saved ? t('notepadSaved') : t('notepadSave')}</Text>
@@ -126,7 +135,7 @@ export default function NotepadScreen() {
       <View style={s.statusBar}>
         <View style={[s.dot, { backgroundColor: saved ? '#22C55E' : '#F59E0B' }]} />
         <Text style={s.statusTxt}>
-          {saved ? 'Salvato' : t('notepadUnsaved')}
+          {saved ? t('notepadSaved') : t('notepadUnsaved')}
         </Text>
         <Text style={s.charCount}>{charCount} {t('notepadChars')}</Text>
       </View>
