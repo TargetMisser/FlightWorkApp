@@ -531,18 +531,25 @@ export default function FlightScreen() {
 
   const userShift = activeDay === 'today' ? shifts.today : shifts.tomorrow;
   const selectedDate = activeDay === 'today' ? new Date() : (() => { const d = new Date(); d.setDate(d.getDate() + 1); return d; })();
-  const isSameDay = (d1: Date, d2: Date) =>
-    d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
 
   const currentData = (() => {
     const source = filterMode === 'all'
       ? (activeTab === 'arrivals' ? allArrivalsFull : allDeparturesFull)
       : (activeTab === 'arrivals' ? arrivals : departures);
+
+    // Performance optimization: pre-calculate boundary timestamps outside the filter loop
+    const startOfDayDate = new Date(selectedDate);
+    startOfDayDate.setHours(0, 0, 0, 0);
+    const startOfDayTs = startOfDayDate.getTime() / 1000;
+    const endOfDayDate = new Date(startOfDayDate);
+    endOfDayDate.setHours(23, 59, 59, 999);
+    const endOfDayTs = endOfDayDate.getTime() / 1000;
+
     return source.filter(item => {
       const ts = activeTab === 'arrivals'
         ? item.flight?.time?.scheduled?.arrival
         : item.flight?.time?.scheduled?.departure;
-      return ts && isSameDay(new Date(ts * 1000), selectedDate);
+      return ts && ts >= startOfDayTs && ts <= endOfDayTs;
     });
   })();
 
@@ -810,6 +817,10 @@ export default function FlightScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchAll(); }} tintColor={colors.primary} />}
           ListEmptyComponent={<Text style={{ textAlign: 'center', marginTop: 40, color: '#9CA3AF', fontSize: 15 }}>{t('flightNoFlights')}</Text>}
           showsVerticalScrollIndicator={false}
+          initialNumToRender={10}
+          windowSize={5}
+          maxToRenderPerBatch={10}
+          removeClippedSubviews={Platform.OS === 'android'}
         />
       )}
 
