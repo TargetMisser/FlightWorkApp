@@ -150,7 +150,28 @@ export default function PasswordScreen() {
   useEffect(() => {
     (async () => {
       const raw = await AsyncStorage.getItem(PASSWORDS_KEY);
-      if (raw) setEntries(JSON.parse(raw));
+      if (raw) {
+        const parsed: PasswordEntry[] = JSON.parse(raw);
+        let hasLegacy = false;
+        const resolved = await Promise.all(
+          parsed.map(async (entry) => {
+            if (entry.password === '***') {
+              const securePassword = await SecureStore.getItemAsync(`aerostaff_pwd_${entry.id}`);
+              return { ...entry, password: securePassword || '' };
+            } else {
+              // Legacy unencrypted entry: secure it now
+              await SecureStore.setItemAsync(`aerostaff_pwd_${entry.id}`, entry.password);
+              hasLegacy = true;
+              return entry;
+            }
+          })
+        );
+        setEntries(resolved);
+        if (hasLegacy) {
+          const maskedLegacy = resolved.map(entry => ({ ...entry, password: '***' }));
+          await AsyncStorage.setItem(PASSWORDS_KEY, JSON.stringify(maskedLegacy));
+        }
+      }
       const enabled = await AsyncStorage.getItem(PIN_ENABLED_KEY);
       const isEnabled = enabled === 'true';
       setPinEnabled(isEnabled);
@@ -160,8 +181,23 @@ export default function PasswordScreen() {
 
   const persist = useCallback(async (next: PasswordEntry[]) => {
     setEntries(next);
-    await AsyncStorage.setItem(PASSWORDS_KEY, JSON.stringify(next));
-  }, []);
+    // Identify and clean up removed entries from SecureStore
+    const currentIds = new Set(entries.map(e => e.id));
+    const nextIds = new Set(next.map(e => e.id));
+    for (const id of currentIds) {
+      if (!nextIds.has(id)) {
+        await SecureStore.deleteItemAsync(`aerostaff_pwd_${id}`);
+      }
+    }
+    // Save actual passwords to SecureStore and mask them for AsyncStorage
+    const maskedNext = await Promise.all(
+      next.map(async (entry) => {
+        await SecureStore.setItemAsync(`aerostaff_pwd_${entry.id}`, entry.password);
+        return { ...entry, password: '***' };
+      })
+    );
+    await AsyncStorage.setItem(PASSWORDS_KEY, JSON.stringify(maskedNext));
+  }, [entries]);
 
   // PIN toggle
   const togglePin = useCallback(async () => {
