@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ActivityIndicator, ScrollView, TouchableOpacity,
   PanResponder, Platform, UIManager, Animated, Dimensions, Modal, Alert, FlatList, TextInput,
+  Linking,
 } from 'react-native';
 import * as SystemCalendar from 'expo-calendar';
 import * as Location from 'expo-location';
@@ -92,8 +93,18 @@ export default function CalendarScreen() {
 
 
   const saveManualShift = async () => {
-    const { status } = await SystemCalendar.requestCalendarPermissionsAsync();
-    if (status !== 'granted') { Alert.alert(t('calPermDenied')); return; }
+    const { status, canAskAgain } = await SystemCalendar.requestCalendarPermissionsAsync();
+    if (status !== 'granted') {
+      if (!canAskAgain) {
+        Alert.alert(t('calPermDenied'), t('calPermSettingsHint'), [
+          { text: t('cancel'), style: 'cancel' },
+          { text: t('calOpenSettings'), onPress: () => Linking.openSettings() },
+        ]);
+      } else {
+        Alert.alert(t('calPermDenied'));
+      }
+      return;
+    }
 
     try {
       const calendarId = calId ?? await getWritableCalendarId();

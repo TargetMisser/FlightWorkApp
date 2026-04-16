@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import * as Calendar from 'expo-calendar';
 
 export type ShiftEventTitles = {
@@ -106,7 +107,30 @@ export async function getWritableCalendarId(): Promise<string | null> {
     calendars.find(item => item.allowsModifications && item.isPrimary)
     || calendars.find(item => item.allowsModifications);
 
-  return calendar?.id ?? null;
+  if (calendar) return calendar.id;
+
+  // Fallback: create a dedicated local calendar
+  try {
+    let source: Calendar.Source;
+    if (Platform.OS === 'ios') {
+      const defaultCal = await Calendar.getDefaultCalendarAsync();
+      source = defaultCal.source;
+    } else {
+      source = { isLocalAccount: true, name: 'FlightWork', type: Calendar.SourceType.LOCAL, id: '' };
+    }
+    const id = await Calendar.createCalendarAsync({
+      title: 'FlightWork Turni',
+      color: '#F47B16',
+      entityType: Calendar.EntityTypes.EVENT,
+      source,
+      name: 'FlightWork',
+      ownerAccount: 'FlightWork',
+      accessLevel: Calendar.CalendarAccessLevel.OWNER,
+    });
+    return id;
+  } catch {
+    return null;
+  }
 }
 
 export async function deleteShiftEventsInRange(
