@@ -4,6 +4,9 @@ on:
   push:
     tags:
       - 'v*'
+    branches:
+      - 'claude/fix-shift-permissions-Cn8gk'
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -57,11 +60,17 @@ jobs:
           sed -i "s|apply plugin: 'com.android.library'|// Fix: project-level re-declaration\ndef _coreFeatures = project.findProperty(\"coreFeatures\") ?: []\next.shouldIncludeCompose = _coreFeatures.contains(\"compose\")\n\napply plugin: 'com.android.library'|" "$FILE"
           sed -i 's/^\s*compose shouldIncludeCompose\s*$/    compose = shouldIncludeCompose/' "$FILE"
 
-      - name: Read version from app.json
+      - name: Compute release tag
         id: meta
         run: |
           VERSION=$(node -p "require('./app.json').expo.version")
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            TAG="${{ github.ref_name }}"
+          else
+            TAG="v${VERSION}"
+          fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG"         >> "$GITHUB_OUTPUT"
 
       - name: Make gradlew executable
         run: chmod +x android/gradlew
@@ -92,20 +101,25 @@ jobs:
       - name: Rename APK
         run: |
           APK=$(find android/app/build/outputs/apk/release -name "*.apk" -type f | head -1)
-          DEST="AeroStaffPro-${{ github.ref_name }}.apk"
+          DEST="AeroStaffPro-${{ steps.meta.outputs.tag }}.apk"
           cp "$APK" "$DEST"
           echo "apk=$DEST" >> "$GITHUB_ENV"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: "AeroStaff Pro ${{ github.ref_name }}"
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: "AeroStaff Pro ${{ steps.meta.outputs.tag }}"
           body: |
-            ## 📦 AeroStaff Pro ${{ github.ref_name }}
+            ## 📦 AeroStaff Pro ${{ steps.meta.outputs.tag }}
 
-            Scarica `AeroStaffPro-${{ github.ref_name }}.apk` e installalo sul tuo dispositivo Android.
+            ### Bug fixes
+            - Permessi calendario: mostra "Apri Impostazioni" se rifiutato permanentemente
+            - Modal Aggiungi Turno: form scrollabile, tasto Salva sempre raggiungibile
+            - Widget: si aggiorna autonomamente ogni 30 min scaricando dati freschi da FR24
+            - Widget: si aggiorna subito dopo il salvataggio di un turno dal CalendarScreen
 
-            > Se hai già una versione installata con lo stesso keystore debug, puoi aggiornare direttamente senza disinstallare.
+            Scarica `AeroStaffPro-${{ steps.meta.outputs.tag }}.apk` e installalo sul tuo dispositivo Android.
           files: ${{ env.apk }}
           draft: false
           prerelease: false
