@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ActivityIndicator, ScrollView, TouchableOpacity,
   PanResponder, Platform, UIManager, Animated, Dimensions, Modal, Alert, FlatList, TextInput,
+  Linking,
 } from 'react-native';
 import * as SystemCalendar from 'expo-calendar';
 import * as Location from 'expo-location';
@@ -10,6 +11,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { WebView } from 'react-native-webview';
 import { MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { requestWidgetUpdate } from 'react-native-android-widget';
 import { useAppTheme, type ThemeColors } from '../context/ThemeContext';
 import TimeCarouselPicker from '../components/TimeCarouselPicker';
 import { useAirport } from '../context/AirportContext';
@@ -19,6 +21,9 @@ import {
   replaceShiftForDate,
   replaceShiftsForRange,
 } from '../utils/shiftCalendar';
+import { WIDGET_SHIFT_KEY, WIDGET_CACHE_KEY } from '../widgets/widgetTaskHandler';
+import type { WidgetShiftData } from '../widgets/widgetTaskHandler';
+import { ShiftWidget } from '../widgets/ShiftWidget';
 import {
   getPdfExtractorHtml, parseShiftCells,
   type ParsedSchedule, type ParsedEmployee, type ParsedShift,
@@ -90,26 +95,64 @@ export default function CalendarScreen() {
     setManualModalOpen(true);
   };
 
+  // Push the saved shift to the widget so it updates immediately without opening FlightScreen
+  const pushShiftToWidget = async (date: string, type: 'work' | 'rest', startH?: number, startM?: number, endH?: number, endM?: number) => {
+    try {
+      const todayIso = new Date().toISOString().split('T')[0];
+      if (date !== todayIso) return; // only update widget for today's shift
+      const isRest = type === 'rest';
+      let shiftToday: { start: number; end: number } | null = null;
+      if (!isRest && startH !== undefined && startM !== undefined && endH !== undefined && endM !== undefined) {
+        const base = new Date(); base.setHours(0, 0, 0, 0);
+        const startTs = new Date(base); startTs.setHours(startH, startM, 0, 0);
+        let endTs = new Date(base); endTs.setHours(endH, endM, 0, 0);
+        if (endTs <= startTs) endTs.setDate(endTs.getDate() + 1);
+        shiftToday = { start: startTs.getTime() / 1000, end: endTs.getTime() / 1000 };
+      }
+      const shiftKeyData: WidgetShiftData = { date: todayIso, shiftToday, isRestDay: isRest };
+      await AsyncStorage.setItem(WIDGET_SHIFT_KEY, JSON.stringify(shiftKeyData));
+      // Invalidate flight cache so widget fetches fresh flights next update
+      const noFlightData = shiftToday
+        ? { state: 'work_empty', shiftLabel: '', updatedAt: '' }
+        : isRest ? { state: 'rest' } : { state: 'no_shift' };
+      await AsyncStorage.setItem(WIDGET_CACHE_KEY, JSON.stringify(noFlightData));
+      if (Platform.OS === 'android') {
+        requestWidgetUpdate({ widgetName: 'ShiftFlights', renderWidget: () => (<ShiftWidget data={noFlightData as any} />) as any }).catch(() => {});
+      }
+    } catch {}
+  };
 
   const saveManualShift = async () => {
-    const { status } = await SystemCalendar.requestCalendarPermissionsAsync();
-    if (status !== 'granted') { Alert.alert(t('calPermDenied')); return; }
+    const { status, canAskAgain } = await SystemCalendar.requestCalendarPermissionsAsync();
+    if (status !== 'granted') {
+      if (!canAskAgain) {
+        Alert.alert(t('calPermDenied'), t('calPermSettingsHint'), [
+          { text: t('cancel'), style: 'cancel' },
+          { text: t('calOpenSettings'), onPress: () => Linking.openSettings() },
+        ]);
+      } else {
+        Alert.alert(t('calPermDenied'));
+      }
+      return;
+    }
 
     try {
       const calendarId = calId ?? await getWritableCalendarId();
       if (!calendarId) { Alert.alert('Errore', t('calNoWritableCalendar')); return; }
       if (!calId) setCalId(calendarId);
 
+      const shiftType: 'work' | 'rest' = manualType === 'Riposo' ? 'rest' : 'work';
       await replaceShiftForDate({
         calendarId,
         date: manualDate,
-        type: manualType === 'Riposo' ? 'rest' : 'work',
+        type: shiftType,
         startTime: manualType === 'Lavoro' ? `${String(manualStartH).padStart(2, '0')}:${String(manualStartM).padStart(2, '0')}` : undefined,
         endTime: manualType === 'Lavoro' ? `${String(manualEndH).padStart(2, '0')}:${String(manualEndM).padStart(2, '0')}` : undefined,
       });
 
       setManualModalOpen(false);
       fetchCalendar(true);
+      pushShiftToWidget(manualDate, shiftType, manualStartH, manualStartM, manualEndH, manualEndM);
       Alert.alert(t('calShiftSaved'));
     } catch (e: any) { Alert.alert('Errore', e.message); }
   };
@@ -341,6 +384,15 @@ export default function CalendarScreen() {
         })),
       });
 
+      // Push today's shift to widget if it's included in the import
+      const todayIso = new Date().toISOString().split('T')[0];
+      const todayShift = selectedEmployee.shifts.find(s => s.date === todayIso);
+      if (todayShift) {
+        const [sh, sm] = (todayShift.start || '00:00').split(':').map(Number);
+        const [eh, em] = (todayShift.end || '00:00').split(':').map(Number);
+        pushShiftToWidget(todayIso, todayShift.type, sh, sm, eh, em);
+      }
+
       setImportStep('done');
       setTimeout(() => {
         setImportModalVisible(false);
@@ -489,73 +541,81 @@ export default function CalendarScreen() {
           <TouchableOpacity style={s.modalBg} activeOpacity={1} onPress={() => setManualModalOpen(false)} />
           <View style={s.modalScrollContent}>
             <View style={[s.manualModalContent, { backgroundColor: colors.isDark || colors.card === 'transparent' ? '#1E293B' : '#FFFFFF' }]}>
-            <View style={s.modalHeader}>
+            {/* Header fisso */}
+            <View style={[s.modalHeader, { paddingHorizontal: 24, paddingTop: 24 }]}>
               <Text style={[s.modalTitle, { color: colors.text }]}>{t('calAddShiftTitle')}</Text>
               <TouchableOpacity onPress={() => setManualModalOpen(false)}>
                 <MaterialIcons name="close" size={24} color={colors.textSub} />
               </TouchableOpacity>
             </View>
 
-            {/* Data */}
-            <Text style={[s.manualLabel, { color: colors.textSub }]}>{t('calDataLabel')}</Text>
-            <TextInput
-              style={[s.manualInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.bg }]}
-              value={manualDate.split('-').reverse().join('/')}
-              editable={false}
-            />
-            <Text style={{ fontSize: 11, color: colors.textMuted, marginBottom: 12 }}>
-              Seleziona un giorno dal calendario per cambiare la data
-            </Text>
+            {/* Contenuto scrollabile */}
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40 }}
+            >
+              {/* Data */}
+              <Text style={[s.manualLabel, { color: colors.textSub }]}>{t('calDataLabel')}</Text>
+              <TextInput
+                style={[s.manualInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.bg }]}
+                value={manualDate.split('-').reverse().join('/')}
+                editable={false}
+              />
+              <Text style={{ fontSize: 11, color: colors.textMuted, marginBottom: 12 }}>
+                Seleziona un giorno dal calendario per cambiare la data
+              </Text>
 
-            {/* Tipo */}
-            <Text style={[s.manualLabel, { color: colors.textSub }]}>{t('calTypeLabel')}</Text>
-            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 16 }}>
-              {(['Lavoro', 'Riposo'] as const).map(shiftType => (
-                <TouchableOpacity
-                  key={shiftType}
-                  style={[s.manualTypeBtn, { borderColor: colors.border }, manualType === shiftType && { backgroundColor: colors.primary, borderColor: colors.primary }]}
-                  onPress={() => setManualType(shiftType)}
-                >
-                  <Text style={{ color: manualType === shiftType ? '#fff' : colors.text, fontWeight: '700' }}>{shiftType === 'Lavoro' ? t('calTypeWork') : t('calTypeRest')}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+              {/* Tipo */}
+              <Text style={[s.manualLabel, { color: colors.textSub }]}>{t('calTypeLabel')}</Text>
+              <View style={{ flexDirection: 'row', gap: 10, marginBottom: 16 }}>
+                {(['Lavoro', 'Riposo'] as const).map(shiftType => (
+                  <TouchableOpacity
+                    key={shiftType}
+                    style={[s.manualTypeBtn, { borderColor: colors.border }, manualType === shiftType && { backgroundColor: colors.primary, borderColor: colors.primary }]}
+                    onPress={() => setManualType(shiftType)}
+                  >
+                    <Text style={{ color: manualType === shiftType ? '#fff' : colors.text, fontWeight: '700' }}>{shiftType === 'Lavoro' ? t('calTypeWork') : t('calTypeRest')}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
 
-            {/* Orari (solo lavoro) */}
-            {manualType === 'Lavoro' && (
-              <>
-                <Text style={[s.manualLabel, { color: colors.textSub }]}>{t('calStartTime')}</Text>
-                <TimeCarouselPicker
-                  key={pickerKey * 2}
-                  hour={manualStartH}
-                  minute={manualStartM}
-                  onHourChange={setManualStartH}
-                  onMinuteChange={setManualStartM}
-                  accentColor={colors.primary}
-                  textColor={colors.text}
-                  mutedColor={colors.textMuted}
-                  bgColor={colors.card === 'transparent' ? (colors.isDark ? '#1E293B' : '#F3F4F6') : colors.card}
-                  borderColor={colors.border}
-                />
-                <Text style={[s.manualLabel, { color: colors.textSub, marginTop: 16 }]}>{t('calEndTime')}</Text>
-                <TimeCarouselPicker
-                  key={pickerKey * 2 + 1}
-                  hour={manualEndH}
-                  minute={manualEndM}
-                  onHourChange={setManualEndH}
-                  onMinuteChange={setManualEndM}
-                  accentColor={colors.primary}
-                  textColor={colors.text}
-                  mutedColor={colors.textMuted}
-                  bgColor={colors.card === 'transparent' ? (colors.isDark ? '#1E293B' : '#F3F4F6') : colors.card}
-                  borderColor={colors.border}
-                />
-              </>
-            )}
+              {/* Orari (solo lavoro) */}
+              {manualType === 'Lavoro' && (
+                <>
+                  <Text style={[s.manualLabel, { color: colors.textSub }]}>{t('calStartTime')}</Text>
+                  <TimeCarouselPicker
+                    key={pickerKey * 2}
+                    hour={manualStartH}
+                    minute={manualStartM}
+                    onHourChange={setManualStartH}
+                    onMinuteChange={setManualStartM}
+                    accentColor={colors.primary}
+                    textColor={colors.text}
+                    mutedColor={colors.textMuted}
+                    bgColor={colors.card === 'transparent' ? (colors.isDark ? '#1E293B' : '#F3F4F6') : colors.card}
+                    borderColor={colors.border}
+                  />
+                  <Text style={[s.manualLabel, { color: colors.textSub, marginTop: 16 }]}>{t('calEndTime')}</Text>
+                  <TimeCarouselPicker
+                    key={pickerKey * 2 + 1}
+                    hour={manualEndH}
+                    minute={manualEndM}
+                    onHourChange={setManualEndH}
+                    onMinuteChange={setManualEndM}
+                    accentColor={colors.primary}
+                    textColor={colors.text}
+                    mutedColor={colors.textMuted}
+                    bgColor={colors.card === 'transparent' ? (colors.isDark ? '#1E293B' : '#F3F4F6') : colors.card}
+                    borderColor={colors.border}
+                  />
+                </>
+              )}
 
-            <TouchableOpacity style={[s.primaryBtn, { backgroundColor: colors.primary, marginTop: 16 }]} onPress={saveManualShift}>
-              <Text style={s.primaryBtnText}>{t('calSaveShift')}</Text>
-            </TouchableOpacity>
+              <TouchableOpacity style={[s.primaryBtn, { backgroundColor: colors.primary, marginTop: 24 }]} onPress={saveManualShift}>
+                <Text style={s.primaryBtnText}>{t('calSaveShift')}</Text>
+              </TouchableOpacity>
+            </ScrollView>
             </View>
           </View>
         </View>
@@ -733,7 +793,7 @@ function makeStyles(c: ThemeColors) {
     modalBg: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)' },
     modalScrollContent: { flex: 1, justifyContent: 'flex-end' },
     modalContent: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 100, maxHeight: '92%' },
-    manualModalContent: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 32, maxHeight: '92%' },
+    manualModalContent: { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 0, maxHeight: '92%' },
     modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
     modalTitle: { fontSize: 20, fontWeight: 'bold' },
     centerBox: { alignItems: 'center', paddingVertical: 40, gap: 12 },

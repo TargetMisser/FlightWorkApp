@@ -1,0 +1,90 @@
+name: Build & Release APK
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Bundle JS for Android
+        run: |
+          mkdir -p android/app/src/main/assets
+          node_modules/.bin/expo export:embed \
+            --platform android \
+            --entry-file index.ts \
+            --bundle-output android/app/src/main/assets/index.android.bundle \
+            --assets-dest android/app/src/main/res
+
+      - name: Generate debug keystore (for signing)
+        run: |
+          keytool -genkey -v \
+            -keystore android/app/debug.keystore \
+            -storepass android \
+            -alias androiddebugkey \
+            -keypass android \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -dname "CN=Android Debug,O=Android,C=US"
+
+      - name: Build release APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleRelease
+
+      - name: Get version name
+        id: version
+        run: |
+          VERSION=$(grep versionName android/app/build.gradle | sed "s/.*versionName \"\\(.*\\)\"/\\1/")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Rename APK
+        run: |
+          mv android/app/build/outputs/apk/release/app-release.apk \
+             FlightWorkApp-${{ github.ref_name }}.apk
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "${{ github.ref_name }} - Shift Permissions & Widget Fix"
+          body: |
+            ## 🐛 Bug Fixes
+
+            🔧 **Permessi calendario** — Quando il permesso è rifiutato permanentemente, ora mostra un tasto "Apri Impostazioni" per abilitarlo direttamente
+            🔧 **Modal Aggiungi Turno** — Il form è ora scrollabile: il tasto "Salva Turno" è sempre raggiungibile su schermi piccoli
+            🔧 **Widget auto-aggiornante** — Il widget ora scarica dati freschi da FR24 ad ogni aggiornamento Android (30 min) senza dover aprire l'app
+            🔧 **Widget si aggiorna dopo salvataggio turno** — Salvando un turno dal CalendarScreen il widget si aggiorna immediatamente
+
+            ## 📦 Technical
+
+            - versionCode bumped to 7
+            - versionName ${{ steps.version.outputs.version }}
+          files: FlightWorkApp-${{ github.ref_name }}.apk
+          draft: false
+          prerelease: false

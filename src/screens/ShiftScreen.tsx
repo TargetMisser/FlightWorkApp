@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, ScrollView, Alert, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, ScrollView, Alert, TouchableOpacity, Image, Linking } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { WebView } from 'react-native-webview';
 import * as Calendar from 'expo-calendar';
@@ -66,9 +66,16 @@ export default function ShiftScreen() {
   };
 
   const parseAndSaveShifts = async () => {
-    const { status } = await Calendar.requestCalendarPermissionsAsync();
+    const { status, canAskAgain } = await Calendar.requestCalendarPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert("Permesso negato", "Devi autorizzare l'accesso al calendario del telefono.");
+      if (!canAskAgain) {
+        Alert.alert("Permesso negato", "Abilita l'accesso al calendario nelle impostazioni del dispositivo.", [
+          { text: 'Annulla', style: 'cancel' },
+          { text: 'Apri Impostazioni', onPress: () => Linking.openSettings() },
+        ]);
+      } else {
+        Alert.alert("Permesso negato", "Devi autorizzare l'accesso al calendario del telefono.");
+      }
       return;
     }
 
