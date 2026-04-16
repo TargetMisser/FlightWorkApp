@@ -27,6 +27,19 @@ const NOTIF_ENABLED_KEY = 'aerostaff_notif_enabled';
 const PINNED_FLIGHT_KEY = 'pinned_flight_v1';
 const PINNED_NOTIF_IDS_KEY = 'pinned_notif_ids_v1';
 const FLIGHT_FILTER_KEY = 'aerostaff_flight_filter_v1';
+const FLIGHTS_CACHE_KEY = 'aerostaff_flights_cache_v2';
+
+function flightKey(item: any, tsField: string): string {
+  return item.flight?.identification?.id
+    || `${item.flight?.identification?.number?.default ?? ''}_${item.flight?.time?.scheduled?.[tsField] ?? ''}`;
+}
+
+function mergeFlights(cached: any[], fresh: any[], tsField: string): any[] {
+  const map = new Map<string, any>();
+  for (const item of cached) map.set(flightKey(item, tsField), item);
+  for (const item of fresh) map.set(flightKey(item, tsField), item);
+  return Array.from(map.values());
+}
 
 // Handler: mostra notifiche anche con app aperta (wrapped for Expo Go compat)
 try { Notifications.setNotificationHandler({
@@ -263,6 +276,18 @@ export default function FlightScreen() {
 
   useEffect(() => {
     AsyncStorage.getItem(NOTIF_ENABLED_KEY).then(v => setNotifsEnabled(v === 'true'));
+    // Carica voli accumulati oggi così sono visibili prima del primo fetch
+    const today = new Date().toISOString().split('T')[0];
+    AsyncStorage.getItem(FLIGHTS_CACHE_KEY).then(raw => {
+      if (!raw) return;
+      try {
+        const cache = JSON.parse(raw);
+        if (cache.date === today) {
+          setAllArrivalsFull(cache.arrivals ?? []);
+          setAllDeparturesFull(cache.departures ?? []);
+        }
+      } catch {}
+    });
   }, []);
 
   // Carica lista compagnie per aeroporto + selezione salvata
@@ -290,8 +315,22 @@ export default function FlightScreen() {
         departures: fetchedDepartures,
         arrivals: fetchedArrivals,
       } = await fetchAirportScheduleRaw(airportCode);
-      setAllArrivalsFull(allArrivals);
-      setAllDeparturesFull(allDepartures);
+      // Accumula voli: fonde i dati freschi con quelli già visti oggi
+      // così i voli rimossi da FR24 dopo la partenza restano visibili fino a mezzanotte
+      const today = new Date().toISOString().split('T')[0];
+      let cachedArrs: any[] = [], cachedDeps: any[] = [];
+      try {
+        const raw = await AsyncStorage.getItem(FLIGHTS_CACHE_KEY);
+        if (raw) {
+          const cache = JSON.parse(raw);
+          if (cache.date === today) { cachedArrs = cache.arrivals ?? []; cachedDeps = cache.departures ?? []; }
+        }
+      } catch {}
+      const mergedArrs = mergeFlights(cachedArrs, allArrivals, 'arrival');
+      const mergedDeps = mergeFlights(cachedDeps, allDepartures, 'departure');
+      setAllArrivalsFull(mergedArrs);
+      setAllDeparturesFull(mergedDeps);
+      AsyncStorage.setItem(FLIGHTS_CACHE_KEY, JSON.stringify({ date: today, arrivals: mergedArrs, departures: mergedDeps })).catch(() => {});
 
       // Build inbound arrival map: registration → best known arrival timestamp
       const inboundMap: Record<string, number> = {};
