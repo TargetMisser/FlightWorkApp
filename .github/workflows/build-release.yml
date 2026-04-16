@@ -113,6 +113,11 @@ jobs:
           body: |
             ## 📦 AeroStaff Pro ${{ steps.meta.outputs.tag }}
 
+            ### Novità
+            - Filtro voli: checklist per compagnia specifica dell'aeroporto selezionato
+            - Voli persistenti: rimangono visibili fino a mezzanotte anche dopo la partenza/arrivo
+            - StaffMonitor: rilevamento dinamico delle colonne — non più dipendente da indici fissi
+
             ### Bug fixes
             - Permessi calendario: mostra "Apri Impostazioni" se rifiutato permanentemente
             - Modal Aggiungi Turno: form scrollabile, tasto Salva sempre raggiungibile
