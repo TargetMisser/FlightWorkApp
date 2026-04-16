@@ -76,7 +76,7 @@ const DARK: ThemeColors = {
   primaryDark:    '#F47B16',
   primaryLight:   'rgba(255,154,66,0.20)',
   glass:          'rgba(255,255,255,0.06)',
-  glassBorder:    'rgba(255,255,255,0.13)',
+  glassBorder:    'transparent',
   glassStrong:    'rgba(28,28,30,0.84)',
   border:         'rgba(255,255,255,0.11)',
   appBar:         'rgba(10,10,12,0.82)',
