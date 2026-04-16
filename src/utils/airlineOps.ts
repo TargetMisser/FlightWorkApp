@@ -41,6 +41,20 @@ export function getAirlineColor(name: string): HexColor {
   return '#2563EB';
 }
 
+export const AIRLINE_DISPLAY_NAMES: Record<string, string> = {
+  'ryanair': 'Ryanair',
+  'easyjet': 'easyJet',
+  'wizz': 'Wizz Air',
+  'volotea': 'Volotea',
+  'vueling': 'Vueling',
+  'transavia': 'Transavia',
+  'aer lingus': 'Aer Lingus',
+  'british airways': 'British Airways',
+  'sas': 'SAS',
+  'scandinavian': 'Scandinavian Airlines',
+  'flydubai': 'flydubai',
+};
+
 export const ALLOWED_AIRLINES = [
   'ryanair', 'easyjet', 'wizz', 'volotea', 'vueling', 'transavia',
   'aer lingus', 'british airways', 'sas', 'scandinavian', 'flydubai',

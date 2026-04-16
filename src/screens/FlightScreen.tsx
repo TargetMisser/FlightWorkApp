@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
-  View, Text, StyleSheet, ActivityIndicator, Modal,
+  View, Text, StyleSheet, ActivityIndicator, Modal, ScrollView,
   FlatList, TouchableOpacity, RefreshControl, Image, Alert,
   Animated, PanResponder, NativeModules, Platform,
 } from 'react-native';
@@ -10,10 +10,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../context/ThemeContext';
 import { useAirport } from '../context/AirportContext';
-import { getAirlineOps, getAirlineColor } from '../utils/airlineOps';
+import { getAirlineOps, getAirlineColor, AIRLINE_COLORS, AIRLINE_DISPLAY_NAMES } from '../utils/airlineOps';
 import { fetchAirportScheduleRaw } from '../utils/fr24api';
 import { fetchStaffMonitorData, normalizeFlightNumber, type StaffMonitorFlight } from '../utils/staffMonitor';
-import { formatAirportHeader } from '../utils/airportSettings';
+import { formatAirportHeader, getAirportAirlines } from '../utils/airportSettings';
 import { requestWidgetUpdate } from 'react-native-android-widget';
 import { WIDGET_CACHE_KEY, WIDGET_SHIFT_KEY } from '../widgets/widgetTaskHandler';
 import type { WidgetData, WidgetFlight, WidgetShiftData } from '../widgets/widgetTaskHandler';
@@ -253,18 +253,32 @@ export default function FlightScreen() {
   const [scheduledCount, setScheduledCount] = useState(0);
   const [pinnedFlightId, setPinnedFlightId] = useState<string | null>(null);
   const [inboundArrivals, setInboundArrivals] = useState<Record<string, number>>({});
-  const [filterMode, setFilterMode] = useState<'mine' | 'all'>('mine');
   const [filterMenuVisible, setFilterMenuVisible] = useState(false);
   const [allArrivalsFull, setAllArrivalsFull] = useState<any[]>([]);
   const [allDeparturesFull, setAllDeparturesFull] = useState<any[]>([]);
+  const [airportAirlines, setAirportAirlines] = useState<string[]>([]);
+  const [selectedAirlines, setSelectedAirlines] = useState<string[]>([]);
   const [staffMonitorDeps, setStaffMonitorDeps] = useState<StaffMonitorFlight[]>([]);
   const [staffMonitorArrs, setStaffMonitorArrs] = useState<StaffMonitorFlight[]>([]);
 
-  // Carica preferenza notifiche salvata
   useEffect(() => {
     AsyncStorage.getItem(NOTIF_ENABLED_KEY).then(v => setNotifsEnabled(v === 'true'));
-    AsyncStorage.getItem(FLIGHT_FILTER_KEY).then(v => { if (v === 'all' || v === 'mine') setFilterMode(v); });
   }, []);
+
+  // Carica lista compagnie per aeroporto + selezione salvata
+  useEffect(() => {
+    const airlines = getAirportAirlines(airportCode);
+    setAirportAirlines(airlines);
+    AsyncStorage.getItem(FLIGHT_FILTER_KEY).then(raw => {
+      try {
+        const saved: string[] = JSON.parse(raw ?? '[]');
+        const valid = saved.filter(k => airlines.includes(k));
+        setSelectedAirlines(valid.length > 0 ? valid : [...airlines]);
+      } catch {
+        setSelectedAirlines([...airlines]);
+      }
+    });
+  }, [airportCode]);
 
   const fetchAll = useCallback(async () => {
     if (airportLoading) return;
@@ -542,15 +556,18 @@ export default function FlightScreen() {
   const isSameDay = (d1: Date, d2: Date) =>
     d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
 
+  const allSelected = airportAirlines.length > 0 && airportAirlines.every(k => selectedAirlines.includes(k));
+
   const currentData = (() => {
-    const source = filterMode === 'all'
-      ? (activeTab === 'arrivals' ? allArrivalsFull : allDeparturesFull)
-      : (activeTab === 'arrivals' ? arrivals : departures);
+    const source = activeTab === 'arrivals' ? allArrivalsFull : allDeparturesFull;
     return source.filter(item => {
       const ts = activeTab === 'arrivals'
         ? item.flight?.time?.scheduled?.arrival
         : item.flight?.time?.scheduled?.departure;
-      return ts && isSameDay(new Date(ts * 1000), selectedDate);
+      if (!ts || !isSameDay(new Date(ts * 1000), selectedDate)) return false;
+      if (selectedAirlines.length === 0) return true;
+      const name = (item.flight?.airline?.name || '').toLowerCase();
+      return selectedAirlines.some(key => name.includes(key));
     });
   })();
 
@@ -756,13 +773,13 @@ export default function FlightScreen() {
           <Text style={s.pageSub}>{formatAirportHeader(airport.code)}</Text>
         </View>
         <TouchableOpacity
-          style={[s.filterBtn, filterMode === 'all' && s.filterBtnActive]}
+          style={[s.filterBtn, !allSelected && s.filterBtnActive]}
           onPress={() => setFilterMenuVisible(true)}
           activeOpacity={0.8}
           accessibilityLabel={t('flightFilterTitle')}
           accessibilityRole="button"
         >
-          <MaterialIcons name="filter-list" size={20} color={filterMode === 'all' ? '#fff' : '#64748B'} />
+          <MaterialIcons name="filter-list" size={20} color={!allSelected ? '#fff' : '#64748B'} />
         </TouchableOpacity>
         <TouchableOpacity
           style={[s.notifBtn, notifsEnabled && s.notifBtnActive]}
@@ -825,7 +842,7 @@ export default function FlightScreen() {
       <Modal
         visible={filterMenuVisible}
         transparent
-        animationType="fade"
+        animationType="slide"
         onRequestClose={() => setFilterMenuVisible(false)}
       >
         <TouchableOpacity
@@ -833,38 +850,51 @@ export default function FlightScreen() {
           activeOpacity={1}
           onPress={() => setFilterMenuVisible(false)}
         >
-          <View style={s.filterSheet}>
+          <View style={s.filterSheet} onStartShouldSetResponder={() => true}>
             <View style={s.filterSheetHandle} />
-            <Text style={s.filterSheetTitle}>{t('flightFilterTitle')}</Text>
-            {(['mine', 'all'] as const).map(mode => (
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <Text style={s.filterSheetTitle}>{t('flightFilterTitle')}</Text>
               <TouchableOpacity
-                key={mode}
-                style={[s.filterOption, filterMode === mode && s.filterOptionActive]}
-                activeOpacity={0.8}
                 onPress={() => {
-                  setFilterMode(mode);
-                  AsyncStorage.setItem(FLIGHT_FILTER_KEY, mode);
-                  setFilterMenuVisible(false);
+                  const next = allSelected ? [] : [...airportAirlines];
+                  setSelectedAirlines(next);
+                  AsyncStorage.setItem(FLIGHT_FILTER_KEY, JSON.stringify(next));
                 }}
               >
-                <MaterialIcons
-                  name={filterMode === mode ? 'radio-button-checked' : 'radio-button-unchecked'}
-                  size={22}
-                  color={filterMode === mode ? colors.primary : '#9CA3AF'}
-                />
-                <View style={{ flex: 1 }}>
-                  <Text style={[s.filterOptionText, filterMode === mode && { color: colors.primary }]}>
-                    {mode === 'mine' ? t('flightFilterMine') : t('flightFilterAll')}
-                  </Text>
-                  <Text style={s.filterOptionSub}>
-                    {mode === 'mine' ? t('flightFilterMineSub') : t('flightFilterAllSub')}
-                  </Text>
-                </View>
-                {filterMode === mode && (
-                  <MaterialIcons name="check-circle" size={20} color={colors.primary} />
-                )}
+                <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 13 }}>
+                  {allSelected ? t('flightFilterDeselAll') : t('flightFilterSelAll')}
+                </Text>
               </TouchableOpacity>
-            ))}
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {airportAirlines.map(key => {
+                const checked = selectedAirlines.includes(key);
+                const dot = AIRLINE_COLORS[key] ?? '#2563EB';
+                const label = AIRLINE_DISPLAY_NAMES[key] ?? key;
+                return (
+                  <TouchableOpacity
+                    key={key}
+                    style={[s.filterOption, checked && s.filterOptionActive]}
+                    activeOpacity={0.8}
+                    onPress={() => {
+                      const next = checked
+                        ? selectedAirlines.filter(k => k !== key)
+                        : [...selectedAirlines, key];
+                      setSelectedAirlines(next);
+                      AsyncStorage.setItem(FLIGHT_FILTER_KEY, JSON.stringify(next));
+                    }}
+                  >
+                    <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: dot }} />
+                    <Text style={[s.filterOptionText, { flex: 1 }, checked && { color: colors.primary }]}>{label}</Text>
+                    <MaterialIcons
+                      name={checked ? 'check-box' : 'check-box-outline-blank'}
+                      size={22}
+                      color={checked ? colors.primary : '#9CA3AF'}
+                    />
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
           </View>
         </TouchableOpacity>
       </Modal>
