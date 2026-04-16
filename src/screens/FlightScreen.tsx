@@ -695,96 +695,87 @@ export default function FlightScreen() {
               <Text style={s.headerDest}>{originDest}</Text>
             </View>
           </View>
-        {/* Body */}
-        <View style={s.cardBody}>
-          {activeTab === 'departures' && ops ? (
-            <View style={s.opsRow}>
-              <View style={s.opsBadge}>
-                <MaterialIcons name="desktop-windows" size={16} color={colors.primary} />
-                <View>
-                  <Text style={s.opsLabel}>{t('flightCheckin')}</Text>
-                  <Text style={s.opsTime}>{fmt(ops.checkInOpen)} – {fmt(ops.checkInClose)}</Text>
-                </View>
-              </View>
-              <View style={s.opsBadge}>
-                <MaterialIcons name="meeting-room" size={16} color={colors.primary} />
-                <View>
-                  <Text style={s.opsLabel}>{t('flightGate')}</Text>
-                  <Text style={s.opsTime}>
-                    {gateOpenFromInbound ? fmtTs(gateOpenFromInbound) : fmt(ops.gateOpen)} – {fmt(ops.gateClose)}
-                  </Text>
-                </View>
-              </View>
-            </View>
-          ) : activeTab === 'arrivals' && ts ? (() => {
-            const realDep = item.flight?.time?.real?.departure;
-            const realArr = item.flight?.time?.real?.arrival;
-            const estArr = item.flight?.time?.estimated?.arrival;
-            const bestArr = realArr || estArr || ts;
-            const delayMin = Math.round((bestArr - ts) / 60);
-            const landed = !!realArr;
-            const departed = !!realDep;
-
-            // Color logic for landing badge
-            const landColor = landed ? '#10B981'
-              : delayMin > 20 ? '#EF4444'
-              : delayMin > 5 ? '#F59E0B'
-              : colors.primary;
-            const landLabel = landed ? t('flightLanded') : t('flightEstimated');
-
-            // Delay pill
-            const delayText = landed ? 'Atterrato'
-              : delayMin > 0 ? `+${delayMin} min`
-              : t('flightOnTime');
-            const delayColor = landed ? '#10B981'
-              : delayMin > 20 ? '#EF4444'
-              : delayMin > 5 ? '#F59E0B'
-              : '#10B981';
-
-            return (
+          {/* Body */}
+          <View style={s.cardBody}>
+            {activeTab === 'departures' && ops ? (
               <View style={s.opsRow}>
                 <View style={s.opsBadge}>
-                  <MaterialIcons name="flight-takeoff" size={16} color={departed ? colors.primary : '#6B7280'} />
+                  <MaterialIcons name="desktop-windows" size={16} color={colors.primary} />
                   <View>
-                    <Text style={s.opsLabel}>{t('flightDeparted')}</Text>
-                    <Text style={[s.opsTime, !departed && { color: '#6B7280' }]}>
-                      {departed ? fmtTs(realDep) : '--:--'}
+                    <Text style={s.opsLabel}>{t('flightCheckin')}</Text>
+                    <Text style={s.opsTime}>{fmt(ops.checkInOpen)} – {fmt(ops.checkInClose)}</Text>
+                  </View>
+                </View>
+                <View style={s.opsBadge}>
+                  <MaterialIcons name="meeting-room" size={16} color={colors.primary} />
+                  <View>
+                    <Text style={s.opsLabel}>{t('flightGate')}</Text>
+                    <Text style={s.opsTime}>
+                      {gateOpenFromInbound ? fmtTs(gateOpenFromInbound) : fmt(ops.gateOpen)} – {fmt(ops.gateClose)}
                     </Text>
                   </View>
                 </View>
-                <View style={s.opsBadge}>
-                  <MaterialIcons name="flight-land" size={16} color={landColor} />
-                  <View>
-                    <Text style={[s.opsLabel, { color: landColor }]}>{landLabel}</Text>
-                    <Text style={[s.opsTime, { color: landColor }]}>{fmtTs(bestArr)}</Text>
+              </View>
+            ) : activeTab === 'arrivals' && ts ? (() => {
+              const realDep = item.flight?.time?.real?.departure;
+              const realArr = item.flight?.time?.real?.arrival;
+              const estArr = item.flight?.time?.estimated?.arrival;
+              const bestArr = realArr || estArr || ts;
+              const delayMin = Math.round((bestArr - ts) / 60);
+              const landed = !!realArr;
+              const departed = !!realDep;
+
+              const landColor = landed ? '#10B981'
+                : delayMin > 20 ? '#EF4444'
+                : delayMin > 5 ? '#F59E0B'
+                : colors.primary;
+              const landLabel = landed ? t('flightLanded') : t('flightEstimated');
+
+              return (
+                <View style={s.opsRow}>
+                  <View style={s.opsBadge}>
+                    <MaterialIcons name="flight-takeoff" size={16} color={departed ? colors.primary : '#6B7280'} />
+                    <View>
+                      <Text style={s.opsLabel}>{t('flightDeparted')}</Text>
+                      <Text style={[s.opsTime, !departed && { color: '#6B7280' }]}>
+                        {departed ? fmtTs(realDep) : '--:--'}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={s.opsBadge}>
+                    <MaterialIcons name="flight-land" size={16} color={landColor} />
+                    <View>
+                      <Text style={[s.opsLabel, { color: landColor }]}>{landLabel}</Text>
+                      <Text style={[s.opsTime, { color: landColor }]}>{fmtTs(bestArr)}</Text>
+                    </View>
                   </View>
                 </View>
+              );
+            })() : (
+              <Text style={s.bodyInfo}>{`Da: ${originDest}`}</Text>
+            )}
+            {/* Status pill — own row, right-aligned */}
+            {activeTab === 'arrivals' && ts ? (() => {
+              const rArr = item.flight?.time?.real?.arrival;
+              const eArr = item.flight?.time?.estimated?.arrival;
+              const bArr = rArr || eArr || ts;
+              const dMin = Math.round((bArr - ts) / 60);
+              const isLanded = !!rArr;
+              const dText = isLanded ? 'Atterrato' : dMin > 0 ? `+${dMin} min` : 'In orario';
+              const dColor = isLanded ? '#10B981' : dMin > 20 ? '#EF4444' : dMin > 5 ? '#F59E0B' : '#10B981';
+              return (
+                <View style={[s.statusPill, { backgroundColor: dColor + '22' }]}>
+                  <Text style={[s.statusText, { color: dColor }]}>{dText}</Text>
+                </View>
+              );
+            })() : (
+              <View style={[s.statusPill, { backgroundColor: statusColor + '22' }]}>
+                <Text style={[s.statusText, { color: statusColor }]}>{statusText}</Text>
               </View>
-            );
-          })() : (
-            <Text style={s.bodyInfo}>{`Da: ${originDest}`}</Text>
-          )}
-          {activeTab === 'arrivals' && ts ? (() => {
-            const rArr = item.flight?.time?.real?.arrival;
-            const eArr = item.flight?.time?.estimated?.arrival;
-            const bArr = rArr || eArr || ts;
-            const dMin = Math.round((bArr - ts) / 60);
-            const isLanded = !!rArr;
-            const dText = isLanded ? 'Atterrato' : dMin > 0 ? `+${dMin} min` : 'In orario';
-            const dColor = isLanded ? '#10B981' : dMin > 20 ? '#EF4444' : dMin > 5 ? '#F59E0B' : '#10B981';
-            return (
-              <View style={[s.statusPill, { backgroundColor: dColor + '22' }]}>
-                <Text style={[s.statusText, { color: dColor }]}>{dText}</Text>
-              </View>
-            );
-          })() : (
-            <View style={[s.statusPill, { backgroundColor: statusColor + '22' }]}>
-              <Text style={[s.statusText, { color: statusColor }]}>{statusText}</Text>
-            </View>
-          )}
-        </View>
-      </View>
-        <View style={s.smFooter}>
+            )}
+          </View>
+          {/* StaffMonitor footer — inside card so border-radius applies */}
+          <View style={s.smFooter}>
           <View style={s.smPill}>
             <MaterialIcons name="local-parking" size={11} color={colors.primary} />
             <Text style={s.smPillText}>Stand {smFlight?.stand ?? '—'}</Text>
@@ -806,6 +797,7 @@ export default function FlightScreen() {
               <Text style={s.smPillText}>{t('flightBelt')} {smFlight?.belt ?? '—'}</Text>
             </View>
           )}
+        </View>
         </View>
       </SwipeableFlightCard>
     );
@@ -971,7 +963,7 @@ function makeStyles(c: ThemeColors) {
     cardPinned: { borderWidth: 2, borderColor: '#F59E0B' },
     pinBanner: { backgroundColor: '#F59E0B', paddingVertical: 5, paddingHorizontal: 12 },
     pinBannerText: { color: '#fff', fontWeight: 'bold', fontSize: 11, letterSpacing: 0.5 },
-    statusPill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20, marginTop: 5 },
+    statusPill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, marginTop: 8, alignSelf: 'flex-end' },
     statusText: { fontSize: 10, fontWeight: '700' },
     cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 14 },
     headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
@@ -979,10 +971,10 @@ function makeStyles(c: ThemeColors) {
     headerAirlineName: { color: 'rgba(255,255,255,0.8)', fontSize: 10 },
     headerTime: { color: '#fff', fontWeight: '900', fontSize: 18, lineHeight: 20, textAlign: 'right' },
     headerDest: { color: 'rgba(255,255,255,0.8)', fontSize: 10, textAlign: 'right' },
-    cardBody: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10, paddingHorizontal: 14, backgroundColor: c.card },
-    bodyInfo: { flex: 1, fontSize: 11, color: c.textSub },
+    cardBody: { flexDirection: 'column', paddingVertical: 10, paddingHorizontal: 14, backgroundColor: c.card },
+    bodyInfo: { fontSize: 11, color: c.textSub },
     bodyTime: { fontWeight: '700', color: c.text },
-    opsRow: { flex: 1, flexDirection: 'row', gap: 8 },
+    opsRow: { flexDirection: 'row', gap: 8 },
     opsBadge: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: c.primaryLight, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8 },
     opsIcon: { fontSize: 16 },
     opsLabel: { fontSize: 10, fontWeight: '600', color: c.textSub, letterSpacing: 0.5 },
