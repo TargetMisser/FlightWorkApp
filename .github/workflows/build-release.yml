@@ -111,6 +111,7 @@ jobs:
             - StaffMonitor: rilevamento dinamico delle colonne — non più dipendente da indici fissi
 
             ### Bug fixes
+            - Home/card: rimossi i bordini bianchi interni alle card in tema chiaro
             - Permessi calendario: mostra "Apri Impostazioni" se rifiutato permanentemente
             - Modal Aggiungi Turno: form scrollabile, tasto Salva sempre raggiungibile
             - Widget: si aggiorna autonomamente ogni 30 min scaricando dati freschi da FR24
