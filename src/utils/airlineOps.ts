@@ -10,8 +10,12 @@ export type AirlineOps = {
 export const DEFAULT_OPS: AirlineOps = { checkInOpen: 120, checkInClose: 40, gateOpen: 30, gateClose: 20 };
 
 export const AIRLINE_OPS: Array<{ key: string; ops: AirlineOps }> = [
+  { key: 'ryanair',         ops: { checkInOpen: 150, checkInClose: 40, gateOpen: 30, gateClose: 20 } },
   { key: 'easyjet',         ops: { checkInOpen: 120, checkInClose: 40, gateOpen: 30, gateClose: 20 } },
   { key: 'wizz',            ops: { checkInOpen: 120, checkInClose: 40, gateOpen: 30, gateClose: 15 } },
+  { key: 'volotea',         ops: { checkInOpen: 120, checkInClose: 40, gateOpen: 30, gateClose: 20 } },
+  { key: 'vueling',         ops: { checkInOpen: 120, checkInClose: 45, gateOpen: 35, gateClose: 20 } },
+  { key: 'transavia',       ops: { checkInOpen: 120, checkInClose: 40, gateOpen: 30, gateClose: 20 } },
   { key: 'aer lingus',      ops: { checkInOpen: 150, checkInClose: 40, gateOpen: 30, gateClose: 20 } },
   { key: 'british airways', ops: { checkInOpen: 180, checkInClose: 45, gateOpen: 45, gateClose: 20 } },
   { key: 'sas',             ops: { checkInOpen: 120, checkInClose: 40, gateOpen: 30, gateClose: 20 } },
@@ -25,8 +29,10 @@ export function getAirlineOps(name: string): AirlineOps {
 }
 
 export const AIRLINE_COLORS: Record<string, HexColor> = {
-  'wizz': '#C6006E', 'easyjet': '#FF6600', 'aer lingus': '#006E44',
-  'british airways': '#075AAA', 'sas': '#003E7E', 'scandinavian': '#003E7E', 'flydubai': '#CC1E42',
+  'ryanair': '#073590', 'easyjet': '#FF6600', 'wizz': '#C6006E',
+  'volotea': '#3C0F8B', 'vueling': '#FFB300', 'transavia': '#00A650',
+  'aer lingus': '#006E44', 'british airways': '#075AAA',
+  'sas': '#003E7E', 'scandinavian': '#003E7E', 'flydubai': '#CC1E42',
 };
 
 export function getAirlineColor(name: string): HexColor {
@@ -35,4 +41,7 @@ export function getAirlineColor(name: string): HexColor {
   return '#2563EB';
 }
 
-export const ALLOWED_AIRLINES = ['wizz', 'aer lingus', 'easyjet', 'british airways', 'sas', 'scandinavian', 'flydubai'];
+export const ALLOWED_AIRLINES = [
+  'ryanair', 'easyjet', 'wizz', 'volotea', 'vueling', 'transavia',
+  'aer lingus', 'british airways', 'sas', 'scandinavian', 'flydubai',
+];

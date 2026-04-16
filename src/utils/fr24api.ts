@@ -1,6 +1,6 @@
-import { ALLOWED_AIRLINES } from './airlineOps';
 import {
   buildFr24ScheduleUrl,
+  getAirportAirlines,
   getAirportInfo,
   getStoredAirportCode,
   isValidAirportCode,
@@ -26,9 +26,9 @@ export type FR24ScheduleRaw = {
   airport: AirportInfo;
 };
 
-function filterAirlines(data: any[]) {
+function filterAirlines(data: any[], allowedList: string[]) {
   return data.filter(item =>
-    ALLOWED_AIRLINES.some(key => (item.flight?.airline?.name || '').toLowerCase().includes(key)),
+    allowedList.some(key => (item.flight?.airline?.name || '').toLowerCase().includes(key)),
   );
 }
 
@@ -56,9 +56,10 @@ export async function fetchAirportSchedule(code?: string): Promise<FR24Schedule>
     const allArrivals = json.result?.response?.airport?.pluginData?.schedule?.arrivals?.data || [];
     const allDepartures = json.result?.response?.airport?.pluginData?.schedule?.departures?.data || [];
 
+    const airlines = getAirportAirlines(airportCode);
     return {
-      arrivals: filterAirlines(allArrivals),
-      departures: filterAirlines(allDepartures),
+      arrivals: filterAirlines(allArrivals, airlines),
+      departures: filterAirlines(allDepartures, airlines),
       airportCode,
       airport: getAirportInfo(airportCode),
     };
@@ -86,11 +87,12 @@ export async function fetchAirportScheduleRaw(code?: string): Promise<FR24Schedu
     const allArrivals = json.result?.response?.airport?.pluginData?.schedule?.arrivals?.data || [];
     const allDepartures = json.result?.response?.airport?.pluginData?.schedule?.departures?.data || [];
 
+    const airlines = getAirportAirlines(airportCode);
     return {
       allArrivals,
       allDepartures,
-      arrivals: filterAirlines(allArrivals),
-      departures: filterAirlines(allDepartures),
+      arrivals: filterAirlines(allArrivals, airlines),
+      departures: filterAirlines(allDepartures, airlines),
       airportCode,
       airport: getAirportInfo(airportCode),
     };

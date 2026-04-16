@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { ALLOWED_AIRLINES } from './airlineOps';
 
 export type AirportPreset = {
   code: string;
@@ -28,6 +29,26 @@ export const AIRPORT_PRESETS: AirportPreset[] = [
   { code: 'CTA', name: 'Catania Fontanarossa', city: 'Catania', icao: 'LICC' },
   { code: 'PMO', name: 'Palermo Falcone Borsellino', city: 'Palermo', icao: 'LICJ' },
 ];
+
+export const AIRPORT_AIRLINES: Record<string, string[]> = {
+  PSA: ['ryanair', 'easyjet', 'wizz', 'aer lingus', 'transavia', 'volotea'],
+  FCO: ['ryanair', 'easyjet', 'wizz', 'aer lingus', 'british airways', 'sas', 'flydubai', 'volotea', 'vueling', 'transavia'],
+  CIA: ['ryanair', 'easyjet', 'wizz'],
+  MXP: ['ryanair', 'easyjet', 'wizz', 'aer lingus', 'british airways', 'flydubai', 'vueling', 'volotea'],
+  LIN: ['british airways', 'aer lingus', 'sas'],
+  BGY: ['ryanair', 'wizz', 'easyjet', 'vueling', 'volotea'],
+  BLQ: ['ryanair', 'easyjet', 'wizz', 'vueling', 'volotea', 'transavia'],
+  VCE: ['ryanair', 'easyjet', 'wizz', 'british airways', 'volotea', 'vueling'],
+  FLR: ['ryanair', 'easyjet', 'volotea', 'vueling'],
+  NAP: ['ryanair', 'easyjet', 'wizz', 'volotea', 'vueling'],
+  CTA: ['ryanair', 'easyjet', 'wizz', 'volotea', 'vueling'],
+  PMO: ['ryanair', 'easyjet', 'wizz', 'volotea', 'vueling'],
+};
+
+export function getAirportAirlines(code: string | null | undefined): string[] {
+  const normalized = normalizeAirportCode(code);
+  return AIRPORT_AIRLINES[normalized] ?? ALLOWED_AIRLINES;
+}
 
 const AIRPORT_MAP = Object.fromEntries(
   AIRPORT_PRESETS.map(airport => [airport.code, airport] as const),

@@ -2,8 +2,8 @@ import React from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { WidgetTaskHandlerProps } from 'react-native-android-widget';
 import type { HexColor } from '../utils/airlineOps';
-import { getAirlineOps, getAirlineColor, ALLOWED_AIRLINES } from '../utils/airlineOps';
-import { getStoredAirportCode, buildFr24ScheduleUrl } from '../utils/airportSettings';
+import { getAirlineOps, getAirlineColor } from '../utils/airlineOps';
+import { getStoredAirportCode, buildFr24ScheduleUrl, getAirportAirlines } from '../utils/airportSettings';
 import { ShiftWidget } from './ShiftWidget';
 
 /** Key used by the main app (FlightScreen) to push pre-built widget data */
@@ -64,6 +64,7 @@ async function fetchFreshWidgetData(): Promise<WidgetData> {
 
     const shiftToday = shiftData.shiftToday;
     const airportCode = await getStoredAirportCode();
+    const allowedAirlines = getAirportAirlines(airportCode);
     const url = buildFr24ScheduleUrl(airportCode);
 
     const controller = new AbortController();
@@ -86,7 +87,7 @@ async function fetchFreshWidgetData(): Promise<WidgetData> {
     const shiftLabel = `${fmtT(shiftToday.start)} – ${fmtT(shiftToday.end)}`;
 
     const filteredDeps = allDepartures.filter(item =>
-      ALLOWED_AIRLINES.some(key => (item.flight?.airline?.name || '').toLowerCase().includes(key)),
+      allowedAirlines.some(key => (item.flight?.airline?.name || '').toLowerCase().includes(key)),
     );
 
     const wFlights: WidgetFlight[] = filteredDeps
