@@ -500,73 +500,81 @@ export default function CalendarScreen() {
           <TouchableOpacity style={s.modalBg} activeOpacity={1} onPress={() => setManualModalOpen(false)} />
           <View style={s.modalScrollContent}>
             <View style={[s.manualModalContent, { backgroundColor: colors.isDark || colors.card === 'transparent' ? '#1E293B' : '#FFFFFF' }]}>
-            <View style={s.modalHeader}>
+            {/* Header fisso */}
+            <View style={[s.modalHeader, { paddingHorizontal: 24, paddingTop: 24 }]}>
               <Text style={[s.modalTitle, { color: colors.text }]}>{t('calAddShiftTitle')}</Text>
               <TouchableOpacity onPress={() => setManualModalOpen(false)}>
                 <MaterialIcons name="close" size={24} color={colors.textSub} />
               </TouchableOpacity>
             </View>
 
-            {/* Data */}
-            <Text style={[s.manualLabel, { color: colors.textSub }]}>{t('calDataLabel')}</Text>
-            <TextInput
-              style={[s.manualInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.bg }]}
-              value={manualDate.split('-').reverse().join('/')}
-              editable={false}
-            />
-            <Text style={{ fontSize: 11, color: colors.textMuted, marginBottom: 12 }}>
-              Seleziona un giorno dal calendario per cambiare la data
-            </Text>
+            {/* Contenuto scrollabile */}
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40 }}
+            >
+              {/* Data */}
+              <Text style={[s.manualLabel, { color: colors.textSub }]}>{t('calDataLabel')}</Text>
+              <TextInput
+                style={[s.manualInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.bg }]}
+                value={manualDate.split('-').reverse().join('/')}
+                editable={false}
+              />
+              <Text style={{ fontSize: 11, color: colors.textMuted, marginBottom: 12 }}>
+                Seleziona un giorno dal calendario per cambiare la data
+              </Text>
 
-            {/* Tipo */}
-            <Text style={[s.manualLabel, { color: colors.textSub }]}>{t('calTypeLabel')}</Text>
-            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 16 }}>
-              {(['Lavoro', 'Riposo'] as const).map(shiftType => (
-                <TouchableOpacity
-                  key={shiftType}
-                  style={[s.manualTypeBtn, { borderColor: colors.border }, manualType === shiftType && { backgroundColor: colors.primary, borderColor: colors.primary }]}
-                  onPress={() => setManualType(shiftType)}
-                >
-                  <Text style={{ color: manualType === shiftType ? '#fff' : colors.text, fontWeight: '700' }}>{shiftType === 'Lavoro' ? t('calTypeWork') : t('calTypeRest')}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+              {/* Tipo */}
+              <Text style={[s.manualLabel, { color: colors.textSub }]}>{t('calTypeLabel')}</Text>
+              <View style={{ flexDirection: 'row', gap: 10, marginBottom: 16 }}>
+                {(['Lavoro', 'Riposo'] as const).map(shiftType => (
+                  <TouchableOpacity
+                    key={shiftType}
+                    style={[s.manualTypeBtn, { borderColor: colors.border }, manualType === shiftType && { backgroundColor: colors.primary, borderColor: colors.primary }]}
+                    onPress={() => setManualType(shiftType)}
+                  >
+                    <Text style={{ color: manualType === shiftType ? '#fff' : colors.text, fontWeight: '700' }}>{shiftType === 'Lavoro' ? t('calTypeWork') : t('calTypeRest')}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
 
-            {/* Orari (solo lavoro) */}
-            {manualType === 'Lavoro' && (
-              <>
-                <Text style={[s.manualLabel, { color: colors.textSub }]}>{t('calStartTime')}</Text>
-                <TimeCarouselPicker
-                  key={pickerKey * 2}
-                  hour={manualStartH}
-                  minute={manualStartM}
-                  onHourChange={setManualStartH}
-                  onMinuteChange={setManualStartM}
-                  accentColor={colors.primary}
-                  textColor={colors.text}
-                  mutedColor={colors.textMuted}
-                  bgColor={colors.card === 'transparent' ? (colors.isDark ? '#1E293B' : '#F3F4F6') : colors.card}
-                  borderColor={colors.border}
-                />
-                <Text style={[s.manualLabel, { color: colors.textSub, marginTop: 16 }]}>{t('calEndTime')}</Text>
-                <TimeCarouselPicker
-                  key={pickerKey * 2 + 1}
-                  hour={manualEndH}
-                  minute={manualEndM}
-                  onHourChange={setManualEndH}
-                  onMinuteChange={setManualEndM}
-                  accentColor={colors.primary}
-                  textColor={colors.text}
-                  mutedColor={colors.textMuted}
-                  bgColor={colors.card === 'transparent' ? (colors.isDark ? '#1E293B' : '#F3F4F6') : colors.card}
-                  borderColor={colors.border}
-                />
-              </>
-            )}
+              {/* Orari (solo lavoro) */}
+              {manualType === 'Lavoro' && (
+                <>
+                  <Text style={[s.manualLabel, { color: colors.textSub }]}>{t('calStartTime')}</Text>
+                  <TimeCarouselPicker
+                    key={pickerKey * 2}
+                    hour={manualStartH}
+                    minute={manualStartM}
+                    onHourChange={setManualStartH}
+                    onMinuteChange={setManualStartM}
+                    accentColor={colors.primary}
+                    textColor={colors.text}
+                    mutedColor={colors.textMuted}
+                    bgColor={colors.card === 'transparent' ? (colors.isDark ? '#1E293B' : '#F3F4F6') : colors.card}
+                    borderColor={colors.border}
+                  />
+                  <Text style={[s.manualLabel, { color: colors.textSub, marginTop: 16 }]}>{t('calEndTime')}</Text>
+                  <TimeCarouselPicker
+                    key={pickerKey * 2 + 1}
+                    hour={manualEndH}
+                    minute={manualEndM}
+                    onHourChange={setManualEndH}
+                    onMinuteChange={setManualEndM}
+                    accentColor={colors.primary}
+                    textColor={colors.text}
+                    mutedColor={colors.textMuted}
+                    bgColor={colors.card === 'transparent' ? (colors.isDark ? '#1E293B' : '#F3F4F6') : colors.card}
+                    borderColor={colors.border}
+                  />
+                </>
+              )}
 
-            <TouchableOpacity style={[s.primaryBtn, { backgroundColor: colors.primary, marginTop: 16 }]} onPress={saveManualShift}>
-              <Text style={s.primaryBtnText}>{t('calSaveShift')}</Text>
-            </TouchableOpacity>
+              <TouchableOpacity style={[s.primaryBtn, { backgroundColor: colors.primary, marginTop: 24 }]} onPress={saveManualShift}>
+                <Text style={s.primaryBtnText}>{t('calSaveShift')}</Text>
+              </TouchableOpacity>
+            </ScrollView>
             </View>
           </View>
         </View>
@@ -744,7 +752,7 @@ function makeStyles(c: ThemeColors) {
     modalBg: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)' },
     modalScrollContent: { flex: 1, justifyContent: 'flex-end' },
     modalContent: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 100, maxHeight: '92%' },
-    manualModalContent: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 32, maxHeight: '92%' },
+    manualModalContent: { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 0, maxHeight: '92%' },
     modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
     modalTitle: { fontSize: 20, fontWeight: 'bold' },
     centerBox: { alignItems: 'center', paddingVertical: 40, gap: 12 },
