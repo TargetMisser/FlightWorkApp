@@ -149,18 +149,51 @@ export default function PasswordScreen() {
   // Load on mount
   useEffect(() => {
     (async () => {
-      const raw = await AsyncStorage.getItem(PASSWORDS_KEY);
-      if (raw) setEntries(JSON.parse(raw));
-      const enabled = await AsyncStorage.getItem(PIN_ENABLED_KEY);
-      const isEnabled = enabled === 'true';
-      setPinEnabled(isEnabled);
-      if (isEnabled) setPinMode('unlock');
+      try {
+        const raw = await AsyncStorage.getItem(PASSWORDS_KEY);
+        if (raw) {
+          const loaded = JSON.parse(raw) as PasswordEntry[];
+          let needsMigration = false;
+          const withRealPasswords = await Promise.all(loaded.map(async (e) => {
+            if (e.password !== '***') {
+              needsMigration = true;
+              try {
+                await SecureStore.setItemAsync(`aerostaff_pwd_${e.id}`, e.password);
+              } catch (err) {
+                if (__DEV__) console.error('[password] migration error', err);
+              }
+              return e; // e already has the real password
+            } else {
+              let realPw = '***';
+              try {
+                realPw = await SecureStore.getItemAsync(`aerostaff_pwd_${e.id}`) || '***';
+              } catch (err) {
+                if (__DEV__) console.error('[password] load error', err);
+              }
+              return { ...e, password: realPw };
+            }
+          }));
+          setEntries(withRealPasswords);
+
+          if (needsMigration) {
+            const masked = withRealPasswords.map(e => ({ ...e, password: '***' }));
+            await AsyncStorage.setItem(PASSWORDS_KEY, JSON.stringify(masked));
+          }
+        }
+        const enabled = await AsyncStorage.getItem(PIN_ENABLED_KEY);
+        const isEnabled = enabled === 'true';
+        setPinEnabled(isEnabled);
+        if (isEnabled) setPinMode('unlock');
+      } catch (err) {
+        if (__DEV__) console.error('[password] load error', err);
+      }
     })();
   }, []);
 
   const persist = useCallback(async (next: PasswordEntry[]) => {
     setEntries(next);
-    await AsyncStorage.setItem(PASSWORDS_KEY, JSON.stringify(next));
+    const masked = next.map(e => ({ ...e, password: '***' }));
+    await AsyncStorage.setItem(PASSWORDS_KEY, JSON.stringify(masked));
   }, []);
 
   // PIN toggle
@@ -218,17 +251,30 @@ export default function PasswordScreen() {
   const saveModal = useCallback(async () => {
     if (!modal.name.trim()) { Alert.alert('Errore', t('passwordErrName')); return; }
     if (!modal.password.trim()) { Alert.alert('Errore', t('passwordErrPw')); return; }
+
+    const entryId = modal.editingId || Date.now().toString();
+    const cleanPw = modal.password.trim();
+
+    // Save to SecureStore
+    try {
+      await SecureStore.setItemAsync(`aerostaff_pwd_${entryId}`, cleanPw);
+    } catch (e) {
+      if (__DEV__) console.error('[password] save error', e);
+      Alert.alert('Errore', 'Impossibile salvare la password in modo sicuro.');
+      return;
+    }
+
     let next: PasswordEntry[];
     if (modal.editingId) {
       next = entries.map(e => e.id === modal.editingId
-        ? { ...e, name: modal.name.trim(), username: modal.username.trim(), password: modal.password.trim(), notes: modal.notes.trim() }
+        ? { ...e, name: modal.name.trim(), username: modal.username.trim(), password: cleanPw, notes: modal.notes.trim() }
         : e);
     } else {
       const entry: PasswordEntry = {
-        id: Date.now().toString(),
+        id: entryId,
         name: modal.name.trim(),
         username: modal.username.trim(),
-        password: modal.password.trim(),
+        password: cleanPw,
         notes: modal.notes.trim(),
       };
       next = [...entries, entry];
@@ -242,6 +288,11 @@ export default function PasswordScreen() {
     Alert.alert(t('passwordDeleteTitle'), t('passwordDeleteMsg'), [
       { text: 'Annulla', style: 'cancel' },
       { text: 'Elimina', style: 'destructive', onPress: async () => {
+        try {
+          await SecureStore.deleteItemAsync(`aerostaff_pwd_${id}`);
+        } catch (e) {
+          if (__DEV__) console.error('[password] delete error', e);
+        }
         await persist(entries.filter(e => e.id !== id));
       }},
     ]);
