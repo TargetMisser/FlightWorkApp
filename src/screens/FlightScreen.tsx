@@ -15,8 +15,8 @@ import { fetchAirportScheduleRaw } from '../utils/fr24api';
 import { fetchStaffMonitorData, normalizeFlightNumber, type StaffMonitorFlight } from '../utils/staffMonitor';
 import { formatAirportHeader } from '../utils/airportSettings';
 import { requestWidgetUpdate } from 'react-native-android-widget';
-import { WIDGET_CACHE_KEY } from '../widgets/widgetTaskHandler';
-import type { WidgetData, WidgetFlight } from '../widgets/widgetTaskHandler';
+import { WIDGET_CACHE_KEY, WIDGET_SHIFT_KEY } from '../widgets/widgetTaskHandler';
+import type { WidgetData, WidgetFlight, WidgetShiftData } from '../widgets/widgetTaskHandler';
 import { ShiftWidget } from '../widgets/ShiftWidget';
 import { useLanguage } from '../context/LanguageContext';
 
@@ -344,6 +344,14 @@ export default function FlightScreen() {
         }
       }
       setShifts({ today: shiftToday, tomorrow: shiftTomorrow });
+
+      // ── Persist shift data for widget self-update ──
+      const shiftKeyData: WidgetShiftData = {
+        date: new Date().toISOString().split('T')[0],
+        shiftToday,
+        isRestDay,
+      };
+      AsyncStorage.setItem(WIDGET_SHIFT_KEY, JSON.stringify(shiftKeyData)).catch(() => {});
 
       // ── Push data to widget cache ──
       try {

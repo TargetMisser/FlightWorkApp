@@ -11,6 +11,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { WebView } from 'react-native-webview';
 import { MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { requestWidgetUpdate } from 'react-native-android-widget';
 import { useAppTheme, type ThemeColors } from '../context/ThemeContext';
 import TimeCarouselPicker from '../components/TimeCarouselPicker';
 import { useAirport } from '../context/AirportContext';
@@ -20,6 +21,9 @@ import {
   replaceShiftForDate,
   replaceShiftsForRange,
 } from '../utils/shiftCalendar';
+import { WIDGET_SHIFT_KEY, WIDGET_CACHE_KEY } from '../widgets/widgetTaskHandler';
+import type { WidgetShiftData } from '../widgets/widgetTaskHandler';
+import { ShiftWidget } from '../widgets/ShiftWidget';
 import {
   getPdfExtractorHtml, parseShiftCells,
   type ParsedSchedule, type ParsedEmployee, type ParsedShift,
@@ -91,6 +95,32 @@ export default function CalendarScreen() {
     setManualModalOpen(true);
   };
 
+  // Push the saved shift to the widget so it updates immediately without opening FlightScreen
+  const pushShiftToWidget = async (date: string, type: 'work' | 'rest', startH?: number, startM?: number, endH?: number, endM?: number) => {
+    try {
+      const todayIso = new Date().toISOString().split('T')[0];
+      if (date !== todayIso) return; // only update widget for today's shift
+      const isRest = type === 'rest';
+      let shiftToday: { start: number; end: number } | null = null;
+      if (!isRest && startH !== undefined && startM !== undefined && endH !== undefined && endM !== undefined) {
+        const base = new Date(); base.setHours(0, 0, 0, 0);
+        const startTs = new Date(base); startTs.setHours(startH, startM, 0, 0);
+        let endTs = new Date(base); endTs.setHours(endH, endM, 0, 0);
+        if (endTs <= startTs) endTs.setDate(endTs.getDate() + 1);
+        shiftToday = { start: startTs.getTime() / 1000, end: endTs.getTime() / 1000 };
+      }
+      const shiftKeyData: WidgetShiftData = { date: todayIso, shiftToday, isRestDay: isRest };
+      await AsyncStorage.setItem(WIDGET_SHIFT_KEY, JSON.stringify(shiftKeyData));
+      // Invalidate flight cache so widget fetches fresh flights next update
+      const noFlightData = shiftToday
+        ? { state: 'work_empty', shiftLabel: '', updatedAt: '' }
+        : isRest ? { state: 'rest' } : { state: 'no_shift' };
+      await AsyncStorage.setItem(WIDGET_CACHE_KEY, JSON.stringify(noFlightData));
+      if (Platform.OS === 'android') {
+        requestWidgetUpdate({ widgetName: 'ShiftFlights', renderWidget: () => (<ShiftWidget data={noFlightData as any} />) as any }).catch(() => {});
+      }
+    } catch {}
+  };
 
   const saveManualShift = async () => {
     const { status, canAskAgain } = await SystemCalendar.requestCalendarPermissionsAsync();
@@ -111,16 +141,18 @@ export default function CalendarScreen() {
       if (!calendarId) { Alert.alert('Errore', t('calNoWritableCalendar')); return; }
       if (!calId) setCalId(calendarId);
 
+      const shiftType: 'work' | 'rest' = manualType === 'Riposo' ? 'rest' : 'work';
       await replaceShiftForDate({
         calendarId,
         date: manualDate,
-        type: manualType === 'Riposo' ? 'rest' : 'work',
+        type: shiftType,
         startTime: manualType === 'Lavoro' ? `${String(manualStartH).padStart(2, '0')}:${String(manualStartM).padStart(2, '0')}` : undefined,
         endTime: manualType === 'Lavoro' ? `${String(manualEndH).padStart(2, '0')}:${String(manualEndM).padStart(2, '0')}` : undefined,
       });
 
       setManualModalOpen(false);
       fetchCalendar(true);
+      pushShiftToWidget(manualDate, shiftType, manualStartH, manualStartM, manualEndH, manualEndM);
       Alert.alert(t('calShiftSaved'));
     } catch (e: any) { Alert.alert('Errore', e.message); }
   };
@@ -351,6 +383,15 @@ export default function CalendarScreen() {
           endTime: shift.end,
         })),
       });
+
+      // Push today's shift to widget if it's included in the import
+      const todayIso = new Date().toISOString().split('T')[0];
+      const todayShift = selectedEmployee.shifts.find(s => s.date === todayIso);
+      if (todayShift) {
+        const [sh, sm] = (todayShift.start || '00:00').split(':').map(Number);
+        const [eh, em] = (todayShift.end || '00:00').split(':').map(Number);
+        pushShiftToWidget(todayIso, todayShift.type, sh, sm, eh, em);
+      }
 
       setImportStep('done');
       setTimeout(() => {
