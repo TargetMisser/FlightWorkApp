@@ -24,6 +24,9 @@ export type WidgetFlight = {
   airlineColor: HexColor;
   departureTs: number;
   isPinned?: boolean;
+  stand?: string;
+  checkin?: string;
+  gate?: string;
 };
 
 export type WidgetData =

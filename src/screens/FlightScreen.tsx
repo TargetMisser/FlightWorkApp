@@ -439,6 +439,11 @@ export default function FlightScreen() {
               const airline = item.flight?.airline?.name || 'Sconosciuta';
               const ops = getAirlineOps(airline);
               const fn = item.flight?.identification?.number?.default || 'N/A';
+              const normFn = normalizeFlightNumber(fn);
+              const strip = (s: string) => s.replace(/[\s\-_]/g, '').toUpperCase();
+              const smDeps = staffMonitorDepsRef.current;
+              const sm = smDeps.find(x => x.flightNumber === normFn)
+                      ?? smDeps.find(x => strip(x.flightNumber) === strip(normFn));
               return {
                 flightNumber: fn,
                 destinationIata: item.flight?.airport?.destination?.code?.iata || '???',
@@ -448,6 +453,9 @@ export default function FlightScreen() {
                 gateOpen: fmtOff(ts, ops.gateOpen), gateClose: fmtOff(ts, ops.gateClose),
                 airlineColor: getAirlineColor(airline),
                 isPinned: fn === pinnedFn,
+                stand: sm?.stand,
+                checkin: sm?.checkin,
+                gate: sm?.gate,
               };
             })
             .sort((a, b) => a.departureTs - b.departureTs);
@@ -495,6 +503,9 @@ export default function FlightScreen() {
     });
   }, []);
 
+  const staffMonitorDepsRef = useRef<StaffMonitorFlight[]>([]);
+  const staffMonitorArrsRef = useRef<StaffMonitorFlight[]>([]);
+
   // staffMonitor: poll stand / gate / belt every 60 s
   useEffect(() => {
     const load = async () => {
@@ -503,6 +514,8 @@ export default function FlightScreen() {
           fetchStaffMonitorData('D'),
           fetchStaffMonitorData('A'),
         ]);
+        staffMonitorDepsRef.current = deps;
+        staffMonitorArrsRef.current = arrs;
         setStaffMonitorDeps(deps);
         setStaffMonitorArrs(arrs);
       } catch {}
@@ -771,34 +784,29 @@ export default function FlightScreen() {
           )}
         </View>
       </View>
-        {smFlight && (smFlight.stand || smFlight.checkin || smFlight.gate || smFlight.belt) && (
-          <View style={s.smFooter}>
-            {smFlight.stand && (
-              <View style={s.smPill}>
-                <MaterialIcons name="local-parking" size={11} color={colors.primary} />
-                <Text style={s.smPillText}>Stand {smFlight.stand}</Text>
-              </View>
-            )}
-            {smFlight.checkin && (
+        <View style={s.smFooter}>
+          <View style={s.smPill}>
+            <MaterialIcons name="local-parking" size={11} color={colors.primary} />
+            <Text style={s.smPillText}>Stand {smFlight?.stand ?? '—'}</Text>
+          </View>
+          {activeTab === 'departures' ? (
+            <>
               <View style={s.smPill}>
                 <MaterialIcons name="desktop-windows" size={11} color={colors.primary} />
-                <Text style={s.smPillText}>{t('flightCheckin')} {smFlight.checkin}</Text>
+                <Text style={s.smPillText}>{t('flightCheckin')} {smFlight?.checkin ?? '—'}</Text>
               </View>
-            )}
-            {smFlight.gate && (
               <View style={s.smPill}>
                 <MaterialIcons name="meeting-room" size={11} color={colors.primary} />
-                <Text style={s.smPillText}>{t('flightGate')} {smFlight.gate}</Text>
+                <Text style={s.smPillText}>{t('flightGate')} {smFlight?.gate ?? '—'}</Text>
               </View>
-            )}
-            {smFlight.belt && (
-              <View style={s.smPill}>
-                <MaterialIcons name="luggage" size={11} color={colors.primary} />
-                <Text style={s.smPillText}>{t('flightBelt')} {smFlight.belt}</Text>
-              </View>
-            )}
-          </View>
-        )}
+            </>
+          ) : (
+            <View style={s.smPill}>
+              <MaterialIcons name="luggage" size={11} color={colors.primary} />
+              <Text style={s.smPillText}>{t('flightBelt')} {smFlight?.belt ?? '—'}</Text>
+            </View>
+          )}
+        </View>
       </SwipeableFlightCard>
     );
   }, [activeTab, userShift, s, pinnedFlightId, pinFlight, unpinFlight, inboundArrivals, colors, staffMonitorDeps, staffMonitorArrs]);

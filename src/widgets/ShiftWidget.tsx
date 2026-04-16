@@ -76,50 +76,45 @@ function FlightRow({ flight, index }: { flight: WidgetFlight; index: number }) {
         />
       </FlexWidget>
 
-      {/* Bottom row: CI pill + Gate pill */}
+      {/* Bottom row 1: CI timing + Gate timing */}
       <FlexWidget
         style={{ width: 'match_parent', flexDirection: 'row', marginTop: 5 }}
       >
-        {/* CI pill */}
         <FlexWidget
-          style={{
-            backgroundColor: ORANGE_DARK,
-            borderRadius: PILL_R,
-            paddingHorizontal: 8,
-            paddingVertical: 3,
-            flexDirection: 'row',
-            alignItems: 'center',
-          }}
+          style={{ backgroundColor: ORANGE_DARK, borderRadius: PILL_R, paddingHorizontal: 8, paddingVertical: 3, flexDirection: 'row', alignItems: 'center' }}
         >
-          <TextWidget
-            text="CI"
-            style={{ fontSize: 12, fontWeight: 'bold', color: ORANGE }}
-          />
-          <TextWidget
-            text={` ${flight.ciOpen}-${flight.ciClose}`}
-            style={{ fontSize: 12, color: ORANGE }}
-          />
+          <TextWidget text="CI" style={{ fontSize: 12, fontWeight: 'bold', color: ORANGE }} />
+          <TextWidget text={` ${flight.ciOpen}-${flight.ciClose}`} style={{ fontSize: 12, color: ORANGE }} />
         </FlexWidget>
-        {/* Gate pill */}
         <FlexWidget
-          style={{
-            backgroundColor: BLUE_BG,
-            borderRadius: PILL_R,
-            paddingHorizontal: 8,
-            paddingVertical: 3,
-            marginLeft: 6,
-            flexDirection: 'row',
-            alignItems: 'center',
-          }}
+          style={{ backgroundColor: BLUE_BG, borderRadius: PILL_R, paddingHorizontal: 8, paddingVertical: 3, marginLeft: 6, flexDirection: 'row', alignItems: 'center' }}
         >
-          <TextWidget
-            text="Gate"
-            style={{ fontSize: 12, fontWeight: 'bold', color: BLUE }}
-          />
-          <TextWidget
-            text={` ${flight.gateOpen}-${flight.gateClose}`}
-            style={{ fontSize: 12, color: BLUE }}
-          />
+          <TextWidget text="Gate" style={{ fontSize: 12, fontWeight: 'bold', color: BLUE }} />
+          <TextWidget text={` ${flight.gateOpen}-${flight.gateClose}`} style={{ fontSize: 12, color: BLUE }} />
+        </FlexWidget>
+      </FlexWidget>
+
+      {/* Bottom row 2: stand / check-in desk / gate number from staffMonitor */}
+      <FlexWidget
+        style={{ width: 'match_parent', flexDirection: 'row', marginTop: 4 }}
+      >
+        <FlexWidget
+          style={{ backgroundColor: '#1C0A00', borderRadius: PILL_R, paddingHorizontal: 7, paddingVertical: 2, flexDirection: 'row', alignItems: 'center' }}
+        >
+          <TextWidget text="Stand " style={{ fontSize: 10, fontWeight: 'bold', color: MUTED }} />
+          <TextWidget text={flight.stand ?? '—'} style={{ fontSize: 10, color: TEXT }} />
+        </FlexWidget>
+        <FlexWidget
+          style={{ backgroundColor: '#1C0A00', borderRadius: PILL_R, paddingHorizontal: 7, paddingVertical: 2, marginLeft: 5, flexDirection: 'row', alignItems: 'center' }}
+        >
+          <TextWidget text="Banco " style={{ fontSize: 10, fontWeight: 'bold', color: MUTED }} />
+          <TextWidget text={flight.checkin ?? '—'} style={{ fontSize: 10, color: TEXT }} />
+        </FlexWidget>
+        <FlexWidget
+          style={{ backgroundColor: '#1C0A00', borderRadius: PILL_R, paddingHorizontal: 7, paddingVertical: 2, marginLeft: 5, flexDirection: 'row', alignItems: 'center' }}
+        >
+          <TextWidget text="Uscita " style={{ fontSize: 10, fontWeight: 'bold', color: MUTED }} />
+          <TextWidget text={flight.gate ?? '—'} style={{ fontSize: 10, color: TEXT }} />
         </FlexWidget>
       </FlexWidget>
     </FlexWidget>
