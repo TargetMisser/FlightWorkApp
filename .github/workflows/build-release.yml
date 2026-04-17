@@ -104,16 +104,15 @@ jobs:
             ## 📦 AeroStaff Pro ${{ steps.meta.outputs.tag }}
 
             ### Novità
-            - Filtro voli: checklist per compagnia specifica dell'aeroporto selezionato
-            - Voli persistenti: rimangono visibili fino a mezzanotte anche dopo la partenza/arrivo
-            - StaffMonitor: rilevamento dinamico delle colonne — non più dipendente da indici fissi
+            - Filtro compagnie applicato a timeline home, conteggio voli nel turno e widget
+            - Password salvate in modo sicuro con Android Keystore (migrazione automatica)
+            - Nome app aggiornato a AeroStaff Pro, icona rinnovata aereo + badge
+            - Tema scuro per il WebView TravelDoc
 
             ### Bug fixes
-            - Home/card: rimossi i bordini bianchi interni alle card in tema chiaro
-            - Permessi calendario: mostra "Apri Impostazioni" se rifiutato permanentemente
-            - Modal Aggiungi Turno: form scrollabile, tasto Salva sempre raggiungibile
-            - Widget: si aggiorna autonomamente ogni 30 min scaricando dati freschi da FR24
-            - Widget: si aggiorna subito dopo il salvataggio di un turno dal CalendarScreen
+            - StaffMonitor: il parser gate/check-in/stand ora restituisce correttamente i dati
+            - Card: rimossi i bordini interni in tema chiaro e scuro
+            - Layout card voli: footer stand/CI/gate attaccato alla card, pill stato su riga propria
 
             Scarica `AeroStaffPro-${{ steps.meta.outputs.tag }}.apk` e installalo sul tuo dispositivo Android.
           files: ${{ env.apk }}
