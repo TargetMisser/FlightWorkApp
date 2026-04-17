@@ -19,6 +19,7 @@ function stripHTML(html: string): string {
     .replace(/&amp;/gi, '&')
     .replace(/&lt;/gi, '<')
     .replace(/&gt;/gi, '>')
+    .replace(/\s+/g, ' ')
     .trim();
 }
 
@@ -31,12 +32,24 @@ function extractCells(trHTML: string): string[] {
   return cells;
 }
 
-/** Returns true if the string looks like a phone number (6+ digits) — used to reject junk. */
+/**
+ * Reject values that are clearly junk: very long strings or continuous digit
+ * sequences of 8+ chars (phone-like). Space-separated numbers like "36 37 38"
+ * are valid check-in desk lists and must NOT be rejected.
+ */
 function isPhoneOrJunk(val: string): boolean {
   if (!val) return false;
-  const digits = val.replace(/\D/g, '');
-  return digits.length >= 6 || val.length > 15;
+  if (val.length > 30) return true;
+  if (/^\d{8,}$/.test(val.trim())) return true;
+  return false;
 }
+
+const HEADER_WORDS = new Set([
+  'volo', 'n. volo', 'n.volo', 'flight', 'flt', 'vol',
+  'compagnia', 'airline', 'destinazione', 'destination', 'dest',
+  'ora', 'time', 'orario', 'status', 'stato', 'stand',
+  'checkin', 'check-in', 'check in', 'gate', 'belt', 'nastro',
+]);
 
 type ColMap = {
   flight: number;
@@ -46,11 +59,6 @@ type ColMap = {
   belt?: number;
 };
 
-/**
- * Scan the HTML for a header row that contains recognisable column names and
- * build a map of field → column index. Falls back to the historically-observed
- * indices if no header can be found.
- */
 function detectColumns(html: string, nature: 'D' | 'A'): ColMap {
   const trRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
   let m: RegExpExecArray | null;
@@ -58,16 +66,23 @@ function detectColumns(html: string, nature: 'D' | 'A'): ColMap {
   while ((m = trRegex.exec(html)) !== null) {
     const cells = extractCells(m[1]).map(c => c.toLowerCase().trim());
 
-    // Look for the row that contains a recognisable "flight number" header
     const flightIdx = cells.findIndex(c =>
-      c === 'volo' || c === 'n. volo' || c === 'flight' || c === 'flt' || c === 'vol',
+      c === 'volo' || c === 'n. volo' || c === 'n.volo' ||
+      c === 'flight' || c === 'flt' || c === 'vol' ||
+      c.startsWith('volo') || c.startsWith('n. volo'),
     );
     if (flightIdx === -1) continue;
 
     const standIdx   = cells.findIndex(c => c.includes('stand') || c.includes('parch'));
-    const checkinIdx = cells.findIndex(c => c.includes('check') || c === 'c/i' || c === 'ci' || c === 'banco');
-    const gateIdx    = cells.findIndex(c => c === 'gate' || c.includes('uscita') || c.includes('imbarco'));
-    const beltIdx    = cells.findIndex(c => c.includes('belt') || c.includes('nastro') || c.includes('tapis'));
+    const checkinIdx = cells.findIndex(c =>
+      c.includes('check') || c === 'c/i' || c === 'ci' || c === 'banco',
+    );
+    const gateIdx = cells.findIndex(c =>
+      c === 'gate' || c.includes('uscita') || c.includes('imbarco'),
+    );
+    const beltIdx = cells.findIndex(c =>
+      c.includes('belt') || c.includes('nastro') || c.includes('tapis'),
+    );
 
     const map: ColMap = { flight: flightIdx };
     if (standIdx   !== -1) map.stand   = standIdx;
@@ -75,15 +90,13 @@ function detectColumns(html: string, nature: 'D' | 'A'): ColMap {
     if (gateIdx    !== -1) map.gate    = gateIdx;
     if (beltIdx    !== -1) map.belt    = beltIdx;
 
-    // Only accept this header row if we found at least one operational field
     if (map.stand !== undefined || map.checkin !== undefined || map.gate !== undefined || map.belt !== undefined) {
-      if (__DEV__) console.log('[staffMonitor] detected columns:', map, '| sample headers:', cells);
+      if (__DEV__) console.log('[staffMonitor] detected columns:', map, '| headers:', cells);
       return map;
     }
   }
 
-  // Fallback: historically-observed indices
-  if (__DEV__) console.warn('[staffMonitor] header detection failed — using hardcoded indices');
+  if (__DEV__) console.warn('[staffMonitor] header detection failed — using hardcoded fallback');
   return nature === 'D'
     ? { flight: 1, stand: 12, checkin: 13, gate: 14 }
     : { flight: 1, stand: 11, belt: 12 };
@@ -96,10 +109,6 @@ function cell(cells: string[], idx: number | undefined): string | undefined {
   return v;
 }
 
-/**
- * Fetch and parse stand/gate/check-in/belt data from the Pisa Airport staffMonitor.
- * Column positions are detected dynamically from the header row.
- */
 export async function fetchStaffMonitorData(nature: 'D' | 'A'): Promise<StaffMonitorFlight[]> {
   try {
     const url = `https://servizi.pisa-airport.com/staffMonitor/staffMonitor?trans=true&nature=${nature}`;
@@ -109,26 +118,31 @@ export async function fetchStaffMonitorData(nature: 'D' | 'A'): Promise<StaffMon
       return [];
     }
     const html = await resp.text();
-    const colMap = detectColumns(html, nature);
 
+    if (__DEV__) {
+      console.log(`[staffMonitor] HTML sample (first 2000 chars):\n`, html.slice(0, 2000));
+    }
+
+    const colMap = detectColumns(html, nature);
     const results: StaffMonitorFlight[] = [];
     const trRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
     let match: RegExpExecArray | null;
 
     while ((match = trRegex.exec(html)) !== null) {
-      const rowHTML = match[1];
-      const cells = extractCells(rowHTML);
-      if (cells.length < 2) continue;
+      const cells = extractCells(match[1]);
+      if (cells.length <= colMap.flight) continue;
 
-      const rawFlight = cells[colMap.flight];
+      const rawFlight = cells[colMap.flight]?.trim();
       if (!rawFlight) continue;
-      // Accept only rows where the flight column looks like a real flight number
-      if (!/^[A-Z]{2,3}\s*\d{1,5}$/i.test(rawFlight.trim())) continue;
 
-      const flightNumber = normalizeFlightNumber(rawFlight);
+      // Skip header rows
+      if (HEADER_WORDS.has(rawFlight.toLowerCase())) continue;
+
+      // Accept rows where the flight cell starts with letters followed by digits
+      if (!/^[A-Z]{1,3}\s*\d/i.test(rawFlight)) continue;
 
       results.push({
-        flightNumber,
+        flightNumber: normalizeFlightNumber(rawFlight),
         stand:   cell(cells, colMap.stand),
         checkin: cell(cells, colMap.checkin),
         gate:    cell(cells, colMap.gate),
