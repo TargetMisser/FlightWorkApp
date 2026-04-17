@@ -2,6 +2,7 @@ import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform, StatusBar, PanResponder, Animated, Dimensions, BackHandler } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView as ExpoBlurView } from 'expo-blur';
+import { BlurView as CommunityBlurView } from '@react-native-community/blur';
 import * as Haptics from 'expo-haptics';
 import { MaterialIcons } from '@expo/vector-icons';
 import { ThemeProvider, useAppTheme } from './src/context/ThemeContext';
@@ -248,29 +249,42 @@ function AppInner() {
       {/* Bottom Nav — Glassmorphic Floating Pill (hidden on overlay screens) */}
       {!overlay && (
         <View style={styles.tabBarWrapper} {...swipePan.panHandlers}>
-          <ExpoBlurView
-            intensity={60}
-            tint={colors.isDark ? 'dark' : 'light'}
-            style={[styles.tabBarBlur, { backgroundColor: colors.isDark ? 'rgba(30,30,30,0.75)' : 'rgba(240,240,240,0.75)' }]}
-          >
-            {TABS.map(tab => {
-              const active = activeTab === tab.id;
-              return (
-                <GlassTab
-                  key={tab.id}
-                  icon={tab.icon}
-                  label={tabLabels[tab.id]}
-                  focused={active}
-                  activeColor={colors.tabIconActive}
-                  inactiveColor={colors.tabIconInactive}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    goToTab(TABS.findIndex(t => t.id === tab.id));
-                  }}
-                />
-              );
-            })}
-          </ExpoBlurView>
+          {/* Outer View clips blur to pill shape on Android */}
+          <View style={styles.tabBarBlur}>
+            {Platform.OS === 'android' ? (
+              <CommunityBlurView
+                blurType={colors.isDark ? 'dark' : 'light'}
+                blurAmount={15}
+                reducedTransparencyFallbackColor={colors.isDark ? '#1e1e1e' : '#f0f0f0'}
+                style={[StyleSheet.absoluteFill, { backgroundColor: colors.isDark ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.35)' }]}
+              />
+            ) : (
+              <ExpoBlurView
+                intensity={100}
+                tint={colors.isDark ? 'dark' : 'light'}
+                style={StyleSheet.absoluteFill}
+              />
+            )}
+            <View style={styles.tabBarRow}>
+              {TABS.map(tab => {
+                const active = activeTab === tab.id;
+                return (
+                  <GlassTab
+                    key={tab.id}
+                    icon={tab.icon}
+                    label={tabLabels[tab.id]}
+                    focused={active}
+                    activeColor={colors.tabIconActive}
+                    inactiveColor={colors.tabIconInactive}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      goToTab(TABS.findIndex(t => t.id === tab.id));
+                    }}
+                  />
+                );
+              })}
+            </View>
+          </View>
         </View>
       )}
 
@@ -334,14 +348,18 @@ const styles = StyleSheet.create({
     right: 16,
   },
   tabBarBlur: {
-    flexDirection: 'row',
     height: 66,
     borderRadius: 33,
-    justifyContent: 'space-around',
-    alignItems: 'center',
     overflow: 'hidden',
     borderWidth: 0.75,
     borderColor: 'rgba(255,255,255,0.22)',
+  },
+  tabBarRow: {
+    flex: 1,
+    flexDirection: 'row',
+    height: 66,
+    justifyContent: 'space-around',
+    alignItems: 'center',
   },
   glassTab: {
     alignItems: 'center',
