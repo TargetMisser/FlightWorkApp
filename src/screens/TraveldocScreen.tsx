@@ -1,9 +1,20 @@
 // src/screens/TraveldocScreen.tsx
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, Text, ActivityIndicator } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { useAppTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
+
+const DARK_CSS_JS = `
+(function() {
+  var s = document.createElement('style');
+  s.innerHTML =
+    'html { filter: invert(1) hue-rotate(180deg) !important; background:#111 !important; }' +
+    'img, video, canvas, svg image { filter: invert(1) hue-rotate(180deg) !important; }';
+  document.documentElement.appendChild(s);
+})();
+true;
+`;
 
 export default function TraveldocScreen() {
   const { colors } = useAppTheme();
@@ -11,7 +22,6 @@ export default function TraveldocScreen() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
 
-  // Timeout: hide spinner after 15s even if WebView never fires onLoadEnd
   useEffect(() => {
     if (!loading) return;
     const timer = setTimeout(() => { setLoading(false); setLoadError(true); }, 15_000);
@@ -20,13 +30,11 @@ export default function TraveldocScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      {/* Header */}
       <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <Text style={[styles.title, { color: colors.primaryDark }]}>TravelDoc</Text>
         <Text style={[styles.sub, { color: colors.textSub }]}>{t('traveldocSub')}</Text>
       </View>
 
-      {/* WebView */}
       {loading && (
         <View style={[styles.loadingWrap, { backgroundColor: colors.bg }]}>
           <ActivityIndicator size="large" color={colors.primary} />
@@ -42,11 +50,13 @@ export default function TraveldocScreen() {
       )}
       <WebView
         source={{ uri: 'https://legacy.traveldoc.aero/' }}
-        style={{ flex: 1 }}
+        style={{ flex: 1, backgroundColor: colors.isDark ? '#111111' : '#ffffff' }}
         onLoadEnd={() => { setLoading(false); setLoadError(false); }}
         onError={() => { setLoading(false); setLoadError(true); }}
         javaScriptEnabled
         domStorageEnabled
+        injectedJavaScriptBeforeContentLoaded={colors.isDark ? DARK_CSS_JS : undefined}
+        injectedJavaScript={colors.isDark ? DARK_CSS_JS : undefined}
       />
     </View>
   );
