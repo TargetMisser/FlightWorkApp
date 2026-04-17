@@ -2,7 +2,6 @@ import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform, StatusBar, PanResponder, Animated, Dimensions, BackHandler } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView as ExpoBlurView } from 'expo-blur';
-import { BlurView as CommunityBlurView } from '@react-native-community/blur';
 import * as Haptics from 'expo-haptics';
 import { MaterialIcons } from '@expo/vector-icons';
 import { ThemeProvider, useAppTheme } from './src/context/ThemeContext';
@@ -249,8 +248,12 @@ function AppInner() {
       {/* Bottom Nav — Glassmorphic Floating Pill (hidden on overlay screens) */}
       {!overlay && (
         <View style={styles.tabBarWrapper} {...swipePan.panHandlers}>
-          {(() => {
-            const tabChildren = TABS.map(tab => {
+          <ExpoBlurView
+            intensity={60}
+            tint={colors.isDark ? 'dark' : 'light'}
+            style={[styles.tabBarBlur, { backgroundColor: colors.isDark ? 'rgba(30,30,30,0.75)' : 'rgba(240,240,240,0.75)' }]}
+          >
+            {TABS.map(tab => {
               const active = activeTab === tab.id;
               return (
                 <GlassTab
@@ -266,29 +269,8 @@ function AppInner() {
                   }}
                 />
               );
-            });
-            if (Platform.OS === 'android') {
-              return (
-                <CommunityBlurView
-                  blurType={colors.isDark ? 'dark' : 'light'}
-                  blurAmount={20}
-                  reducedTransparencyFallbackColor={colors.isDark ? '#1a1a1a' : '#f0f0f0'}
-                  style={[styles.tabBarBlur, { backgroundColor: colors.isDark ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.3)' }]}
-                >
-                  {tabChildren}
-                </CommunityBlurView>
-              );
-            }
-            return (
-              <ExpoBlurView
-                intensity={100}
-                tint={colors.isDark ? 'dark' : 'light'}
-                style={styles.tabBarBlur}
-              >
-                {tabChildren}
-              </ExpoBlurView>
-            );
-          })()}
+            })}
+          </ExpoBlurView>
         </View>
       )}
 
