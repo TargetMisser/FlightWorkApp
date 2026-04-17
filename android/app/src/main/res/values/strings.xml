@@ -1,5 +1,5 @@
 <resources>
-  <string name="app_name">FlightWorkApp</string>
+  <string name="app_name">AeroStaff Pro</string>
   <string name="expo_splash_screen_resize_mode" translatable="false">contain</string>
   <string name="expo_splash_screen_status_bar_translucent" translatable="false">false</string>
   <string name="widget_shiftflights_description" translatable="false">Voli del turno corrente con orari CI e Gate</string>
