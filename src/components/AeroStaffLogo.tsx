@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Platform } from 'react-native';
+import { View, Text, StyleSheet, Platform, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
 type Size = 'small' | 'large';
@@ -12,9 +12,15 @@ interface Props {
 }
 
 export default function AeroStaffLogo({ variant = 'large', monochrome = false }: Props) {
+  const iconSize = variant === 'small' ? 36 : 44;
   return (
     <View style={[styles.root, variant === 'small' && styles.rootSmall]}>
-      <AeroIconMark small={variant === 'small'} monochrome={monochrome} />
+      <Image
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        source={require('../../assets/icon.png')}
+        style={{ width: iconSize, height: iconSize, borderRadius: iconSize * 0.25 }}
+        resizeMode="cover"
+      />
       {variant === 'large' && (
         <View style={styles.wordmarkWrapper}>
           <Text style={[styles.wordmarkAero, monochrome && styles.wordmarkMono]}>AERO</Text>
