@@ -35,7 +35,7 @@
     <receiver android:name=".widget.ShiftFlights" android:exported="false" android:label="Turno Voli">
       <intent-filter>
         <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
-        <action android:name="com.anonymous.FlightWorkApp.WIDGET_CLICK"/>
+        <action android:name="com.aerostaffpro.app.WIDGET_CLICK"/>
       </intent-filter>
       <meta-data android:name="android.appwidget.provider" android:resource="@xml/widgetprovider_shiftflights"/>
     </receiver>

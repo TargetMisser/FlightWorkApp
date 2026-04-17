@@ -9,21 +9,44 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
 
-const PASSWORDS_KEY = 'aerostaff_passwords_v1';
-const PIN_KEY       = 'aerostaff_pin_v1';
+const PASSWORDS_KEY   = 'aerostaff_passwords_v1';
+const PIN_KEY         = 'aerostaff_pin_v1';
 const PIN_ENABLED_KEY = 'aerostaff_pin_enabled_v1';
 
-// Secure helpers — PIN is stored in the OS keychain, not plain AsyncStorage.
+// ── Secure helpers — all sensitive data goes through the OS keychain ──────────
 async function getSecurePin(): Promise<string | null> {
   try { return await SecureStore.getItemAsync(PIN_KEY); }
-  catch { return AsyncStorage.getItem(PIN_KEY); } // fallback for older installs
+  catch { return AsyncStorage.getItem(PIN_KEY); }
 }
 async function setSecurePin(pin: string): Promise<void> {
   await SecureStore.setItemAsync(PIN_KEY, pin);
 }
 async function deleteSecurePin(): Promise<void> {
   await SecureStore.deleteItemAsync(PIN_KEY).catch(() => {});
-  await AsyncStorage.removeItem(PIN_KEY).catch(() => {}); // clean up legacy
+  await AsyncStorage.removeItem(PIN_KEY).catch(() => {});
+}
+
+// Passwords are stored encrypted in SecureStore.
+// On first access we migrate any legacy plaintext AsyncStorage data.
+async function loadPasswords(): Promise<PasswordEntry[]> {
+  try {
+    const secure = await SecureStore.getItemAsync(PASSWORDS_KEY);
+    if (secure) return JSON.parse(secure);
+  } catch {}
+  // Migration: if data exists only in AsyncStorage, move it to SecureStore
+  try {
+    const legacy = await AsyncStorage.getItem(PASSWORDS_KEY);
+    if (legacy) {
+      const parsed: PasswordEntry[] = JSON.parse(legacy);
+      await SecureStore.setItemAsync(PASSWORDS_KEY, legacy);
+      await AsyncStorage.removeItem(PASSWORDS_KEY);
+      return parsed;
+    }
+  } catch {}
+  return [];
+}
+async function savePasswords(entries: PasswordEntry[]): Promise<void> {
+  await SecureStore.setItemAsync(PASSWORDS_KEY, JSON.stringify(entries));
 }
 
 type PasswordEntry = {
@@ -149,8 +172,8 @@ export default function PasswordScreen() {
   // Load on mount
   useEffect(() => {
     (async () => {
-      const raw = await AsyncStorage.getItem(PASSWORDS_KEY);
-      if (raw) setEntries(JSON.parse(raw));
+      const loaded = await loadPasswords();
+      setEntries(loaded);
       const enabled = await AsyncStorage.getItem(PIN_ENABLED_KEY);
       const isEnabled = enabled === 'true';
       setPinEnabled(isEnabled);
@@ -160,7 +183,7 @@ export default function PasswordScreen() {
 
   const persist = useCallback(async (next: PasswordEntry[]) => {
     setEntries(next);
-    await AsyncStorage.setItem(PASSWORDS_KEY, JSON.stringify(next));
+    await savePasswords(next);
   }, []);
 
   // PIN toggle

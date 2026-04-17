@@ -19,6 +19,7 @@ import { WIDGET_CACHE_KEY, WIDGET_SHIFT_KEY } from '../widgets/widgetTaskHandler
 import type { WidgetData, WidgetFlight, WidgetShiftData } from '../widgets/widgetTaskHandler';
 import { ShiftWidget } from '../widgets/ShiftWidget';
 import { useLanguage } from '../context/LanguageContext';
+import type { TranslationKey } from '../i18n/translations';
 
 const WearDataSender = Platform.OS === 'android' ? NativeModules.WearDataSender : null;
 
@@ -116,6 +117,197 @@ function SwipeableFlightCardComponent({
 
 // Performance optimization: memoize flatlist item to prevent unnecessary re-renders
 const SwipeableFlightCard = React.memo(SwipeableFlightCardComponent);
+
+// ─── FlightRow ────────────────────────────────────────────────────────────────
+interface FlightRowProps {
+  item: any;
+  activeTab: 'arrivals' | 'departures';
+  userShift: { start: number; end: number } | null;
+  pinnedFlightId: string | null;
+  onPin: (item: any) => void;
+  onUnpin: () => void;
+  inboundArrivals: Record<string, number>;
+  colors: ThemeColors;
+  s: ReturnType<typeof makeStyles>;
+  smPool: StaffMonitorFlight[];
+  locale: string;
+  t: (key: TranslationKey) => string;
+}
+
+function FlightRowComponent({ item, activeTab, userShift, pinnedFlightId, onPin, onUnpin, inboundArrivals, colors, s, smPool, locale, t }: FlightRowProps) {
+  const flightNumber = item.flight?.identification?.number?.default || 'N/A';
+  const airline = item.flight?.airline?.name || 'Sconosciuta';
+  const iataCode = item.flight?.airline?.code?.iata || '';
+  const statusText = item.flight?.status?.text || 'Scheduled';
+  const raw = item.flight?.status?.generic?.status?.color || 'gray';
+  const statusColor = raw === 'green' ? '#10b981' : raw === 'red' ? '#ef4444' : raw === 'yellow' ? '#f59e0b' : '#6b7280';
+  const originDest = activeTab === 'arrivals'
+    ? (item.flight?.airport?.origin?.name || item.flight?.airport?.origin?.code?.iata || 'N/A')
+    : (item.flight?.airport?.destination?.name || item.flight?.airport?.destination?.code?.iata || 'N/A');
+  const ts = activeTab === 'arrivals' ? item.flight?.time?.scheduled?.arrival : item.flight?.time?.scheduled?.departure;
+  const time = ts ? new Date(ts * 1000).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }) : 'N/A';
+  const duringShift = userShift && ts && (() => {
+    if (activeTab === 'arrivals') return ts >= userShift.start && ts <= userShift.end;
+    const opsData = getAirlineOps(airline);
+    const ciOpen = ts - opsData.checkInOpen * 60;
+    const ciClose = ts - opsData.checkInClose * 60;
+    const gOpen = ts - opsData.gateOpen * 60;
+    const gClose = ts - opsData.gateClose * 60;
+    const ciOverlap = ciOpen <= userShift.end && ciClose >= userShift.start;
+    const gateOverlap = gOpen <= userShift.end && gClose >= userShift.start;
+    return ciOverlap || gateOverlap;
+  })();
+  const color = getAirlineColor(airline);
+  const ops = activeTab === 'departures' && ts ? getAirlineOps(airline) : null;
+  const fmt = (offsetMin: number) =>
+    ts ? new Date((ts - offsetMin * 60) * 1000).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }) : '';
+  const fmtTs = (t: number) =>
+    new Date(t * 1000).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+
+  const reg = item.flight?.aircraft?.registration;
+  const inboundTs = reg ? inboundArrivals[reg] : undefined;
+  const gateOpenFromInbound = activeTab === 'departures' && ts && inboundTs ? inboundTs : undefined;
+
+  const flightId = item.flight?.identification?.number?.default || null;
+  const isPinned = flightId !== null && flightId === pinnedFlightId;
+
+  const normFn = normalizeFlightNumber(flightNumber);
+  const normalizeForMatching = (s: string) => s.replace(/[\s\-_]/g, '').toUpperCase();
+  const normFnStripped = normalizeForMatching(normFn);
+  const smFlight =
+    smPool.find(sm => sm.flightNumber === normFn) ??
+    smPool.find(sm => normalizeForMatching(sm.flightNumber) === normFnStripped);
+
+  return (
+    <SwipeableFlightCard
+      isPinned={isPinned}
+      onToggle={() => isPinned ? onUnpin() : onPin(item)}
+    >
+      <View style={[s.card, isPinned && s.cardPinned, { marginBottom: 0 }]}>
+        {isPinned && <View style={s.pinBanner}><Text style={s.pinBannerText}>{t('flightPinned')}</Text></View>}
+        {/* Header */}
+        <View style={[s.cardHeader, { backgroundColor: color }]}>
+          <View style={s.headerLeft}>
+            <LogoPill iataCode={iataCode} airlineName={airline} color={color} />
+            <View>
+              <Text style={s.headerFlightNum}>{flightNumber}</Text>
+              <Text style={s.headerAirlineName}>{airline}</Text>
+            </View>
+          </View>
+          <View>
+            <Text style={s.headerTime}>{time}</Text>
+            <Text style={s.headerDest}>{originDest}</Text>
+          </View>
+        </View>
+        {/* Body */}
+        <View style={s.cardBody}>
+          {activeTab === 'departures' && ops ? (
+            <View style={s.opsRow}>
+              <View style={s.opsBadge}>
+                <MaterialIcons name="desktop-windows" size={16} color={colors.primary} />
+                <View>
+                  <Text style={s.opsLabel}>{t('flightCheckin')}</Text>
+                  <Text style={s.opsTime}>{fmt(ops.checkInOpen)} – {fmt(ops.checkInClose)}</Text>
+                </View>
+              </View>
+              <View style={s.opsBadge}>
+                <MaterialIcons name="meeting-room" size={16} color={colors.primary} />
+                <View>
+                  <Text style={s.opsLabel}>{t('flightGate')}</Text>
+                  <Text style={s.opsTime}>
+                    {gateOpenFromInbound ? fmtTs(gateOpenFromInbound) : fmt(ops.gateOpen)} – {fmt(ops.gateClose)}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          ) : activeTab === 'arrivals' && ts ? (() => {
+            const realDep = item.flight?.time?.real?.departure;
+            const realArr = item.flight?.time?.real?.arrival;
+            const estArr = item.flight?.time?.estimated?.arrival;
+            const bestArr = realArr || estArr || ts;
+            const delayMin = Math.round((bestArr - ts) / 60);
+            const landed = !!realArr;
+            const departed = !!realDep;
+
+            const landColor = landed ? '#10B981'
+              : delayMin > 20 ? '#EF4444'
+              : delayMin > 5 ? '#F59E0B'
+              : colors.primary;
+            const landLabel = landed ? t('flightLanded') : t('flightEstimated');
+
+            return (
+              <View style={s.opsRow}>
+                <View style={s.opsBadge}>
+                  <MaterialIcons name="flight-takeoff" size={16} color={departed ? colors.primary : '#6B7280'} />
+                  <View>
+                    <Text style={s.opsLabel}>{t('flightDeparted')}</Text>
+                    <Text style={[s.opsTime, !departed && { color: '#6B7280' }]}>
+                      {departed ? fmtTs(realDep) : '--:--'}
+                    </Text>
+                  </View>
+                </View>
+                <View style={s.opsBadge}>
+                  <MaterialIcons name="flight-land" size={16} color={landColor} />
+                  <View>
+                    <Text style={[s.opsLabel, { color: landColor }]}>{landLabel}</Text>
+                    <Text style={[s.opsTime, { color: landColor }]}>{fmtTs(bestArr)}</Text>
+                  </View>
+                </View>
+              </View>
+            );
+          })() : (
+            <Text style={s.bodyInfo}>{`Da: ${originDest}`}</Text>
+          )}
+          {/* Status pill — own row, right-aligned */}
+          {activeTab === 'arrivals' && ts ? (() => {
+            const rArr = item.flight?.time?.real?.arrival;
+            const eArr = item.flight?.time?.estimated?.arrival;
+            const bArr = rArr || eArr || ts;
+            const dMin = Math.round((bArr - ts) / 60);
+            const isLanded = !!rArr;
+            const dText = isLanded ? 'Atterrato' : dMin > 0 ? `+${dMin} min` : 'In orario';
+            const dColor = isLanded ? '#10B981' : dMin > 20 ? '#EF4444' : dMin > 5 ? '#F59E0B' : '#10B981';
+            return (
+              <View style={[s.statusPill, { backgroundColor: dColor + '22' }]}>
+                <Text style={[s.statusText, { color: dColor }]}>{dText}</Text>
+              </View>
+            );
+          })() : (
+            <View style={[s.statusPill, { backgroundColor: statusColor + '22' }]}>
+              <Text style={[s.statusText, { color: statusColor }]}>{statusText}</Text>
+            </View>
+          )}
+        </View>
+        {/* StaffMonitor footer — inside card so border-radius applies */}
+        <View style={s.smFooter}>
+          <View style={s.smPill}>
+            <MaterialIcons name="local-parking" size={11} color={colors.primary} />
+            <Text style={s.smPillText}>Stand {smFlight?.stand ?? '—'}</Text>
+          </View>
+          {activeTab === 'departures' ? (
+            <>
+              <View style={s.smPill}>
+                <MaterialIcons name="desktop-windows" size={11} color={colors.primary} />
+                <Text style={s.smPillText}>{t('flightCheckin')} {smFlight?.checkin ?? '—'}</Text>
+              </View>
+              <View style={s.smPill}>
+                <MaterialIcons name="meeting-room" size={11} color={colors.primary} />
+                <Text style={s.smPillText}>{t('flightGate')} {smFlight?.gate ?? '—'}</Text>
+              </View>
+            </>
+          ) : (
+            <View style={s.smPill}>
+              <MaterialIcons name="luggage" size={11} color={colors.primary} />
+              <Text style={s.smPillText}>{t('flightBelt')} {smFlight?.belt ?? '—'}</Text>
+            </View>
+          )}
+        </View>
+      </View>
+    </SwipeableFlightCard>
+  );
+}
+
+const FlightRow = React.memo(FlightRowComponent);
 
 // ─── Helpers notifiche ─────────────────────────────────────────────────────────
 async function cancelPreviousNotifications() {
@@ -623,185 +815,22 @@ export default function FlightScreen() {
     });
   })();
 
-  const renderFlight = useCallback(({ item }: { item: any }) => {
-    const flightNumber = item.flight?.identification?.number?.default || 'N/A';
-    const airline = item.flight?.airline?.name || 'Sconosciuta';
-    const iataCode = item.flight?.airline?.code?.iata || '';
-    const statusText = item.flight?.status?.text || 'Scheduled';
-    const raw = item.flight?.status?.generic?.status?.color || 'gray';
-    const statusColor = raw === 'green' ? '#10b981' : raw === 'red' ? '#ef4444' : raw === 'yellow' ? '#f59e0b' : '#6b7280';
-    const originDest = activeTab === 'arrivals'
-      ? (item.flight?.airport?.origin?.name || item.flight?.airport?.origin?.code?.iata || 'N/A')
-      : (item.flight?.airport?.destination?.name || item.flight?.airport?.destination?.code?.iata || 'N/A');
-    const ts = activeTab === 'arrivals' ? item.flight?.time?.scheduled?.arrival : item.flight?.time?.scheduled?.departure;
-    const time = ts ? new Date(ts * 1000).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }) : 'N/A';
-    const duringShift = userShift && ts && (() => {
-      if (activeTab === 'arrivals') return ts >= userShift.start && ts <= userShift.end;
-      // Departures: CI or Gate window overlaps with shift (even 1 min)
-      const opsData = getAirlineOps(airline);
-      const ciOpen = ts - opsData.checkInOpen * 60;
-      const ciClose = ts - opsData.checkInClose * 60;
-      const gOpen = ts - opsData.gateOpen * 60;
-      const gClose = ts - opsData.gateClose * 60;
-      const ciOverlap = ciOpen <= userShift.end && ciClose >= userShift.start;
-      const gateOverlap = gOpen <= userShift.end && gClose >= userShift.start;
-      return ciOverlap || gateOverlap;
-    })();
-    const color = getAirlineColor(airline);
-    // ops is null when ts is falsy — fmt is only called when ops is truthy
-    const ops = activeTab === 'departures' && ts ? getAirlineOps(airline) : null;
-    const fmt = (offsetMin: number) =>
-      ts ? new Date((ts - offsetMin * 60) * 1000).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }) : '';
-    const fmtTs = (t: number) =>
-      new Date(t * 1000).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
-
-    // Gate open = inbound aircraft arrival time (if available)
-    const reg = item.flight?.aircraft?.registration;
-    const inboundTs = reg ? inboundArrivals[reg] : undefined;
-    const gateOpenFromInbound = activeTab === 'departures' && ts && inboundTs ? inboundTs : undefined;
-
-    const flightId = item.flight?.identification?.number?.default || null;
-    const isPinned = flightId !== null && flightId === pinnedFlightId;
-
-    const normFn = normalizeFlightNumber(flightNumber);
-    const normalizeForMatching = (s: string) => s.replace(/[\s\-_]/g, '').toUpperCase();
-    const normFnStripped = normalizeForMatching(normFn);
-    const smPool = activeTab === 'departures' ? staffMonitorDeps : staffMonitorArrs;
-    const smFlight =
-      smPool.find(sm => sm.flightNumber === normFn) ??
-      smPool.find(sm => normalizeForMatching(sm.flightNumber) === normFnStripped);
-    if (__DEV__ && !smFlight && smPool.length > 0) {
-      console.log(`[FlightScreen] No staffMonitor match for "${normFn}" (stripped: "${normFnStripped}") in ${activeTab}`);
-    }
-
-    return (
-      <SwipeableFlightCard
-        isPinned={isPinned}
-        onToggle={() => isPinned ? unpinFlight() : pinFlight(item)}
-      >
-        <View style={[s.card, isPinned && s.cardPinned, { marginBottom: 0 }]}>
-          {isPinned && <View style={s.pinBanner}><Text style={s.pinBannerText}>{t('flightPinned')}</Text></View>}
-          {/* Header */}
-          <View style={[s.cardHeader, { backgroundColor: color }]}>
-            <View style={s.headerLeft}>
-              <LogoPill iataCode={iataCode} airlineName={airline} color={color} />
-              <View>
-                <Text style={s.headerFlightNum}>{flightNumber}</Text>
-                <Text style={s.headerAirlineName}>{airline}</Text>
-              </View>
-            </View>
-            <View>
-              <Text style={s.headerTime}>{time}</Text>
-              <Text style={s.headerDest}>{originDest}</Text>
-            </View>
-          </View>
-          {/* Body */}
-          <View style={s.cardBody}>
-            {activeTab === 'departures' && ops ? (
-              <View style={s.opsRow}>
-                <View style={s.opsBadge}>
-                  <MaterialIcons name="desktop-windows" size={16} color={colors.primary} />
-                  <View>
-                    <Text style={s.opsLabel}>{t('flightCheckin')}</Text>
-                    <Text style={s.opsTime}>{fmt(ops.checkInOpen)} – {fmt(ops.checkInClose)}</Text>
-                  </View>
-                </View>
-                <View style={s.opsBadge}>
-                  <MaterialIcons name="meeting-room" size={16} color={colors.primary} />
-                  <View>
-                    <Text style={s.opsLabel}>{t('flightGate')}</Text>
-                    <Text style={s.opsTime}>
-                      {gateOpenFromInbound ? fmtTs(gateOpenFromInbound) : fmt(ops.gateOpen)} – {fmt(ops.gateClose)}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-            ) : activeTab === 'arrivals' && ts ? (() => {
-              const realDep = item.flight?.time?.real?.departure;
-              const realArr = item.flight?.time?.real?.arrival;
-              const estArr = item.flight?.time?.estimated?.arrival;
-              const bestArr = realArr || estArr || ts;
-              const delayMin = Math.round((bestArr - ts) / 60);
-              const landed = !!realArr;
-              const departed = !!realDep;
-
-              const landColor = landed ? '#10B981'
-                : delayMin > 20 ? '#EF4444'
-                : delayMin > 5 ? '#F59E0B'
-                : colors.primary;
-              const landLabel = landed ? t('flightLanded') : t('flightEstimated');
-
-              return (
-                <View style={s.opsRow}>
-                  <View style={s.opsBadge}>
-                    <MaterialIcons name="flight-takeoff" size={16} color={departed ? colors.primary : '#6B7280'} />
-                    <View>
-                      <Text style={s.opsLabel}>{t('flightDeparted')}</Text>
-                      <Text style={[s.opsTime, !departed && { color: '#6B7280' }]}>
-                        {departed ? fmtTs(realDep) : '--:--'}
-                      </Text>
-                    </View>
-                  </View>
-                  <View style={s.opsBadge}>
-                    <MaterialIcons name="flight-land" size={16} color={landColor} />
-                    <View>
-                      <Text style={[s.opsLabel, { color: landColor }]}>{landLabel}</Text>
-                      <Text style={[s.opsTime, { color: landColor }]}>{fmtTs(bestArr)}</Text>
-                    </View>
-                  </View>
-                </View>
-              );
-            })() : (
-              <Text style={s.bodyInfo}>{`Da: ${originDest}`}</Text>
-            )}
-            {/* Status pill — own row, right-aligned */}
-            {activeTab === 'arrivals' && ts ? (() => {
-              const rArr = item.flight?.time?.real?.arrival;
-              const eArr = item.flight?.time?.estimated?.arrival;
-              const bArr = rArr || eArr || ts;
-              const dMin = Math.round((bArr - ts) / 60);
-              const isLanded = !!rArr;
-              const dText = isLanded ? 'Atterrato' : dMin > 0 ? `+${dMin} min` : 'In orario';
-              const dColor = isLanded ? '#10B981' : dMin > 20 ? '#EF4444' : dMin > 5 ? '#F59E0B' : '#10B981';
-              return (
-                <View style={[s.statusPill, { backgroundColor: dColor + '22' }]}>
-                  <Text style={[s.statusText, { color: dColor }]}>{dText}</Text>
-                </View>
-              );
-            })() : (
-              <View style={[s.statusPill, { backgroundColor: statusColor + '22' }]}>
-                <Text style={[s.statusText, { color: statusColor }]}>{statusText}</Text>
-              </View>
-            )}
-          </View>
-          {/* StaffMonitor footer — inside card so border-radius applies */}
-          <View style={s.smFooter}>
-          <View style={s.smPill}>
-            <MaterialIcons name="local-parking" size={11} color={colors.primary} />
-            <Text style={s.smPillText}>Stand {smFlight?.stand ?? '—'}</Text>
-          </View>
-          {activeTab === 'departures' ? (
-            <>
-              <View style={s.smPill}>
-                <MaterialIcons name="desktop-windows" size={11} color={colors.primary} />
-                <Text style={s.smPillText}>{t('flightCheckin')} {smFlight?.checkin ?? '—'}</Text>
-              </View>
-              <View style={s.smPill}>
-                <MaterialIcons name="meeting-room" size={11} color={colors.primary} />
-                <Text style={s.smPillText}>{t('flightGate')} {smFlight?.gate ?? '—'}</Text>
-              </View>
-            </>
-          ) : (
-            <View style={s.smPill}>
-              <MaterialIcons name="luggage" size={11} color={colors.primary} />
-              <Text style={s.smPillText}>{t('flightBelt')} {smFlight?.belt ?? '—'}</Text>
-            </View>
-          )}
-        </View>
-        </View>
-      </SwipeableFlightCard>
-    );
-  }, [activeTab, userShift, s, pinnedFlightId, pinFlight, unpinFlight, inboundArrivals, colors, staffMonitorDeps, staffMonitorArrs]);
+  const renderFlight = useCallback(({ item }: { item: any }) => (
+    <FlightRow
+      item={item}
+      activeTab={activeTab}
+      userShift={userShift}
+      pinnedFlightId={pinnedFlightId}
+      onPin={pinFlight}
+      onUnpin={unpinFlight}
+      inboundArrivals={inboundArrivals}
+      colors={colors}
+      s={s}
+      smPool={activeTab === 'departures' ? staffMonitorDeps : staffMonitorArrs}
+      locale={locale}
+      t={t}
+    />
+  ), [activeTab, userShift, s, pinnedFlightId, pinFlight, unpinFlight, inboundArrivals, colors, staffMonitorDeps, staffMonitorArrs, locale, t]);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
