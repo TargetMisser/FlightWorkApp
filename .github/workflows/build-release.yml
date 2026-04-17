@@ -112,9 +112,10 @@ jobs:
             - Tema scuro per il WebView TravelDoc
 
             ### Bug fixes
-            - StaffMonitor: il parser gate/check-in/stand ora restituisce correttamente i dati
+            - StaffMonitor: rilevamento righe via numero volo, non più dipendente dalla classe CSS
             - Card: rimossi i bordini interni in tema chiaro e scuro
             - Layout card voli: footer stand/CI/gate attaccato alla card, pill stato su riga propria
+            - Timeline home: si ricarica con il filtro aggiornato ogni volta che torni sul tab
 
             Scarica `AeroStaffPro-${{ steps.meta.outputs.tag }}.apk` e installalo sul tuo dispositivo Android.
           files: ${{ env.apk }}
