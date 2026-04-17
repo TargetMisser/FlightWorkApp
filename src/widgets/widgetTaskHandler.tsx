@@ -67,7 +67,9 @@ async function fetchFreshWidgetData(): Promise<WidgetData> {
 
     const shiftToday = shiftData.shiftToday;
     const airportCode = await getStoredAirportCode();
-    const allowedAirlines = getAirportAirlines(airportCode);
+    const allAirlines = getAirportAirlines(airportCode);
+    const filterRaw = await AsyncStorage.getItem('aerostaff_flight_filter_v1');
+    const allowedAirlines: string[] = filterRaw ? JSON.parse(filterRaw) : allAirlines;
     const url = buildFr24ScheduleUrl(airportCode);
 
     const controller = new AbortController();

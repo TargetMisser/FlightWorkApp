@@ -616,11 +616,14 @@ export default function FlightScreen() {
           if (pinnedRawW) {
             try { pinnedFn = JSON.parse(pinnedRawW).flight?.identification?.number?.default || null; } catch {}
           }
+          const wFilterRaw = await AsyncStorage.getItem(FLIGHT_FILTER_KEY);
+          const wAllowedAirlines: string[] = wFilterRaw ? JSON.parse(wFilterRaw) : [];
           const wFlights: WidgetFlight[] = fetchedDepartures
             .filter(item => {
               const ts = item.flight?.time?.scheduled?.departure;
               if (ts == null) return false;
               const airline = item.flight?.airline?.name || '';
+              if (wAllowedAirlines.length > 0 && !wAllowedAirlines.some(k => airline.toLowerCase().includes(k))) return false;
               const ops = getAirlineOps(airline);
               const ciO = ts - ops.checkInOpen * 60, ciC = ts - ops.checkInClose * 60;
               const gO = ts - ops.gateOpen * 60, gC = ts - ops.gateClose * 60;

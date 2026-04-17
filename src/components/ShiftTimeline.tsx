@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, Modal, ScrollView, TouchableOpacity,
   ActivityIndicator, Dimensions, LayoutAnimation, Platform, UIManager,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../context/ThemeContext';
 import { useAirport } from '../context/AirportContext';
@@ -74,10 +75,18 @@ export default function ShiftTimeline({ visible, onClose, shiftStart, shiftEnd, 
     setLoading(true);
     setError(false);
     try {
-      const { departures } = await fetchAirportScheduleRaw(airportCode);
+      const [{ departures }, filterRaw] = await Promise.all([
+        fetchAirportScheduleRaw(airportCode),
+        AsyncStorage.getItem('aerostaff_flight_filter_v1'),
+      ]);
+      const selectedAirlines: string[] = filterRaw ? JSON.parse(filterRaw) : [];
       const filtered = departures
         .map(parseFlight)
-        .filter((f): f is Flight => f !== null && f.departureTs >= startSec && f.departureTs <= endSec)
+        .filter((f): f is Flight => {
+          if (!f || f.departureTs < startSec || f.departureTs > endSec) return false;
+          if (selectedAirlines.length > 0 && !selectedAirlines.some(k => f.airlineName.toLowerCase().includes(k))) return false;
+          return true;
+        })
         .sort((a, b) => a.departureTs - b.departureTs);
       setFlights(filtered);
     } catch {
