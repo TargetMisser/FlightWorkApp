@@ -121,9 +121,14 @@ function parseSection(sectionHTML: string, nature: 'D' | 'A'): StaffMonitorFligh
 
 export async function fetchStaffMonitorData(nature: 'D' | 'A'): Promise<StaffMonitorFlight[]> {
   try {
-    // Try the direct .html page which contains both sections
+    // The staffMonitor.html page is a frameset that loads separate HTML files
+    // per section — we fetch the frame directly for the requested nature.
+    const base = 'https://servizi.pisa-airport.com/staffMonitor/StaffMonitor_files';
+    const frameFile = nature === 'D' ? 'staffMonitor_002.htm' : 'staffMonitor_003.htm';
     const urls = [
-      `https://servizi.pisa-airport.com/staffMonitor/staffMonitor.html`,
+      `${base}/${frameFile}?aviation=1`,
+      `${base}/${frameFile}`,
+      // legacy fallback
       `https://servizi.pisa-airport.com/staffMonitor/staffMonitor?trans=true&nature=${nature}`,
     ];
 
@@ -131,7 +136,10 @@ export async function fetchStaffMonitorData(nature: 'D' | 'A'): Promise<StaffMon
     for (const url of urls) {
       try {
         const resp = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-        if (resp.ok) { html = await resp.text(); break; }
+        if (resp.ok) {
+          const body = await resp.text();
+          if (body && body.length > 500) { html = body; break; }
+        }
       } catch {}
     }
 
@@ -141,27 +149,10 @@ export async function fetchStaffMonitorData(nature: 'D' | 'A'): Promise<StaffMon
     }
 
     if (__DEV__) {
-      console.log(`[staffMonitor] HTML sample:\n`, html.slice(0, 3000));
+      console.log(`[staffMonitor] nature=${nature} HTML sample:\n`, html.slice(0, 3000));
     }
 
-    // Split into DEPARTURES and ARRIVALS sections by looking for section markers
-    const upperHTML = html.toUpperCase();
-    const arrIdx = upperHTML.indexOf('ARRIVALS');
-    const depIdx = upperHTML.indexOf('DEPARTURES');
-
-    let sectionHTML: string;
-    if (nature === 'A' && arrIdx !== -1) {
-      sectionHTML = html.slice(arrIdx);
-    } else if (nature === 'D' && depIdx !== -1 && (arrIdx === -1 || depIdx < arrIdx)) {
-      sectionHTML = html.slice(depIdx, arrIdx !== -1 ? arrIdx : undefined);
-    } else if (nature === 'D' && arrIdx !== -1) {
-      // departures are before arrivals
-      sectionHTML = html.slice(0, arrIdx);
-    } else {
-      sectionHTML = html;
-    }
-
-    const results = parseSection(sectionHTML, nature);
+    const results = parseSection(html, nature);
 
     if (__DEV__) {
       console.log(`[staffMonitor] nature=${nature} → ${results.length} flights`, results.slice(0, 5));
