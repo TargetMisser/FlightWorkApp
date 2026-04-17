@@ -117,7 +117,7 @@ export async function fetchStaffMonitorData(nature: 'D' | 'A'): Promise<StaffMon
 
     while ((match = trRegex.exec(html)) !== null) {
       const rowHTML = match[1];
-      if (!/class\s*=\s*["'][^"']*clsFlight[^"']*["']/i.test(rowHTML)) continue;
+      if (!/class\s*=\s*["'][^"']*clsFlight[^"']*["']/i.test(match[0])) continue;
 
       const cells = extractCells(rowHTML);
       if (cells.length < 2) continue;
