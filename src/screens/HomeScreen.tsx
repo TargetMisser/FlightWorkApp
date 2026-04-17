@@ -150,9 +150,11 @@ function PinnedFlightCardComponent({ item, colors }: { item: any; colors: any })
 // Performance optimization: memoize flatlist item to prevent unnecessary re-renders
 const PinnedFlightCard = React.memo(PinnedFlightCardComponent);
 
-export default function HomeScreen() {
+export default function HomeScreen({ isFocused }: { isFocused?: boolean }) {
   const { colors } = useAppTheme();
   const { t, months, locale, weatherMap } = useLanguage();
+  const [timelineKey, setTimelineKey] = React.useState(0);
+  React.useEffect(() => { if (isFocused) setTimelineKey(k => k + 1); }, [isFocused]);
   const HOME_SHIFT_TITLES = { work: t('homeShiftWork'), rest: '🌴 Riposo' };
   const today = new Date();
   const [shiftEvent, setShiftEvent] = useState<any>(null);
@@ -428,6 +430,7 @@ export default function HomeScreen() {
             shiftStart={new Date(shiftEvent.startDate)}
             shiftEnd={new Date(shiftEvent.endDate)}
             inline
+            refreshKey={timelineKey}
           />
         </View>
       )}

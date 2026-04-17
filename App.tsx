@@ -167,7 +167,7 @@ function AppInner() {
 
   const renderTabScreen = (tab: Tab) => {
     switch (tab) {
-      case 'Shifts':    return <HomeScreen />;
+      case 'Shifts':    return <HomeScreen isFocused={activeTab === 'Shifts'} />;
       case 'Calendar':  return <CalendarScreen />;
       case 'Flights':   return <FlightScreen />;
       case 'TravelDoc': return <TraveldocScreen />;

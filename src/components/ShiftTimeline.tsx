@@ -24,6 +24,7 @@ type Props = {
   shiftStart: Date;
   shiftEnd: Date;
   inline?: boolean;
+  refreshKey?: number;
 };
 
 type Flight = {
@@ -55,7 +56,7 @@ function parseFlight(item: any): Flight | null {
   };
 }
 
-export default function ShiftTimeline({ visible, onClose, shiftStart, shiftEnd, inline }: Props) {
+export default function ShiftTimeline({ visible, onClose, shiftStart, shiftEnd, inline, refreshKey }: Props) {
   const { colors } = useAppTheme();
   const { t } = useLanguage();
   const { airportCode, isLoading: airportLoading } = useAirport();
@@ -94,7 +95,7 @@ export default function ShiftTimeline({ visible, onClose, shiftStart, shiftEnd, 
     } finally {
       setLoading(false);
     }
-  }, [airportCode, airportLoading, startSec, endSec]);
+  }, [airportCode, airportLoading, startSec, endSec, refreshKey]);
 
   // Inline: carica subito; Modal: carica quando visibile
   useEffect(() => {
