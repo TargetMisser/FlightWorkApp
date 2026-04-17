@@ -117,13 +117,13 @@ export async function fetchStaffMonitorData(nature: 'D' | 'A'): Promise<StaffMon
 
     while ((match = trRegex.exec(html)) !== null) {
       const rowHTML = match[1];
-      if (!/class\s*=\s*["'][^"']*clsFlight[^"']*["']/i.test(match[0])) continue;
-
       const cells = extractCells(rowHTML);
       if (cells.length < 2) continue;
 
       const rawFlight = cells[colMap.flight];
       if (!rawFlight) continue;
+      // Accept only rows where the flight column looks like a real flight number
+      if (!/^[A-Z]{2,3}\s*\d{1,5}$/i.test(rawFlight.trim())) continue;
 
       const flightNumber = normalizeFlightNumber(rawFlight);
 
