@@ -112,7 +112,7 @@ jobs:
             - Tema scuro per il WebView TravelDoc
 
             ### Bug fixes
-            - StaffMonitor: parser robusto — checkin multipli (36 37 38), rilevamento colonne migliorato
+            - StaffMonitor: parser riscritto — URL corretto, estrazione codice volo, split sezioni DEP/ARR
             - Card: rimossi i bordini interni in tema chiaro e scuro
             - Layout card voli: footer stand/CI/gate attaccato alla card, pill stato su riga propria
             - Timeline home: si ricarica con il filtro aggiornato ogni volta che torni sul tab
