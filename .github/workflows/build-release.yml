@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - 'v*'
+    branches:
+      - 'claude/fix-shift-permissions-Cn8gk'
   workflow_dispatch:
 
 permissions:
