@@ -23,7 +23,6 @@ function stripHTML(html: string): string {
     .trim();
 }
 
-/** Extract all cell contents from a <tr> — handles both <td> and <th> */
 function extractCells(trHTML: string): string[] {
   const cells: string[] = [];
   const regex = /<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi;
@@ -32,24 +31,13 @@ function extractCells(trHTML: string): string[] {
   return cells;
 }
 
-/**
- * Reject values that are clearly junk: very long strings or continuous digit
- * sequences of 8+ chars (phone-like). Space-separated numbers like "36 37 38"
- * are valid check-in desk lists and must NOT be rejected.
- */
+/** Reject only obvious junk: very long strings or 8+ continuous digits (phone-like). */
 function isPhoneOrJunk(val: string): boolean {
   if (!val) return false;
   if (val.length > 30) return true;
   if (/^\d{8,}$/.test(val.trim())) return true;
   return false;
 }
-
-const HEADER_WORDS = new Set([
-  'volo', 'n. volo', 'n.volo', 'flight', 'flt', 'vol',
-  'compagnia', 'airline', 'destinazione', 'destination', 'dest',
-  'ora', 'time', 'orario', 'status', 'stato', 'stand',
-  'checkin', 'check-in', 'check in', 'gate', 'belt', 'nastro',
-]);
 
 type ColMap = {
   flight: number;
@@ -59,47 +47,30 @@ type ColMap = {
   belt?: number;
 };
 
-function detectColumns(html: string, nature: 'D' | 'A'): ColMap {
-  const trRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
-  let m: RegExpExecArray | null;
+function detectColumns(headerCells: string[], nature: 'D' | 'A'): ColMap | null {
+  const cells = headerCells.map(c => c.toLowerCase().trim());
 
-  while ((m = trRegex.exec(html)) !== null) {
-    const cells = extractCells(m[1]).map(c => c.toLowerCase().trim());
+  // Flight column: "VOLO / FLIGHT", "VOLO", "FLIGHT", etc.
+  const flightIdx = cells.findIndex(c => c.includes('volo') || c.includes('flight') || c === 'flt');
+  if (flightIdx === -1) return null;
 
-    const flightIdx = cells.findIndex(c =>
-      c === 'volo' || c === 'n. volo' || c === 'n.volo' ||
-      c === 'flight' || c === 'flt' || c === 'vol' ||
-      c.startsWith('volo') || c.startsWith('n. volo'),
-    );
-    if (flightIdx === -1) continue;
+  const standIdx   = cells.findIndex(c => c.includes('stand') || c.includes('parch'));
+  const checkinIdx = cells.findIndex(c => c.includes('check') || c === 'c/i' || c === 'ci' || c === 'banco');
+  const gateIdx    = cells.findIndex(c => c === 'gate' || c.includes('uscita') || c.includes('imbarco'));
+  const beltIdx    = cells.findIndex(c => c.includes('belt') || c.includes('nastro') || c.includes('tapis'));
 
-    const standIdx   = cells.findIndex(c => c.includes('stand') || c.includes('parch'));
-    const checkinIdx = cells.findIndex(c =>
-      c.includes('check') || c === 'c/i' || c === 'ci' || c === 'banco',
-    );
-    const gateIdx = cells.findIndex(c =>
-      c === 'gate' || c.includes('uscita') || c.includes('imbarco'),
-    );
-    const beltIdx = cells.findIndex(c =>
-      c.includes('belt') || c.includes('nastro') || c.includes('tapis'),
-    );
+  const map: ColMap = { flight: flightIdx };
+  if (standIdx   !== -1) map.stand   = standIdx;
+  if (checkinIdx !== -1) map.checkin = checkinIdx;
+  if (gateIdx    !== -1) map.gate    = gateIdx;
+  if (beltIdx    !== -1) map.belt    = beltIdx;
 
-    const map: ColMap = { flight: flightIdx };
-    if (standIdx   !== -1) map.stand   = standIdx;
-    if (checkinIdx !== -1) map.checkin = checkinIdx;
-    if (gateIdx    !== -1) map.gate    = gateIdx;
-    if (beltIdx    !== -1) map.belt    = beltIdx;
-
-    if (map.stand !== undefined || map.checkin !== undefined || map.gate !== undefined || map.belt !== undefined) {
-      if (__DEV__) console.log('[staffMonitor] detected columns:', map, '| headers:', cells);
-      return map;
-    }
+  if (map.stand === undefined && map.checkin === undefined && map.gate === undefined && map.belt === undefined) {
+    return null;
   }
 
-  if (__DEV__) console.warn('[staffMonitor] header detection failed — using hardcoded fallback');
-  return nature === 'D'
-    ? { flight: 1, stand: 12, checkin: 13, gate: 14 }
-    : { flight: 1, stand: 11, belt: 12 };
+  if (__DEV__) console.log('[staffMonitor] detected columns:', map, '| headers:', cells);
+  return map;
 }
 
 function cell(cells: string[], idx: number | undefined): string | undefined {
@@ -109,46 +80,88 @@ function cell(cells: string[], idx: number | undefined): string | undefined {
   return v;
 }
 
+/** Extract flight number from a cell that may contain "FR03747 B738" — take first token only. */
+function extractFlightCode(raw: string): string | null {
+  const token = raw.trim().split(/\s+/)[0];
+  if (!/^[A-Z]{1,3}\d/i.test(token)) return null;
+  return normalizeFlightNumber(token);
+}
+
+function parseSection(sectionHTML: string, nature: 'D' | 'A'): StaffMonitorFlight[] {
+  const results: StaffMonitorFlight[] = [];
+  const trRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+  let match: RegExpExecArray | null;
+  let colMap: ColMap | null = null;
+
+  while ((match = trRegex.exec(sectionHTML)) !== null) {
+    const cells = extractCells(match[1]);
+    if (cells.length < 2) continue;
+
+    // Try to detect the header row
+    if (!colMap) {
+      colMap = detectColumns(cells, nature);
+      continue; // header row is not a data row
+    }
+
+    const rawFlight = cells[colMap.flight] ?? '';
+    const flightNumber = extractFlightCode(rawFlight);
+    if (!flightNumber) continue;
+
+    results.push({
+      flightNumber,
+      stand:   cell(cells, colMap.stand),
+      checkin: cell(cells, colMap.checkin),
+      gate:    cell(cells, colMap.gate),
+      belt:    cell(cells, colMap.belt),
+    });
+  }
+
+  return results;
+}
+
 export async function fetchStaffMonitorData(nature: 'D' | 'A'): Promise<StaffMonitorFlight[]> {
   try {
-    const url = `https://servizi.pisa-airport.com/staffMonitor/staffMonitor?trans=true&nature=${nature}`;
-    const resp = await fetch(url);
-    if (!resp.ok) {
-      console.warn(`[staffMonitor] HTTP ${resp.status} for nature=${nature}`);
+    // Try the direct .html page which contains both sections
+    const urls = [
+      `https://servizi.pisa-airport.com/staffMonitor/staffMonitor.html`,
+      `https://servizi.pisa-airport.com/staffMonitor/staffMonitor?trans=true&nature=${nature}`,
+    ];
+
+    let html = '';
+    for (const url of urls) {
+      try {
+        const resp = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+        if (resp.ok) { html = await resp.text(); break; }
+      } catch {}
+    }
+
+    if (!html) {
+      console.warn('[staffMonitor] all URLs failed');
       return [];
     }
-    const html = await resp.text();
 
     if (__DEV__) {
-      console.log(`[staffMonitor] HTML sample (first 2000 chars):\n`, html.slice(0, 2000));
+      console.log(`[staffMonitor] HTML sample:\n`, html.slice(0, 3000));
     }
 
-    const colMap = detectColumns(html, nature);
-    const results: StaffMonitorFlight[] = [];
-    const trRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
-    let match: RegExpExecArray | null;
+    // Split into DEPARTURES and ARRIVALS sections by looking for section markers
+    const upperHTML = html.toUpperCase();
+    const arrIdx = upperHTML.indexOf('ARRIVALS');
+    const depIdx = upperHTML.indexOf('DEPARTURES');
 
-    while ((match = trRegex.exec(html)) !== null) {
-      const cells = extractCells(match[1]);
-      if (cells.length <= colMap.flight) continue;
-
-      const rawFlight = cells[colMap.flight]?.trim();
-      if (!rawFlight) continue;
-
-      // Skip header rows
-      if (HEADER_WORDS.has(rawFlight.toLowerCase())) continue;
-
-      // Accept rows where the flight cell starts with letters followed by digits
-      if (!/^[A-Z]{1,3}\s*\d/i.test(rawFlight)) continue;
-
-      results.push({
-        flightNumber: normalizeFlightNumber(rawFlight),
-        stand:   cell(cells, colMap.stand),
-        checkin: cell(cells, colMap.checkin),
-        gate:    cell(cells, colMap.gate),
-        belt:    cell(cells, colMap.belt),
-      });
+    let sectionHTML: string;
+    if (nature === 'A' && arrIdx !== -1) {
+      sectionHTML = html.slice(arrIdx);
+    } else if (nature === 'D' && depIdx !== -1 && (arrIdx === -1 || depIdx < arrIdx)) {
+      sectionHTML = html.slice(depIdx, arrIdx !== -1 ? arrIdx : undefined);
+    } else if (nature === 'D' && arrIdx !== -1) {
+      // departures are before arrivals
+      sectionHTML = html.slice(0, arrIdx);
+    } else {
+      sectionHTML = html;
     }
+
+    const results = parseSection(sectionHTML, nature);
 
     if (__DEV__) {
       console.log(`[staffMonitor] nature=${nature} → ${results.length} flights`, results.slice(0, 5));
