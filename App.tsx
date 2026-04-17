@@ -248,7 +248,11 @@ function AppInner() {
       {/* Bottom Nav — Glassmorphic Floating Pill (hidden on overlay screens) */}
       {!overlay && (
         <View style={styles.tabBarWrapper} {...swipePan.panHandlers}>
-          <BlurView intensity={80} tint={colors.isDark ? 'dark' : 'light'} style={styles.tabBarBlur}>
+          <BlurView
+            intensity={100}
+            tint={colors.isDark ? 'dark' : 'light'}
+            style={[styles.tabBarBlur, { backgroundColor: colors.isDark ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.55)' }]}
+          >
             {TABS.map(tab => {
               const active = activeTab === tab.id;
               return (
