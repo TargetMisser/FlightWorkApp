@@ -3,12 +3,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 export const APP_VERSION = '2.5.0';
 const REPO = 'targetmisser/flightworkapp';
 const CHECK_KEY = 'aerostaff_update_check_v1';
+const SEEN_KEY = 'aerostaff_update_seen_v1';
 
 export type UpdateInfo = {
   available: boolean;
   latestVersion: string;
   downloadUrl: string;
   releaseUrl: string;
+  releaseNotes: string;
   checkedAt: number;
 };
 
@@ -34,7 +36,6 @@ export async function checkForUpdate(force = false): Promise<UpdateInfo | null> 
       const raw = await AsyncStorage.getItem(CHECK_KEY);
       if (raw) {
         const cached: UpdateInfo = JSON.parse(raw);
-        // Re-use cached result for 24 hours
         if (now - cached.checkedAt < 24 * 60 * 60 * 1000) return cached;
       }
     }
@@ -56,15 +57,14 @@ export async function checkForUpdate(force = false): Promise<UpdateInfo | null> 
     }
 
     const tag: string = json.tag_name ?? '';
-    const apkAsset = json.assets?.find((a: any) =>
-      (a.name as string).endsWith('.apk'),
-    );
+    const apkAsset = json.assets?.find((a: any) => (a.name as string).endsWith('.apk'));
 
     const info: UpdateInfo = {
       available: isNewer(tag, APP_VERSION),
       latestVersion: tag,
       downloadUrl: apkAsset?.browser_download_url ?? json.html_url,
       releaseUrl: json.html_url ?? '',
+      releaseNotes: json.body ?? '',
       checkedAt: now,
     };
 
@@ -82,4 +82,18 @@ export async function getCachedUpdateInfo(): Promise<UpdateInfo | null> {
   } catch {
     return null;
   }
+}
+
+/** Returns true if this version was already shown to the user */
+export async function wasUpdateSeen(version: string): Promise<boolean> {
+  try {
+    const seen = await AsyncStorage.getItem(SEEN_KEY);
+    return seen === version;
+  } catch {
+    return false;
+  }
+}
+
+export async function markUpdateSeen(version: string): Promise<void> {
+  await AsyncStorage.setItem(SEEN_KEY, version);
 }

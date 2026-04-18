@@ -1,0 +1,157 @@
+import React from 'react';
+import {
+  Modal, View, Text, TouchableOpacity, ScrollView, StyleSheet, Linking,
+} from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
+import { useAppTheme } from '../context/ThemeContext';
+import { type UpdateInfo, APP_VERSION } from '../utils/updateChecker';
+
+interface Props {
+  info: UpdateInfo;
+  onDismiss: () => void;
+}
+
+function renderNotes(raw: string): string {
+  return raw
+    .replace(/^#{1,3} ?/gm, '')          // strip markdown headers
+    .replace(/\*\*(.+?)\*\*/g, '$1')     // strip bold
+    .replace(/`(.+?)`/g, '$1')           // strip inline code
+    .replace(/📦 AeroStaff Pro [^\n]+\n?/, '') // strip redundant title line
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+export default function UpdateModal({ info, onDismiss }: Props) {
+  const { colors } = useAppTheme();
+
+  const notes = renderNotes(info.releaseNotes);
+
+  return (
+    <Modal visible transparent animationType="fade" onRequestClose={onDismiss}>
+      <View style={styles.overlay}>
+        <View style={[styles.sheet, { backgroundColor: colors.card }]}>
+          {/* Header */}
+          <View style={[styles.header, { backgroundColor: colors.primary }]}>
+            <MaterialIcons name="system-update" size={28} color="#fff" />
+            <View style={{ marginLeft: 12, flex: 1 }}>
+              <Text style={styles.headerTitle}>Aggiornamento disponibile</Text>
+              <Text style={styles.headerSub}>
+                v{APP_VERSION} → {info.latestVersion}
+              </Text>
+            </View>
+          </View>
+
+          {/* Release notes */}
+          {notes.length > 0 && (
+            <ScrollView
+              style={styles.notesScroll}
+              contentContainerStyle={styles.notesContent}
+              showsVerticalScrollIndicator={false}
+            >
+              <Text style={[styles.notesText, { color: colors.text }]}>{notes}</Text>
+            </ScrollView>
+          )}
+
+          {/* Buttons */}
+          <View style={[styles.footer, { borderTopColor: colors.border }]}>
+            <TouchableOpacity style={styles.btnLater} onPress={onDismiss} activeOpacity={0.7}>
+              <Text style={[styles.btnLaterText, { color: colors.textMuted }]}>Più tardi</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.btn, { borderColor: colors.primary }]}
+              onPress={() => { Linking.openURL(info.releaseUrl); onDismiss(); }}
+              activeOpacity={0.8}
+            >
+              <MaterialIcons name="open-in-browser" size={16} color={colors.primary} />
+              <Text style={[styles.btnText, { color: colors.primary }]}>GitHub</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.btn, styles.btnPrimary, { backgroundColor: colors.primary }]}
+              onPress={() => { Linking.openURL(info.downloadUrl); onDismiss(); }}
+              activeOpacity={0.8}
+            >
+              <MaterialIcons name="download" size={16} color="#fff" />
+              <Text style={[styles.btnText, { color: '#fff' }]}>Scarica APK</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const styles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  sheet: {
+    width: '100%',
+    maxWidth: 420,
+    borderRadius: 20,
+    overflow: 'hidden',
+    maxHeight: '80%',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 20,
+  },
+  headerTitle: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  headerSub: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  notesScroll: {
+    maxHeight: 320,
+  },
+  notesContent: {
+    padding: 20,
+  },
+  notesText: {
+    fontSize: 13,
+    lineHeight: 20,
+  },
+  footer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 16,
+    borderTopWidth: 1,
+  },
+  btnLater: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  btnLaterText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  btn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1.5,
+  },
+  btnPrimary: {
+    borderWidth: 0,
+  },
+  btnText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+});

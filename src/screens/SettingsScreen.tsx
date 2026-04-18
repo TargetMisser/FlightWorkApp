@@ -18,8 +18,10 @@ import {
   APP_VERSION,
   checkForUpdate,
   getCachedUpdateInfo,
+  markUpdateSeen,
   type UpdateInfo,
 } from '../utils/updateChecker';
+import UpdateModal from '../components/UpdateModal';
 
 // ─── Tema picker ──────────────────────────────────────────────────────────────
 type ThemeOption = {
@@ -180,6 +182,7 @@ export default function SettingsScreen() {
   const [airportInput, setAirportInput] = useState(airportCode);
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [showUpdateModal, setShowUpdateModal] = useState(false);
 
   useEffect(() => {
     getCachedUpdateInfo().then(setUpdateInfo);
@@ -192,7 +195,9 @@ export default function SettingsScreen() {
     setCheckingUpdate(false);
     if (!info) {
       Alert.alert('Errore', 'Impossibile contattare GitHub. Riprova più tardi.');
-    } else if (!info.available) {
+    } else if (info.available) {
+      setShowUpdateModal(true);
+    } else {
       Alert.alert('Sei aggiornato!', `AeroStaff Pro v${APP_VERSION} è l'ultima versione.`);
     }
   }, []);
@@ -375,6 +380,16 @@ export default function SettingsScreen() {
 
         <View style={{ height: 32 }} />
       </ScrollView>
+
+      {showUpdateModal && updateInfo && (
+        <UpdateModal
+          info={updateInfo}
+          onDismiss={() => {
+            markUpdateSeen(updateInfo.latestVersion).catch(() => {});
+            setShowUpdateModal(false);
+          }}
+        />
+      )}
 
       <Modal
         visible={airportModalOpen}

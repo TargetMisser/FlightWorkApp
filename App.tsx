@@ -18,7 +18,8 @@ import SettingsScreen from './src/screens/SettingsScreen';
 import PasswordScreen from './src/screens/PasswordScreen';
 import DrawerMenu from './src/components/DrawerMenu';
 import { autoScheduleNotifications } from './src/utils/autoNotifications';
-import { checkForUpdate } from './src/utils/updateChecker';
+import { checkForUpdate, wasUpdateSeen, markUpdateSeen, type UpdateInfo } from './src/utils/updateChecker';
+import UpdateModal from './src/components/UpdateModal';
 
 type Tab = 'Shifts' | 'Calendar' | 'Flights' | 'TravelDoc';
 type OverlayScreen = 'Notepad' | 'Phonebook' | 'Passwords' | 'Manuals' | 'Settings' | null;
@@ -83,6 +84,7 @@ function AppInner() {
   const [activeTab, setActiveTab]   = useState<Tab>('Shifts');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [overlay, setOverlay]       = useState<OverlayScreen>(null);
+  const [pendingUpdate, setPendingUpdate] = useState<UpdateInfo | null>(null);
 
   const tabLabels: Record<Tab, string> = {
     Shifts: t('tabHome'), Calendar: t('tabShifts'), Flights: t('tabFlights'), TravelDoc: t('tabTravelDoc'),
@@ -100,8 +102,12 @@ function AppInner() {
     autoScheduleNotifications().then(count => {
       if (count > 0 && __DEV__) console.log(`Auto-scheduled ${count} notifications`);
     }).catch(() => {});
-    // Silently check for updates once per day
-    checkForUpdate().catch(() => {});
+    // Check for updates; show modal once per new version
+    checkForUpdate().then(async info => {
+      if (!info?.available) return;
+      const seen = await wasUpdateSeen(info.latestVersion);
+      if (!seen) setPendingUpdate(info);
+    }).catch(() => {});
   }, []);
 
   // ─── Android back button: overlay → home, drawer → close ───────────────────
@@ -286,6 +292,15 @@ function AppInner() {
         onClose={() => setDrawerOpen(false)}
         onSelect={handleDrawerSelect}
       />
+      {pendingUpdate && (
+        <UpdateModal
+          info={pendingUpdate}
+          onDismiss={() => {
+            markUpdateSeen(pendingUpdate.latestVersion).catch(() => {});
+            setPendingUpdate(null);
+          }}
+        />
+      )}
     </View>
   );
 }
