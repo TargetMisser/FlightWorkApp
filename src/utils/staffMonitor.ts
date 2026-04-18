@@ -184,7 +184,8 @@ export async function fetchStaffMonitorData(nature: 'D' | 'A'): Promise<StaffMon
         const body = await resp.text();
         _lastDebugStatus = `${nature}:${resp.status} len=${body.length}`;
         console.warn(`[staffMonitor] ${_lastDebugStatus} url=${url}`);
-        if (resp.ok && body.length > 500 && body.includes('<tr')) {
+        // Accept any 200 OK; parser returns [] naturally for "no flights" pages
+        if (resp.ok && body.length > 200) {
           html = body;
           if (nature === 'D') _lastDebugHtml = body.replace(/\s+/g, ' ').slice(0, 300);
           break;
