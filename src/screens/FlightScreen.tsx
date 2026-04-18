@@ -12,7 +12,7 @@ import { useAppTheme, type ThemeColors } from '../context/ThemeContext';
 import { useAirport } from '../context/AirportContext';
 import { getAirlineOps, getAirlineColor, AIRLINE_COLORS, AIRLINE_DISPLAY_NAMES } from '../utils/airlineOps';
 import { fetchAirportScheduleRaw } from '../utils/fr24api';
-import { fetchStaffMonitorData, normalizeFlightNumber, type StaffMonitorFlight } from '../utils/staffMonitor';
+import { fetchStaffMonitorData, getStaffMonitorDebugStatus, normalizeFlightNumber, type StaffMonitorFlight } from '../utils/staffMonitor';
 import { formatAirportHeader, getAirportAirlines } from '../utils/airportSettings';
 import { requestWidgetUpdate } from 'react-native-android-widget';
 import { WIDGET_CACHE_KEY, WIDGET_SHIFT_KEY } from '../widgets/widgetTaskHandler';
@@ -873,17 +873,10 @@ export default function FlightScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* StaffMonitor debug badge — remove before release */}
-      {__DEV__ === false && (staffMonitorDeps.length > 0 || staffMonitorArrs.length > 0) === false && (
-        <View style={{ backgroundColor: 'red', padding: 4 }}>
-          <Text style={{ color: '#fff', fontSize: 11, textAlign: 'center' }}>
-            SM: D={staffMonitorDeps.length} A={staffMonitorArrs.length}
-          </Text>
-        </View>
-      )}
+      {/* StaffMonitor debug banner — REMOVE BEFORE RELEASE */}
       <View style={{ backgroundColor: '#1a1a2e', padding: 3 }}>
         <Text style={{ color: '#aaa', fontSize: 10, textAlign: 'center' }}>
-          SM: D={staffMonitorDeps.length} A={staffMonitorArrs.length}
+          SM: D={staffMonitorDeps.length} A={staffMonitorArrs.length} | {getStaffMonitorDebugStatus()}
         </Text>
       </View>
 

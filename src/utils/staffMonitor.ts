@@ -151,6 +151,9 @@ function parseSection(sectionHTML: string): StaffMonitorFlight[] {
   return results;
 }
 
+let _lastDebugStatus = 'init';
+export function getStaffMonitorDebugStatus(): string { return _lastDebugStatus; }
+
 export async function fetchStaffMonitorData(nature: 'D' | 'A'): Promise<StaffMonitorFlight[]> {
   try {
     // The dynamic Tomcat servlet that returns real data. The static .html
@@ -172,11 +175,14 @@ export async function fetchStaffMonitorData(nature: 'D' | 'A'): Promise<StaffMon
               'Referer': 'https://servizi.pisa-airport.com/staffMonitor/staffMonitor.html',
             },
           });
-        if (resp.ok) {
-          const body = await resp.text();
-          if (body && body.length > 500) { html = body; break; }
-        }
-      } catch {}
+        const body = await resp.text();
+        _lastDebugStatus = `${nature}:${resp.status} len=${body.length}`;
+        console.warn(`[staffMonitor] ${_lastDebugStatus} url=${url}`);
+        if (resp.ok && body.length > 500) { html = body; break; }
+      } catch (e: any) {
+        _lastDebugStatus = `${nature}:ERR ${String(e).slice(0, 60)}`;
+        console.warn(`[staffMonitor] fetch error: ${_lastDebugStatus}`);
+      }
     }
 
     if (!html) {
