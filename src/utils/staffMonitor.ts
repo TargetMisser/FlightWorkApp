@@ -23,12 +23,24 @@ function stripHTML(html: string): string {
     .trim();
 }
 
-function extractCells(trHTML: string): string[] {
-  const cells: string[] = [];
-  const regex = /<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi;
+type RawCell = { text: string; colspan: number };
+
+function extractCellsRaw(trHTML: string): RawCell[] {
+  const cells: RawCell[] = [];
+  const regex = /<t[dh]([^>]*)>([\s\S]*?)<\/t[dh]>/gi;
   let m: RegExpExecArray | null;
-  while ((m = regex.exec(trHTML)) !== null) cells.push(stripHTML(m[1]));
+  while ((m = regex.exec(trHTML)) !== null) {
+    const attrs = m[1];
+    const text = stripHTML(m[2]);
+    const csMatch = /colspan\s*=\s*["']?(\d+)/i.exec(attrs);
+    const colspan = csMatch ? Math.max(1, parseInt(csMatch[1], 10)) : 1;
+    cells.push({ text, colspan });
+  }
   return cells;
+}
+
+function extractCells(trHTML: string): string[] {
+  return extractCellsRaw(trHTML).map(c => c.text);
 }
 
 /** Reject only obvious junk: very long strings or 8+ continuous digits (phone-like). */
@@ -47,29 +59,46 @@ type ColMap = {
   belt?: number;
 };
 
-function detectColumns(headerCells: string[], nature: 'D' | 'A'): ColMap | null {
-  const cells = headerCells.map(c => c.toLowerCase().trim());
+/**
+ * Build absolute data-column positions from a header row.
+ * Headers with colspan>1 span multiple data columns — e.g. "VOLO / FLIGHT"
+ * with colspan=2 covers [logo_col, flight_number_col]. For the flight column
+ * specifically, data rows put the flight code in the LAST sub-column.
+ */
+function detectColumns(headerRow: RawCell[]): ColMap | null {
+  type HPos = { name: string; start: number; span: number };
+  const positions: HPos[] = [];
+  let col = 0;
+  for (const h of headerRow) {
+    positions.push({ name: h.text.toLowerCase().trim(), start: col, span: h.colspan });
+    col += h.colspan;
+  }
 
-  // Flight column: "VOLO / FLIGHT", "VOLO", "FLIGHT", etc.
-  const flightIdx = cells.findIndex(c => c.includes('volo') || c.includes('flight') || c === 'flt');
-  if (flightIdx === -1) return null;
+  const findPos = (pred: (n: string) => boolean) => positions.find(p => pred(p.name));
 
-  const standIdx   = cells.findIndex(c => c.includes('stand') || c.includes('parch'));
-  const checkinIdx = cells.findIndex(c => c.includes('check') || c === 'c/i' || c === 'ci' || c === 'banco');
-  const gateIdx    = cells.findIndex(c => c === 'gate' || c.includes('uscita') || c.includes('imbarco'));
-  const beltIdx    = cells.findIndex(c => c.includes('belt') || c.includes('nastro') || c.includes('tapis'));
+  const flightH = findPos(n => n.includes('volo') || n.includes('flight') || n === 'flt');
+  if (!flightH) return null;
 
-  const map: ColMap = { flight: flightIdx };
-  if (standIdx   !== -1) map.stand   = standIdx;
-  if (checkinIdx !== -1) map.checkin = checkinIdx;
-  if (gateIdx    !== -1) map.gate    = gateIdx;
-  if (beltIdx    !== -1) map.belt    = beltIdx;
+  // For "VOLO / FLIGHT" with colspan=2, logo is first sub-col, flight # is last.
+  const flightCol = flightH.start + flightH.span - 1;
+
+  const standH   = findPos(n => n.includes('stand') || n.includes('parch'));
+  const checkinH = findPos(n => n.includes('check') || n === 'c/i' || n === 'ci' || n === 'banco');
+  // gate keywords: avoid matching "imbarco" in STATUS header, so prefer exact 'gate' or 'uscita'
+  const gateH    = findPos(n => n === 'gate' || n.includes('uscita'));
+  const beltH    = findPos(n => n.includes('belt') || n.includes('nastro') || n.includes('tapis'));
+
+  const map: ColMap = { flight: flightCol };
+  if (standH)   map.stand   = standH.start;
+  if (checkinH) map.checkin = checkinH.start;
+  if (gateH)    map.gate    = gateH.start;
+  if (beltH)    map.belt    = beltH.start;
 
   if (map.stand === undefined && map.checkin === undefined && map.gate === undefined && map.belt === undefined) {
     return null;
   }
 
-  if (__DEV__) console.log('[staffMonitor] detected columns:', map, '| headers:', cells);
+  if (__DEV__) console.log('[staffMonitor] detected columns:', map, '| headers:', positions.map(p => `${p.start}:${p.name}`));
   return map;
 }
 
@@ -83,26 +112,28 @@ function cell(cells: string[], idx: number | undefined): string | undefined {
 /** Extract flight number from a cell that may contain "FR03747 B738" — take first token only. */
 function extractFlightCode(raw: string): string | null {
   const token = raw.trim().split(/\s+/)[0];
-  if (!/^[A-Z]{1,3}\d/i.test(token)) return null;
+  if (!/^[A-Z0-9]{1,4}\d/i.test(token)) return null;
+  // Require at least 2 chars and at least one letter to avoid matching pure numbers
+  if (!/[A-Z]/i.test(token)) return null;
   return normalizeFlightNumber(token);
 }
 
-function parseSection(sectionHTML: string, nature: 'D' | 'A'): StaffMonitorFlight[] {
+function parseSection(sectionHTML: string): StaffMonitorFlight[] {
   const results: StaffMonitorFlight[] = [];
   const trRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
   let match: RegExpExecArray | null;
   let colMap: ColMap | null = null;
 
   while ((match = trRegex.exec(sectionHTML)) !== null) {
-    const cells = extractCells(match[1]);
-    if (cells.length < 2) continue;
+    const rawCells = extractCellsRaw(match[1]);
+    if (rawCells.length < 2) continue;
 
-    // Try to detect the header row
     if (!colMap) {
-      colMap = detectColumns(cells, nature);
-      continue; // header row is not a data row
+      colMap = detectColumns(rawCells);
+      continue;
     }
 
+    const cells = rawCells.map(c => c.text);
     const rawFlight = cells[colMap.flight] ?? '';
     const flightNumber = extractFlightCode(rawFlight);
     if (!flightNumber) continue;
@@ -121,15 +152,12 @@ function parseSection(sectionHTML: string, nature: 'D' | 'A'): StaffMonitorFligh
 
 export async function fetchStaffMonitorData(nature: 'D' | 'A'): Promise<StaffMonitorFlight[]> {
   try {
-    // The staffMonitor.html page is a frameset that loads separate HTML files
-    // per section — we fetch the frame directly for the requested nature.
-    const base = 'https://servizi.pisa-airport.com/staffMonitor/StaffMonitor_files';
-    const frameFile = nature === 'D' ? 'staffMonitor_002.htm' : 'staffMonitor_003.htm';
+    // The dynamic Tomcat servlet that returns real data. The static .html
+    // wrapper is a saved-page frameset whose frame files don't exist on the server.
     const urls = [
-      `${base}/${frameFile}?aviation=1`,
-      `${base}/${frameFile}`,
-      // legacy fallback
       `https://servizi.pisa-airport.com/staffMonitor/staffMonitor?trans=true&nature=${nature}`,
+      `https://servizi.pisa-airport.com/staffMonitor/staffMonitor?nature=${nature}`,
+      `https://servizi.pisa-airport.com/staffMonitor/staffMonitor?nature=${nature}&aviation=1`,
     ];
 
     let html = '';
@@ -149,10 +177,10 @@ export async function fetchStaffMonitorData(nature: 'D' | 'A'): Promise<StaffMon
     }
 
     if (__DEV__) {
-      console.log(`[staffMonitor] nature=${nature} HTML sample:\n`, html.slice(0, 3000));
+      console.log(`[staffMonitor] nature=${nature} HTML sample:\n`, html.slice(0, 2000));
     }
 
-    const results = parseSection(html, nature);
+    const results = parseSection(html);
 
     if (__DEV__) {
       console.log(`[staffMonitor] nature=${nature} → ${results.length} flights`, results.slice(0, 5));
