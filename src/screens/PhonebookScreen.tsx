@@ -273,13 +273,13 @@ function ContactRowComponent({ contact, onEdit, onDelete }: ContactRowProps) {
         <Text style={rowStyles.number} numberOfLines={1}>{contact.number}</Text>
         {!!contact.note && <Text style={rowStyles.note}>{contact.note}</Text>}
       </View>
-      <TouchableOpacity style={[rowStyles.callBtn, { backgroundColor: color }]} onPress={call}>
+      <TouchableOpacity style={[rowStyles.callBtn, { backgroundColor: color }]} onPress={call} accessible accessibilityRole="button" accessibilityLabel={t('contactCall')}>
         <MaterialIcons name="call" size={18} color="#fff" />
       </TouchableOpacity>
-      <TouchableOpacity style={rowStyles.editBtn} onPress={() => onEdit(contact)}>
+      <TouchableOpacity style={rowStyles.editBtn} onPress={() => onEdit(contact)} accessible accessibilityRole="button" accessibilityLabel={t('contactEdit')}>
         <MaterialIcons name="edit" size={18} color={colors.textSub} />
       </TouchableOpacity>
-      <TouchableOpacity style={rowStyles.editBtn} onPress={confirmDelete}>
+      <TouchableOpacity style={rowStyles.editBtn} onPress={confirmDelete} accessible accessibilityRole="button" accessibilityLabel={t('contactDeleteConfirm')}>
         <MaterialIcons name="delete-outline" size={18} color="#EF4444" />
       </TouchableOpacity>
     </View>
