@@ -167,7 +167,7 @@ export async function fetchStaffMonitorData(nature: 'D' | 'A'): Promise<StaffMon
     let html = '';
     for (const url of urls) {
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 8_000);
+      const timer = setTimeout(() => controller.abort(), 20_000);
       try {
         const resp = await fetch(url, {
             signal: controller.signal,
