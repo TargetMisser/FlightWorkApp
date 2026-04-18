@@ -371,32 +371,45 @@ export default function FlightScreen() {
           if (pinnedRawW) {
             try { pinnedFn = JSON.parse(pinnedRawW).flight?.identification?.number?.default || null; } catch {}
           }
+          const opsCache: Record<string, ReturnType<typeof getAirlineOps>> = {};
+          const colorCache: Record<string, string> = {};
           const wFlights: WidgetFlight[] = fetchedDepartures
-            .filter(item => {
+            .reduce((acc: WidgetFlight[], item) => {
               const ts = item.flight?.time?.scheduled?.departure;
-              if (ts == null) return false;
-              const airline = item.flight?.airline?.name || '';
-              const ops = getAirlineOps(airline);
+              if (ts == null) return acc;
+              const airline = item.flight?.airline?.name || 'Sconosciuta';
+
+              let ops = opsCache[airline];
+              if (!ops) {
+                ops = getAirlineOps(airline);
+                opsCache[airline] = ops;
+              }
+
               const ciO = ts - ops.checkInOpen * 60, ciC = ts - ops.checkInClose * 60;
               const gO = ts - ops.gateOpen * 60, gC = ts - ops.gateClose * 60;
-              return (ciO <= shiftToday!.end && ciC >= shiftToday!.start) || (gO <= shiftToday!.end && gC >= shiftToday!.start);
-            })
-            .map(item => {
-              const ts = item.flight.time.scheduled.departure;
-              const airline = item.flight?.airline?.name || 'Sconosciuta';
-              const ops = getAirlineOps(airline);
-              const fn = item.flight?.identification?.number?.default || 'N/A';
-              return {
-                flightNumber: fn,
-                destinationIata: item.flight?.airport?.destination?.code?.iata || '???',
-                departureTs: ts,
-                departureTime: fmtT(ts),
-                ciOpen: fmtOff(ts, ops.checkInOpen), ciClose: fmtOff(ts, ops.checkInClose),
-                gateOpen: fmtOff(ts, ops.gateOpen), gateClose: fmtOff(ts, ops.gateClose),
-                airlineColor: getAirlineColor(airline),
-                isPinned: fn === pinnedFn,
-              };
-            })
+
+              if ((ciO <= shiftToday!.end && ciC >= shiftToday!.start) || (gO <= shiftToday!.end && gC >= shiftToday!.start)) {
+                const fn = item.flight?.identification?.number?.default || 'N/A';
+
+                let color = colorCache[airline];
+                if (!color) {
+                  color = getAirlineColor(airline);
+                  colorCache[airline] = color;
+                }
+
+                acc.push({
+                  flightNumber: fn,
+                  destinationIata: item.flight?.airport?.destination?.code?.iata || '???',
+                  departureTs: ts,
+                  departureTime: fmtT(ts),
+                  ciOpen: fmtOff(ts, ops.checkInOpen), ciClose: fmtOff(ts, ops.checkInClose),
+                  gateOpen: fmtOff(ts, ops.gateOpen), gateClose: fmtOff(ts, ops.gateClose),
+                  airlineColor: color as `#${string}`,
+                  isPinned: fn === pinnedFn,
+                });
+              }
+              return acc;
+            }, [])
             .sort((a, b) => a.departureTs - b.departureTs);
 
           widgetData = wFlights.length === 0
