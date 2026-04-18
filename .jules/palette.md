@@ -1,0 +1,3 @@
+## 2025-03-09 - Accessible Icon Buttons in React Native
+**Learning:** In this React Native application, several icon-only components (like `<TouchableOpacity>` containing only a `<MaterialIcons>`) lacked inherent meaning for screen readers. Using standard ARIA attributes directly isn't perfectly 1-to-1 with React Native.
+**Action:** Next time, when adding accessibility to interactive elements in React Native, ensure `<TouchableOpacity>` (or similar) is given the props `accessible={true}`, `accessibilityRole="button"`, and a descriptive `accessibilityLabel` (ideally translated) to provide context for screen readers.
