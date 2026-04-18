@@ -46,7 +46,18 @@ export type WidgetShiftData = {
 async function getWidgetData(): Promise<WidgetData> {
   try {
     const cached = await AsyncStorage.getItem(WIDGET_CACHE_KEY);
-    if (cached) return JSON.parse(cached);
+    if (!cached) return { state: 'error' };
+    const data: WidgetData = JSON.parse(cached);
+    // For rest/no_shift states validate against WIDGET_SHIFT_KEY date —
+    // otherwise a stale 'rest' from yesterday would persist until the app reopens.
+    if (data.state === 'rest' || data.state === 'no_shift') {
+      const todayIso = new Date().toISOString().split('T')[0];
+      const shiftRaw = await AsyncStorage.getItem(WIDGET_SHIFT_KEY);
+      if (!shiftRaw) return { state: 'no_shift' };
+      const shiftData: WidgetShiftData = JSON.parse(shiftRaw);
+      if (shiftData.date !== todayIso) return { state: 'no_shift' };
+    }
+    return data;
   } catch {}
   return { state: 'error' };
 }
