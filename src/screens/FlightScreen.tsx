@@ -873,6 +873,20 @@ export default function FlightScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* StaffMonitor debug badge — remove before release */}
+      {__DEV__ === false && (staffMonitorDeps.length > 0 || staffMonitorArrs.length > 0) === false && (
+        <View style={{ backgroundColor: 'red', padding: 4 }}>
+          <Text style={{ color: '#fff', fontSize: 11, textAlign: 'center' }}>
+            SM: D={staffMonitorDeps.length} A={staffMonitorArrs.length}
+          </Text>
+        </View>
+      )}
+      <View style={{ backgroundColor: '#1a1a2e', padding: 3 }}>
+        <Text style={{ color: '#aaa', fontSize: 10, textAlign: 'center' }}>
+          SM: D={staffMonitorDeps.length} A={staffMonitorArrs.length}
+        </Text>
+      </View>
+
       {/* Dual segmented controls */}
       <View style={s.controlsRow}>
         {/* Arrivi / Partenze */}
