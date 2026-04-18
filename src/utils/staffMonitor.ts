@@ -152,7 +152,9 @@ function parseSection(sectionHTML: string): StaffMonitorFlight[] {
 }
 
 let _lastDebugStatus = 'init';
+let _lastDebugHtml = '';
 export function getStaffMonitorDebugStatus(): string { return _lastDebugStatus; }
+export function getStaffMonitorDebugHtml(): string { return _lastDebugHtml; }
 
 export async function fetchStaffMonitorData(nature: 'D' | 'A'): Promise<StaffMonitorFlight[]> {
   try {
@@ -182,8 +184,11 @@ export async function fetchStaffMonitorData(nature: 'D' | 'A'): Promise<StaffMon
         const body = await resp.text();
         _lastDebugStatus = `${nature}:${resp.status} len=${body.length}`;
         console.warn(`[staffMonitor] ${_lastDebugStatus} url=${url}`);
-        // Accept any response with a table structure; empty tables (no active flights) are valid
-        if (resp.ok && body.length > 500 && body.includes('<tr')) { html = body; break; }
+        if (resp.ok && body.length > 500 && body.includes('<tr')) {
+          html = body;
+          if (nature === 'D') _lastDebugHtml = body.replace(/\s+/g, ' ').slice(0, 300);
+          break;
+        }
       } catch (e: any) {
         clearTimeout(timer);
         _lastDebugStatus = `${nature}:ERR ${String(e).slice(0, 60)}`;
