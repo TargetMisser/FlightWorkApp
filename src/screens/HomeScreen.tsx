@@ -42,6 +42,22 @@ const weatherMap: Record<number, { text: string; icon: string }> = {
 const engineHtml = `<!DOCTYPE html><html lang="it"><head>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script></head>
 <body style="background-color:transparent;"><script>
+window.addEventListener("message", function(event) {
+  try {
+    var data = JSON.parse(event.data);
+    if(data.type === 'runTesseract') {
+      window.runTesseract(data.payload);
+    }
+  } catch(e) {}
+});
+document.addEventListener("message", function(event) {
+  try {
+    var data = JSON.parse(event.data);
+    if(data.type === 'runTesseract') {
+      window.runTesseract(data.payload);
+    }
+  } catch(e) {}
+});
 window.runTesseract = async function(base64JsonStr) {
   try {
     const images = JSON.parse(base64JsonStr);
@@ -287,15 +303,7 @@ export default function HomeScreen() {
         setProcessing(true); setOcrText('');
         const base64List = result.assets.map(a => `data:image/jpeg;base64,${a.base64}`);
         const base64Json = JSON.stringify(base64List);
-        // Use postMessage pattern to avoid script-injection risks with injectJavaScript
-        webViewRef.current?.injectJavaScript(`
-          if(window.runTesseract){
-            window.runTesseract(${JSON.stringify(base64Json)});
-          } else {
-            window.ReactNativeWebView.postMessage(JSON.stringify({success:false,error:'OCR non pronto'}));
-          }
-          true;
-        `);
+        webViewRef.current?.postMessage(JSON.stringify({ type: 'runTesseract', payload: base64Json }));
       }
     } catch (e) { if (__DEV__) console.error('[imagePicker]', e); setProcessing(false); }
   };
