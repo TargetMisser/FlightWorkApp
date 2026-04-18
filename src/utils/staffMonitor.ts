@@ -166,8 +166,11 @@ export async function fetchStaffMonitorData(nature: 'D' | 'A'): Promise<StaffMon
 
     let html = '';
     for (const url of urls) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 8_000);
       try {
         const resp = await fetch(url, {
+            signal: controller.signal,
             headers: {
               'User-Agent': 'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 Chrome/120 Safari/537.36',
               'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -175,11 +178,13 @@ export async function fetchStaffMonitorData(nature: 'D' | 'A'): Promise<StaffMon
               'Referer': 'https://servizi.pisa-airport.com/staffMonitor/staffMonitor.html',
             },
           });
+        clearTimeout(timer);
         const body = await resp.text();
         _lastDebugStatus = `${nature}:${resp.status} len=${body.length}`;
         console.warn(`[staffMonitor] ${_lastDebugStatus} url=${url}`);
         if (resp.ok && body.length > 500) { html = body; break; }
       } catch (e: any) {
+        clearTimeout(timer);
         _lastDebugStatus = `${nature}:ERR ${String(e).slice(0, 60)}`;
         console.warn(`[staffMonitor] fetch error: ${_lastDebugStatus}`);
       }
