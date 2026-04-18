@@ -2,7 +2,6 @@ import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform, StatusBar, PanResponder, Animated, Dimensions, BackHandler } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView as ExpoBlurView } from 'expo-blur';
-import { BlurView as CommunityBlurView } from '@react-native-community/blur';
 import * as Haptics from 'expo-haptics';
 import { MaterialIcons } from '@expo/vector-icons';
 import { ThemeProvider, useAppTheme } from './src/context/ThemeContext';
@@ -249,22 +248,12 @@ function AppInner() {
       {/* Bottom Nav — Glassmorphic Floating Pill (hidden on overlay screens) */}
       {!overlay && (
         <View style={styles.tabBarWrapper} {...swipePan.panHandlers}>
-          {/* Outer View clips blur to pill shape on Android */}
-          <View style={styles.tabBarBlur}>
-            {Platform.OS === 'android' ? (
-              <CommunityBlurView
-                blurType={colors.isDark ? 'dark' : 'light'}
-                blurAmount={15}
-                reducedTransparencyFallbackColor={colors.isDark ? '#1e1e1e' : '#f0f0f0'}
-                style={[StyleSheet.absoluteFill, { backgroundColor: colors.isDark ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.35)' }]}
-              />
-            ) : (
-              <ExpoBlurView
-                intensity={100}
-                tint={colors.isDark ? 'dark' : 'light'}
-                style={StyleSheet.absoluteFill}
-              />
-            )}
+          <View style={[styles.tabBarBlur, { backgroundColor: colors.isDark ? 'rgba(28,28,30,0.82)' : 'rgba(242,242,247,0.82)' }]}>
+            <ExpoBlurView
+              intensity={80}
+              tint={colors.isDark ? 'dark' : 'light'}
+              style={StyleSheet.absoluteFill}
+            />
             <View style={styles.tabBarRow}>
               {TABS.map(tab => {
                 const active = activeTab === tab.id;
