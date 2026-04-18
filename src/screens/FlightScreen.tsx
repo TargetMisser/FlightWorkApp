@@ -807,11 +807,15 @@ export default function FlightScreen() {
 
   const currentData = (() => {
     const source = activeTab === 'arrivals' ? allArrivalsFull : allDeparturesFull;
+    const seen = new Set<string>();
     return source.filter(item => {
       const ts = activeTab === 'arrivals'
         ? item.flight?.time?.scheduled?.arrival
         : item.flight?.time?.scheduled?.departure;
       if (!ts || !isSameDay(new Date(ts * 1000), selectedDate)) return false;
+      const dedupeKey = `${item.flight?.identification?.number?.default ?? ''}_${ts}`;
+      if (seen.has(dedupeKey)) return false;
+      seen.add(dedupeKey);
       if (selectedAirlines.length === 0) return true;
       const name = (item.flight?.airline?.name || '').toLowerCase();
       return selectedAirlines.some(key => name.includes(key));
