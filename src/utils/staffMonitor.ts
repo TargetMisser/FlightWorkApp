@@ -6,9 +6,10 @@ export type StaffMonitorFlight = {
   belt?: string;
 };
 
-/** Normalize flight number: FR07146 → FR7146, FR00770 → FR770 */
+/** Normalize flight number: FR07146 → FR7146, W405032 → W45032, U208320 → U28320.
+ *  Handles both pure-letter IATA codes (FR, BA) and mixed codes (W4, U2, D8). */
 export function normalizeFlightNumber(raw: string): string {
-  return raw.trim().toUpperCase().replace(/^([A-Z]{2,3})0+([0-9])/, '$1$2');
+  return raw.trim().toUpperCase().replace(/^([A-Z][A-Z0-9]{1,2})0+([0-9])/, '$1$2');
 }
 
 function stripHTML(html: string): string {
