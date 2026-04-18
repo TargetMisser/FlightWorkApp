@@ -8,6 +8,7 @@ import {
   dismissShiftOngoingNotification,
   syncShiftOngoingExpiry,
 } from './shiftOngoingNotification';
+import { handleError } from './errorHandler';
 
 const NOTIF_IDS_KEY = 'aerostaff_notif_ids_v1';
 const LAST_SCHEDULE_KEY = 'aerostaff_notif_last_schedule';
@@ -133,8 +134,8 @@ export async function autoScheduleNotifications(): Promise<number> {
           trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: Math.round(secondsUntilNotify), repeats: false },
         });
         newIds.push(id);
-      } catch (err) {
-        if (__DEV__) console.error('Failed to schedule arrival notification:', err);
+      } catch (err: unknown) {
+        handleError(err, 'notification', true);
       }
     }
 
@@ -186,8 +187,8 @@ export async function autoScheduleNotifications(): Promise<number> {
           });
           newIds.push(id);
         }
-      } catch (err) {
-        if (__DEV__) console.error('Failed to schedule departure notification:', err);
+      } catch (err: unknown) {
+        handleError(err, 'notification', true);
       }
     }
 
@@ -210,8 +211,8 @@ export async function autoScheduleNotifications(): Promise<number> {
     await AsyncStorage.setItem(NOTIF_IDS_KEY, JSON.stringify(newIds));
     await AsyncStorage.setItem(LAST_SCHEDULE_KEY, todayKey);
     return newIds.length;
-  } catch (e) {
-    if (__DEV__) console.error('autoScheduleNotifications error:', e);
+  } catch (e: unknown) {
+    handleError(e, 'notification', true);
     return 0;
   }
 }
