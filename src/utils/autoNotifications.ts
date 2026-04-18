@@ -2,7 +2,7 @@ import * as Calendar from 'expo-calendar';
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getAirlineOps } from './airlineOps';
-import { fetchAirportScheduleRaw } from './fr24api';
+import { fetchAirportScheduleRaw, type FR24FlightData } from './fr24api';
 import {
   showShiftOngoingNotification,
   dismissShiftOngoingNotification,
@@ -63,13 +63,13 @@ export async function autoScheduleNotifications(): Promise<number> {
     const { departures: allDepartures, arrivals: allArrivals } = await fetchAirportScheduleRaw();
 
     // Filter departures during shift
-    const shiftDepartures = allDepartures.filter((item: any) => {
+    const shiftDepartures = allDepartures.filter((item: FR24FlightData) => {
       const ts = item.flight?.time?.scheduled?.departure;
       return ts && ts >= shiftStart && ts <= shiftEnd;
     });
 
     // Filter arrivals during shift (inbound aircraft that become our departures)
-    const shiftArrivals = allArrivals.filter((item: any) => {
+    const shiftArrivals = allArrivals.filter((item: FR24FlightData) => {
       const ts = item.flight?.time?.scheduled?.arrival;
       return ts && ts >= shiftStart && ts <= shiftEnd;
     });
@@ -83,8 +83,8 @@ export async function autoScheduleNotifications(): Promise<number> {
 
     if (now >= shiftStart && now <= shiftEnd) {
       const upcoming = shiftDepartures
-        .filter((f: any) => (f.flight?.time?.scheduled?.departure ?? 0) > now)
-        .sort((a: any, b: any) =>
+        .filter((f: FR24FlightData) => (f.flight?.time?.scheduled?.departure ?? 0) > now)
+        .sort((a: FR24FlightData, b: FR24FlightData) =>
           (a.flight?.time?.scheduled?.departure ?? 0) - (b.flight?.time?.scheduled?.departure ?? 0),
         );
       const next = upcoming[0];

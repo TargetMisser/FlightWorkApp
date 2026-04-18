@@ -10,23 +10,79 @@ import {
 
 const FETCH_TIMEOUT = 10000; // 10 seconds
 
+export type FR24FlightData = {
+  flight: {
+    identification?: {
+      id?: string;
+      number?: {
+        default?: string;
+      };
+    };
+    airline?: {
+      name?: string;
+      code?: {
+        iata?: string;
+      };
+    };
+    airport?: {
+      origin?: {
+        name?: string;
+        code?: {
+          iata?: string;
+        };
+      };
+      destination?: {
+        name?: string;
+        code?: {
+          iata?: string;
+        };
+      };
+    };
+    time?: {
+      scheduled?: {
+        arrival?: number;
+        departure?: number;
+      };
+      estimated?: {
+        arrival?: number;
+        departure?: number;
+      };
+      real?: {
+        arrival?: number;
+        departure?: number;
+      };
+    };
+    status?: {
+      text?: string;
+      generic?: {
+        status?: {
+          color?: string;
+        };
+      };
+    };
+    aircraft?: {
+      registration?: string;
+    };
+  };
+};
+
 export type FR24Schedule = {
-  arrivals: any[];
-  departures: any[];
+  arrivals: FR24FlightData[];
+  departures: FR24FlightData[];
   airportCode: string;
   airport: AirportInfo;
 };
 
 export type FR24ScheduleRaw = {
-  allArrivals: any[];
-  allDepartures: any[];
-  arrivals: any[];
-  departures: any[];
+  allArrivals: FR24FlightData[];
+  allDepartures: FR24FlightData[];
+  arrivals: FR24FlightData[];
+  departures: FR24FlightData[];
   airportCode: string;
   airport: AirportInfo;
 };
 
-function filterAirlines(data: any[]) {
+function filterAirlines(data: FR24FlightData[]) {
   return data.filter(item =>
     ALLOWED_AIRLINES.some(key => (item.flight?.airline?.name || '').toLowerCase().includes(key)),
   );

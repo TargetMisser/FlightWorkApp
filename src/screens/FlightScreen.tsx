@@ -11,7 +11,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../context/ThemeContext';
 import { useAirport } from '../context/AirportContext';
 import { getAirlineOps, getAirlineColor } from '../utils/airlineOps';
-import { fetchAirportScheduleRaw } from '../utils/fr24api';
+import { fetchAirportScheduleRaw, type FR24FlightData } from '../utils/fr24api';
 import { fetchStaffMonitorData, normalizeFlightNumber, type StaffMonitorFlight } from '../utils/staffMonitor';
 import { formatAirportHeader } from '../utils/airportSettings';
 import { requestWidgetUpdate } from 'react-native-android-widget';
@@ -114,7 +114,7 @@ async function cancelPreviousNotifications() {
 }
 
 async function scheduleShiftNotifications(
-  shiftFlights: any[],
+  shiftFlights: FR24FlightData[],
   shiftEnd: number,
   locale: string,
 ): Promise<number> {
@@ -175,7 +175,7 @@ async function cancelPinnedNotifications() {
   await AsyncStorage.removeItem(PINNED_NOTIF_IDS_KEY);
 }
 
-async function schedulePinnedNotifications(item: any, tab: 'arrivals' | 'departures', locale: string): Promise<void> {
+async function schedulePinnedNotifications(item: FR24FlightData, tab: 'arrivals' | 'departures', locale: string): Promise<void> {
   await cancelPinnedNotifications();
   const now = Date.now() / 1000;
   const ids: string[] = [];
@@ -246,8 +246,8 @@ export default function FlightScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<'arrivals' | 'departures'>('departures');
   const [activeDay, setActiveDay] = useState<'today' | 'tomorrow'>('today');
-  const [arrivals, setArrivals] = useState<any[]>([]);
-  const [departures, setDepartures] = useState<any[]>([]);
+  const [arrivals, setArrivals] = useState<FR24FlightData[]>([]);
+  const [departures, setDepartures] = useState<FR24FlightData[]>([]);
   const [shifts, setShifts] = useState<{ today: { start: number; end: number } | null; tomorrow: { start: number; end: number } | null }>({ today: null, tomorrow: null });
   const [notifsEnabled, setNotifsEnabled] = useState(false);
   const [scheduledCount, setScheduledCount] = useState(0);
@@ -255,8 +255,8 @@ export default function FlightScreen() {
   const [inboundArrivals, setInboundArrivals] = useState<Record<string, number>>({});
   const [filterMode, setFilterMode] = useState<'mine' | 'all'>('mine');
   const [filterMenuVisible, setFilterMenuVisible] = useState(false);
-  const [allArrivalsFull, setAllArrivalsFull] = useState<any[]>([]);
-  const [allDeparturesFull, setAllDeparturesFull] = useState<any[]>([]);
+  const [allArrivalsFull, setAllArrivalsFull] = useState<FR24FlightData[]>([]);
+  const [allDeparturesFull, setAllDeparturesFull] = useState<FR24FlightData[]>([]);
   const [staffMonitorDeps, setStaffMonitorDeps] = useState<StaffMonitorFlight[]>([]);
   const [staffMonitorArrs, setStaffMonitorArrs] = useState<StaffMonitorFlight[]>([]);
 
@@ -382,7 +382,7 @@ export default function FlightScreen() {
               return (ciO <= shiftToday!.end && ciC >= shiftToday!.start) || (gO <= shiftToday!.end && gC >= shiftToday!.start);
             })
             .map(item => {
-              const ts = item.flight.time.scheduled.departure;
+              const ts = item.flight?.time?.scheduled?.departure || 0;
               const airline = item.flight?.airline?.name || 'Sconosciuta';
               const ops = getAirlineOps(airline);
               const fn = item.flight?.identification?.number?.default || 'N/A';
@@ -497,7 +497,7 @@ export default function FlightScreen() {
     }
   }, [notifsEnabled, shifts, arrivals]);
 
-  const pinFlight = useCallback(async (item: any) => {
+  const pinFlight = useCallback(async (item: FR24FlightData) => {
     try {
       const id = item.flight?.identification?.number?.default;
       if (!id) return;
@@ -554,7 +554,7 @@ export default function FlightScreen() {
     });
   })();
 
-  const renderFlight = useCallback(({ item }: { item: any }) => {
+  const renderFlight = useCallback(({ item }: { item: FR24FlightData }) => {
     const flightNumber = item.flight?.identification?.number?.default || 'N/A';
     const airline = item.flight?.airline?.name || 'Sconosciuta';
     const iataCode = item.flight?.airline?.code?.iata || '';
