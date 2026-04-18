@@ -159,9 +159,9 @@ export async function fetchStaffMonitorData(nature: 'D' | 'A'): Promise<StaffMon
     // The dynamic Tomcat servlet that returns real data. The static .html
     // wrapper is a saved-page frameset whose frame files don't exist on the server.
     const urls = [
+      `https://servizi.pisa-airport.com/staffMonitor/staffMonitor?trans=true&nature=${nature}`,
       `https://servizi.pisa-airport.com/staffMonitor/staffMonitor?nature=${nature}`,
       `https://servizi.pisa-airport.com/staffMonitor/staffMonitor?nature=${nature}&aviation=1`,
-      `https://servizi.pisa-airport.com/staffMonitor/staffMonitor?trans=true&nature=${nature}`,
     ];
 
     let html = '';
@@ -182,8 +182,8 @@ export async function fetchStaffMonitorData(nature: 'D' | 'A'): Promise<StaffMon
         const body = await resp.text();
         _lastDebugStatus = `${nature}:${resp.status} len=${body.length}`;
         console.warn(`[staffMonitor] ${_lastDebugStatus} url=${url}`);
-        // Real data pages are ~20-30k; small responses are error/login pages
-        if (resp.ok && body.length > 8_000) { html = body; break; }
+        // Accept any response with a table structure; empty tables (no active flights) are valid
+        if (resp.ok && body.length > 500 && body.includes('<tr')) { html = body; break; }
       } catch (e: any) {
         clearTimeout(timer);
         _lastDebugStatus = `${nature}:ERR ${String(e).slice(0, 60)}`;
