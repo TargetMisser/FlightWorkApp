@@ -18,6 +18,7 @@ import SettingsScreen from './src/screens/SettingsScreen';
 import PasswordScreen from './src/screens/PasswordScreen';
 import DrawerMenu from './src/components/DrawerMenu';
 import { autoScheduleNotifications } from './src/utils/autoNotifications';
+import { checkForUpdate } from './src/utils/updateChecker';
 
 type Tab = 'Shifts' | 'Calendar' | 'Flights' | 'TravelDoc';
 type OverlayScreen = 'Notepad' | 'Phonebook' | 'Passwords' | 'Manuals' | 'Settings' | null;
@@ -99,6 +100,8 @@ function AppInner() {
     autoScheduleNotifications().then(count => {
       if (count > 0 && __DEV__) console.log(`Auto-scheduled ${count} notifications`);
     }).catch(() => {});
+    // Silently check for updates once per day
+    checkForUpdate().catch(() => {});
   }, []);
 
   // ─── Android back button: overlay → home, drawer → close ───────────────────

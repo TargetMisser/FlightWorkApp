@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, ActivityIndicator,
-  Alert, Modal, KeyboardAvoidingView, Platform, TextInput,
+  Alert, Modal, KeyboardAvoidingView, Platform, TextInput, Linking,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -14,6 +14,12 @@ import {
   normalizeAirportCode,
   isValidAirportCode,
 } from '../utils/airportSettings';
+import {
+  APP_VERSION,
+  checkForUpdate,
+  getCachedUpdateInfo,
+  type UpdateInfo,
+} from '../utils/updateChecker';
 
 // ─── Tema picker ──────────────────────────────────────────────────────────────
 type ThemeOption = {
@@ -172,6 +178,28 @@ export default function SettingsScreen() {
     sublabel: opt.id === 'light' ? t('themeLightSub') : opt.id === 'dark' ? t('themeDarkSub') : t('themeWeatherSub'),
   }));
   const [airportInput, setAirportInput] = useState(airportCode);
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+
+  useEffect(() => {
+    getCachedUpdateInfo().then(setUpdateInfo);
+  }, []);
+
+  const handleCheckUpdate = useCallback(async () => {
+    setCheckingUpdate(true);
+    const info = await checkForUpdate(true);
+    setUpdateInfo(info);
+    setCheckingUpdate(false);
+    if (!info) {
+      Alert.alert('Errore', 'Impossibile contattare GitHub. Riprova più tardi.');
+    } else if (!info.available) {
+      Alert.alert('Sei aggiornato!', `AeroStaff Pro v${APP_VERSION} è l'ultima versione.`);
+    }
+  }, []);
+
+  const handleDownload = useCallback(() => {
+    if (updateInfo?.downloadUrl) Linking.openURL(updateInfo.downloadUrl);
+  }, [updateInfo]);
 
   const openAirportModal = () => {
     setAirportInput(airportCode);
@@ -213,7 +241,7 @@ export default function SettingsScreen() {
         </View>
         <View>
           <Text style={[styles.bannerTitle, { color: colors.primaryDark }]}>{t('settingsTitle')}</Text>
-          <Text style={[styles.bannerSub, { color: colors.textMuted }]}>AeroStaff Pro · v1.1.0</Text>
+          <Text style={[styles.bannerSub, { color: colors.textMuted }]}>AeroStaff Pro · v{APP_VERSION}</Text>
         </View>
       </View>
 
@@ -275,7 +303,48 @@ export default function SettingsScreen() {
       {/* ── Info app ── */}
       <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>{t('sectionApp')}</Text>
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }, colors.isDark && { elevation: 0, shadowOpacity: 0, borderWidth: 1 }]}>
-        <SettingRow icon="info-outline"    label={t('appVersion')} sublabel='1.1.0'                    type="info" />
+        <SettingRow icon="info-outline" label={t('appVersion')} sublabel={`v${APP_VERSION}`} type="info" />
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
+        <TouchableOpacity style={styles.row} onPress={handleCheckUpdate} activeOpacity={0.8} disabled={checkingUpdate}>
+          <View style={[styles.iconWrap, { backgroundColor: colors.primaryLight }]}>
+            {checkingUpdate
+              ? <ActivityIndicator size={18} color={colors.primary} />
+              : <MaterialIcons name="system-update" size={20} color={colors.primary} />}
+          </View>
+          <View style={styles.rowText}>
+            <Text style={[styles.rowLabel, { color: colors.text }]}>Controlla aggiornamenti</Text>
+            <Text style={[styles.rowSub, { color: colors.textMuted }]}>
+              {updateInfo
+                ? updateInfo.available
+                  ? `v${updateInfo.latestVersion} disponibile!`
+                  : 'Sei aggiornato'
+                : 'Tocca per verificare'}
+            </Text>
+          </View>
+          {updateInfo?.available && (
+            <View style={{ backgroundColor: colors.primary, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 }}>
+              <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>NEW</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+        {updateInfo?.available && (
+          <TouchableOpacity
+            style={[styles.row, { backgroundColor: colors.primaryLight }]}
+            onPress={handleDownload}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.iconWrap, { backgroundColor: colors.primary + '22' }]}>
+              <MaterialIcons name="download" size={20} color={colors.primary} />
+            </View>
+            <View style={styles.rowText}>
+              <Text style={[styles.rowLabel, { color: colors.primary, fontWeight: '700' }]}>
+                Scarica v{updateInfo.latestVersion}
+              </Text>
+              <Text style={[styles.rowSub, { color: colors.textMuted }]}>Apre il download dell'APK</Text>
+            </View>
+            <MaterialIcons name="chevron-right" size={20} color={colors.primary} />
+          </TouchableOpacity>
+        )}
       </View>
 
 
