@@ -875,8 +875,11 @@ export default function FlightScreen() {
 
       {/* StaffMonitor debug banner — REMOVE BEFORE RELEASE */}
       <View style={{ backgroundColor: '#1a1a2e', padding: 3 }}>
-        <Text style={{ color: '#aaa', fontSize: 10, textAlign: 'center' }}>
+        <Text style={{ color: '#aaa', fontSize: 9, textAlign: 'center' }}>
           SM: D={staffMonitorDeps.length} A={staffMonitorArrs.length} | {getStaffMonitorDebugStatus()}
+        </Text>
+        <Text style={{ color: '#666', fontSize: 9, textAlign: 'center' }}>
+          d=[{staffMonitorDeps.slice(0,5).map(f=>f.flightNumber).join(',')}]
         </Text>
       </View>
 
