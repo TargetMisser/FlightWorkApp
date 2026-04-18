@@ -163,7 +163,14 @@ export async function fetchStaffMonitorData(nature: 'D' | 'A'): Promise<StaffMon
     let html = '';
     for (const url of urls) {
       try {
-        const resp = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+        const resp = await fetch(url, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 Chrome/120 Safari/537.36',
+              'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+              'Accept-Language': 'it-IT,it;q=0.9,en;q=0.8',
+              'Referer': 'https://servizi.pisa-airport.com/staffMonitor/staffMonitor.html',
+            },
+          });
         if (resp.ok) {
           const body = await resp.text();
           if (body && body.length > 500) { html = body; break; }
