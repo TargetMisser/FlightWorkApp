@@ -106,16 +106,16 @@ jobs:
             ## 📦 AeroStaff Pro ${{ steps.meta.outputs.tag }}
 
             ### Novità
-            - Filtro compagnie applicato a timeline home, conteggio voli nel turno e widget
-            - Password salvate in modo sicuro con Android Keystore (migrazione automatica)
-            - Nome app aggiornato a AeroStaff Pro, icona rinnovata aereo + badge
-            - Tema scuro per il WebView TravelDoc
+            - Aggiornamento in-app: popup stile Mihon con changelog e download APK diretto
+            - Controllo aggiornamenti automatico all'avvio (una volta ogni 24h)
+            - Sezione aggiornamenti in Impostazioni con badge NEW e bottoni GitHub / Scarica APK
 
             ### Bug fixes
-            - StaffMonitor: parser riscritto — URL corretto, estrazione codice volo, split sezioni DEP/ARR
-            - Card: rimossi i bordini interni in tema chiaro e scuro
-            - Layout card voli: footer stand/CI/gate attaccato alla card, pill stato su riga propria
-            - Timeline home: si ricarica con il filtro aggiornato ogni volta che torni sul tab
+            - StaffMonitor: accetta risposte con tag HTML maiuscoli (fix AbortError inutili)
+            - StaffMonitor: timeout 20s, URL corretto con trans=true
+            - Widget: fix "Giorno di riposo" mostrato a casaccio il giorno dopo un riposo
+            - Voli: rimossi duplicati con stesso numero volo e orario programmato
+            - Impostazioni: versione app corretta (era hardcoded v1.1.0)
 
             Scarica `AeroStaffPro-${{ steps.meta.outputs.tag }}.apk` e installalo sul tuo dispositivo Android.
           files: ${{ env.apk }}

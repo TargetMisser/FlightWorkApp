@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export const APP_VERSION = '2.5.0';
+export const APP_VERSION = '2.6.0';
 const REPO = 'targetmisser/flightworkapp';
 const CHECK_KEY = 'aerostaff_update_check_v1';
 const SEEN_KEY = 'aerostaff_update_seen_v1';
