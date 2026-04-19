@@ -99,7 +99,9 @@ function detectColumns(headerRow: RawCell[]): ColMap | null {
   // Do NOT return null when only flight column is found — better to parse flight numbers
   // with empty stand/gate/belt than to skip every row because keyword didn't match.
 
-  console.warn('[staffMonitor] columns detected:', JSON.stringify(map), '| headers:', positions.map(p => `${p.start}:"${p.name}"`).join(' '));
+  const headerStr = positions.map(p => `${p.start}:"${p.name}"`).join(' ');
+  _lastDebugColumns = `map=${JSON.stringify(map)} | ${headerStr}`;
+  console.warn('[staffMonitor] columns:', _lastDebugColumns);
   return map;
 }
 
@@ -150,14 +152,16 @@ function parseSection(sectionHTML: string): StaffMonitorFlight[] {
     });
   }
 
-  if (!colMap) console.warn('[staffMonitor] header row never detected — table may use unknown column names');
+  if (!colMap) { _lastDebugColumns = 'NESSUNA intestazione trovata'; console.warn('[staffMonitor] header row never detected'); }
   return results;
 }
 
 let _lastDebugStatus = 'init';
 let _lastDebugHtml = '';
+let _lastDebugColumns = 'non ancora rilevate';
 export function getStaffMonitorDebugStatus(): string { return _lastDebugStatus; }
 export function getStaffMonitorDebugHtml(): string { return _lastDebugHtml; }
+export function getStaffMonitorDebugColumns(): string { return _lastDebugColumns; }
 
 export async function fetchStaffMonitorData(nature: 'D' | 'A'): Promise<StaffMonitorFlight[]> {
   try {

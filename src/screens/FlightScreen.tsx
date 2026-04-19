@@ -583,8 +583,10 @@ export default function FlightScreen() {
             const s = new Date(e.startDate).getTime() / 1000;
             const en = new Date(e.endDate).getTime() / 1000;
             const evtDay = new Date(e.startDate);
-            if (evtDay >= todayStart && evtDay <= todayEnd) shiftToday = { start: s, end: en };
-            else if (evtDay >= tomorrowStart && evtDay <= tomorrowEnd) shiftTomorrow = { start: s, end: en };
+            if (evtDay >= todayStart && evtDay <= todayEnd) {
+              shiftToday = { start: s, end: en };
+              isRestDay = false; // Lavoro event overrides any stale Riposo marker for the same day
+            } else if (evtDay >= tomorrowStart && evtDay <= tomorrowEnd) shiftTomorrow = { start: s, end: en };
           }
         }
       }

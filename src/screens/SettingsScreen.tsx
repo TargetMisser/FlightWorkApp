@@ -23,6 +23,7 @@ import {
 } from '../utils/updateChecker';
 import UpdateModal from '../components/UpdateModal';
 import { exportBackup, importBackup } from '../utils/backupManager';
+import { getStaffMonitorDebugStatus, getStaffMonitorDebugColumns } from '../utils/staffMonitor';
 
 // ─── Tema picker ──────────────────────────────────────────────────────────────
 type ThemeOption = {
@@ -388,6 +389,16 @@ export default function SettingsScreen() {
             <MaterialIcons name="chevron-right" size={20} color={colors.primary} />
           </TouchableOpacity>
         )}
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
+        <TouchableOpacity style={styles.row} onPress={() => Alert.alert('StaffMonitor debug', `Stato: ${getStaffMonitorDebugStatus()}\n\nColonne:\n${getStaffMonitorDebugColumns()}`)} activeOpacity={0.8}>
+          <View style={[styles.iconWrap, { backgroundColor: colors.primaryLight }]}>
+            <MaterialIcons name="bug-report" size={20} color={colors.primary} />
+          </View>
+          <View style={styles.rowText}>
+            <Text style={[styles.rowLabel, { color: colors.text }]}>Debug StaffMonitor</Text>
+            <Text style={[styles.rowSub, { color: colors.textMuted }]}>Tocca per vedere colonne rilevate</Text>
+          </View>
+        </TouchableOpacity>
       </View>
 
 
