@@ -87,11 +87,11 @@ npm run typecheck
 
 APK files are published in [GitHub Releases](https://github.com/TargetMisser/FlightWorkApp/releases).
 
-Latest stable: **v1.4.3**
+Latest stable: **v2.6.0**
 
 To install:
 
-1. Open the Releases section and download `AeroStaffPro-v1.4.3.apk`.
+1. Open the Releases section and download `AeroStaffPro-v2.6.0.apk`.
 2. Transfer to your Android device and install (enable "Unknown sources" if needed).
 3. For Wear OS, pair the phone app — the watch companion installs automatically.
 

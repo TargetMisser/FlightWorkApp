@@ -88,18 +88,11 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
-      - name: Generate debug keystore (used by release signing config)
+      - name: Restore signing keystore from repository secret
         run: |
-          mkdir -p android/app
-          keytool -genkey -v \
-            -keystore android/app/debug.keystore \
-            -storepass android \
-            -alias androiddebugkey \
-            -keypass android \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -dname "CN=Android Debug,O=Android,C=US"
+          mkdir -p android/app "$HOME/.android"
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/app/debug.keystore
+          cp android/app/debug.keystore "$HOME/.android/debug.keystore"
 
       - name: Build release APK (standalone, JS bundle embedded)
         run: |
@@ -145,22 +138,18 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.build.outputs.tag }}
-          name: "AeroStaff Pro ${{ needs.build.outputs.version }} — Liquid Glass + Orange"
+          name: "AeroStaff Pro ${{ needs.build.outputs.version }}"
           body: |
-            ## 🍊 AeroStaff Pro ${{ needs.build.outputs.version }}
+            ## AeroStaff Pro ${{ needs.build.outputs.version }}
 
-            ### Design Overhaul: Liquid Glass + Orange
-            - Nuovo colore primario arancione `#F47B16`
-            - Stile iOS 26 liquid glass (BlurView + shimmer cards)
-            - Nuovo logo AeroStaff PRO con gradiente arancione
-            - GlassCard component con fallback Android
-            - Tab bar, AppBar e DrawerMenu aggiornati
-            - Tutti gli hardcoded blue rimossi
+            APK Android generato automaticamente da GitHub Actions.
 
-            ### ✅ APK Standalone
-            Bundle JavaScript incorporato — funziona senza Metro dev server.
+            ### Contenuto
+            - Bundle JavaScript incorporato
+            - Build release firmata con la keystore del repository
+            - APK pronto da installare
 
             ### Download
             Installa `AeroStaffPro-v${{ needs.build.outputs.version }}.apk` sul tuo dispositivo Android.
-          prerelease: true
+          prerelease: false
           files: artifacts/*.apk

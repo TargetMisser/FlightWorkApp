@@ -6,6 +6,11 @@ export type StaffMonitorFlight = {
   belt?: string;
 };
 
+type StaffMonitorCell = {
+  className: string;
+  text: string;
+};
+
 /** Normalize flight number: FR07146 → FR7146, FR00770 → FR770 */
 export function normalizeFlightNumber(raw: string): string {
   return raw.trim().toUpperCase().replace(/^([A-Z]{2,3})0+([0-9])/, '$1$2');
@@ -13,6 +18,7 @@ export function normalizeFlightNumber(raw: string): string {
 
 function stripHTML(html: string): string {
   return html
+    .replace(/<br\s*\/?>/gi, ' / ')
     .replace(/<[^>]+>/g, '')
     .replace(/&#176;/g, '')
     .replace(/&nbsp;/gi, ' ')
@@ -24,26 +30,36 @@ function stripHTML(html: string): string {
     .trim();
 }
 
-function extractTDCells(trHTML: string): string[] {
-  const cells: string[] = [];
-  const regex = /<td[^>]*>([\s\S]*?)<\/td>/gi;
+function extractTDCells(trHTML: string): StaffMonitorCell[] {
+  const cells: StaffMonitorCell[] = [];
+  const regex = /<td([^>]*?)\/>|<td([^>]*)>([\s\S]*?)<\/td>/gi;
   let m: RegExpExecArray | null;
   while ((m = regex.exec(trHTML)) !== null) {
-    cells.push(stripHTML(m[1]));
+    const attrs = m[1] || m[2] || '';
+    const classMatch = attrs.match(/class\s*=\s*["']([^"']+)["']/i);
+    cells.push({
+      className: (classMatch?.[1] || '').trim(),
+      text: stripHTML(m[3] || ''),
+    });
   }
   return cells;
+}
+
+function getCellText(cells: StaffMonitorCell[], index: number): string | undefined {
+  const value = cells[index]?.text?.trim();
+  return value ? value : undefined;
 }
 
 /**
  * Fetch and parse stand/gate/check-in data from the Pisa Airport staffMonitor.
  *
- * Departures columns (0-indexed):
- *   0=logo, 1=flight, 2=ACtype, 3=TRtype, 4=REG, 5=dest, 6=SLOT, 7=SCHED,
- *   8=EXP, 9=BLKOFF, 10=TKOFF, 11=STATUS, 12=STAND, 13=CHECKIN, 14=GATE
+ * The live staff monitor currently includes a logo column before the flight
+ * number, but we key off the `clsFlight` cell so the parser survives either
+ * layout.
  *
- * Arrivals columns (0-indexed):
- *   0=logo, 1=flight, 2=ACtype, 3=TRtype, 4=REG, 5=origin, 6=SCHED,
- *   7=EXP, 8=LAND, 9=BLKON, 10=STATUS, 11=STAND, 12=BELT
+ * Relative to the flight-number cell:
+ * Departures: +11=STAND, +12=CHECKIN, +13=GATE
+ * Arrivals:   +10=STAND, +11=BELT
  */
 export async function fetchStaffMonitorData(nature: 'D' | 'A'): Promise<StaffMonitorFlight[]> {
   try {
@@ -67,7 +83,10 @@ export async function fetchStaffMonitorData(nature: 'D' | 'A'): Promise<StaffMon
       const cells = extractTDCells(rowHTML);
       if (cells.length < 2) continue;
 
-      const rawFlight = cells[1];
+      const flightCellIndex = cells.findIndex(cell => /\bclsFlight\b/i.test(cell.className));
+      if (flightCellIndex === -1) continue;
+
+      const rawFlight = cells[flightCellIndex]?.text;
       if (!rawFlight) continue;
 
       const flightNumber = normalizeFlightNumber(rawFlight);
@@ -75,15 +94,15 @@ export async function fetchStaffMonitorData(nature: 'D' | 'A'): Promise<StaffMon
       if (nature === 'D') {
         results.push({
           flightNumber,
-          stand: cells[12] || undefined,
-          checkin: cells[13] || undefined,
-          gate: cells[14] || undefined,
+          stand: getCellText(cells, flightCellIndex + 11),
+          checkin: getCellText(cells, flightCellIndex + 12),
+          gate: getCellText(cells, flightCellIndex + 13),
         });
       } else {
         results.push({
           flightNumber,
-          stand: cells[11] || undefined,
-          belt: cells[12] || undefined,
+          stand: getCellText(cells, flightCellIndex + 10),
+          belt: getCellText(cells, flightCellIndex + 11),
         });
       }
     }
