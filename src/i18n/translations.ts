@@ -39,7 +39,7 @@ const it = {
   notepadUnsaved: 'Modifiche non salvate', notepadChars: 'caratteri',
   notepadClearTitle: 'Cancella note',
   notepadClearMsg: 'Sei sicuro di voler cancellare tutte le note?',
-  notepadClearConfirm: 'Cancella', notepadPlaceholder: 'Inizia a scrivere...',
+  notepadClearConfirm: 'Cancella', notepadPlaceholder: 'Scrivi qui le tue note...\n\nUsa questo blocco note per:\n• Annotazioni di turno\n• Promemoria procedure\n• Note personali',
   // TravelDoc
   traveldocSub: 'Verifica documenti di viaggio',
   traveldocLoading: 'Caricamento TravelDoc…',
@@ -197,7 +197,7 @@ const en: typeof it = {
   notepadUnsaved: 'Unsaved changes', notepadChars: 'characters',
   notepadClearTitle: 'Clear notes',
   notepadClearMsg: 'Are you sure you want to clear all notes?',
-  notepadClearConfirm: 'Clear', notepadPlaceholder: 'Start writing...',
+  notepadClearConfirm: 'Clear', notepadPlaceholder: 'Write your notes here...\n\nUse this notepad for:\n• Shift annotations\n• Procedure reminders\n• Personal notes',
   // TravelDoc
   traveldocSub: 'Travel document check',
   traveldocLoading: 'Loading TravelDoc…',
