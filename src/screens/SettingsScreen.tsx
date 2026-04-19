@@ -349,47 +349,6 @@ export default function SettingsScreen() {
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }, colors.isDark && { elevation: 0, shadowOpacity: 0, borderWidth: 1 }]}>
         <SettingRow icon="info-outline" label={t('appVersion')} sublabel={`v${APP_VERSION}`} type="info" />
         <View style={[styles.divider, { backgroundColor: colors.border }]} />
-        <TouchableOpacity style={styles.row} onPress={handleCheckUpdate} activeOpacity={0.8} disabled={checkingUpdate}>
-          <View style={[styles.iconWrap, { backgroundColor: colors.primaryLight }]}>
-            {checkingUpdate
-              ? <ActivityIndicator size={18} color={colors.primary} />
-              : <MaterialIcons name="system-update" size={20} color={colors.primary} />}
-          </View>
-          <View style={styles.rowText}>
-            <Text style={[styles.rowLabel, { color: colors.text }]}>Controlla aggiornamenti</Text>
-            <Text style={[styles.rowSub, { color: colors.textMuted }]}>
-              {updateInfo
-                ? updateInfo.available
-                  ? `v${updateInfo.latestVersion} disponibile!`
-                  : 'Sei aggiornato'
-                : 'Tocca per verificare'}
-            </Text>
-          </View>
-          {updateInfo?.available && (
-            <View style={{ backgroundColor: colors.primary, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 }}>
-              <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>NEW</Text>
-            </View>
-          )}
-        </TouchableOpacity>
-        {updateInfo?.available && (
-          <TouchableOpacity
-            style={[styles.row, { backgroundColor: colors.primaryLight }]}
-            onPress={handleDownload}
-            activeOpacity={0.8}
-          >
-            <View style={[styles.iconWrap, { backgroundColor: colors.primary + '22' }]}>
-              <MaterialIcons name="download" size={20} color={colors.primary} />
-            </View>
-            <View style={styles.rowText}>
-              <Text style={[styles.rowLabel, { color: colors.primary, fontWeight: '700' }]}>
-                Scarica v{updateInfo.latestVersion}
-              </Text>
-              <Text style={[styles.rowSub, { color: colors.textMuted }]}>Apre il download dell'APK</Text>
-            </View>
-            <MaterialIcons name="chevron-right" size={20} color={colors.primary} />
-          </TouchableOpacity>
-        )}
-        <View style={[styles.divider, { backgroundColor: colors.border }]} />
         <TouchableOpacity style={styles.row} onPress={() => Alert.alert('StaffMonitor debug', `Stato: ${getStaffMonitorDebugStatus()}\n\nColonne:\n${getStaffMonitorDebugColumns()}\n\nVoli (D, primi 5):\n${getStaffMonitorDebugFlights()}`)} activeOpacity={0.8}>
           <View style={[styles.iconWrap, { backgroundColor: colors.primaryLight }]}>
             <MaterialIcons name="bug-report" size={20} color={colors.primary} />
@@ -401,34 +360,92 @@ export default function SettingsScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* ── Sezione Aggiornamenti ── */}
+      <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>AGGIORNAMENTI</Text>
+      <View style={[styles.updateCard, { backgroundColor: colors.card, borderColor: updateInfo?.available ? colors.primary : colors.border }, colors.isDark && { elevation: 0, borderWidth: 1 }]}>
+        {/* Version row */}
+        <View style={styles.updateTop}>
+          <View style={[styles.updateIconWrap, { backgroundColor: updateInfo?.available ? colors.primary : colors.primaryLight }]}>
+            <MaterialIcons name="system-update" size={24} color={updateInfo?.available ? '#fff' : colors.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.updateTitle, { color: colors.text }]}>
+              {updateInfo?.available ? `Aggiornamento disponibile` : 'AeroStaff Pro'}
+            </Text>
+            <Text style={[styles.updateSub, { color: colors.textMuted }]}>
+              {updateInfo?.available
+                ? `Versione ${updateInfo.latestVersion} pronta`
+                : `v${APP_VERSION} · versione installata`}
+            </Text>
+          </View>
+          {updateInfo?.available && (
+            <View style={[styles.newBadge, { backgroundColor: colors.primary }]}>
+              <Text style={styles.newBadgeTxt}>NEW</Text>
+            </View>
+          )}
+        </View>
+        {/* Action buttons */}
+        <View style={styles.updateActions}>
+          <TouchableOpacity
+            style={[styles.updateBtn, { backgroundColor: colors.primaryLight, borderColor: colors.border, borderWidth: 1 }, checkingUpdate && { opacity: 0.6 }]}
+            onPress={handleCheckUpdate}
+            disabled={checkingUpdate}
+            activeOpacity={0.8}
+          >
+            {checkingUpdate
+              ? <ActivityIndicator size={14} color={colors.primary} />
+              : <MaterialIcons name="refresh" size={16} color={colors.primary} />}
+            <Text style={[styles.updateBtnTxt, { color: colors.primary }]}>
+              {checkingUpdate ? 'Controllo…' : 'Controlla'}
+            </Text>
+          </TouchableOpacity>
+          {updateInfo?.available && (
+            <TouchableOpacity
+              style={[styles.updateBtn, { backgroundColor: colors.primary, flex: 1 }]}
+              onPress={handleDownload}
+              activeOpacity={0.8}
+            >
+              <MaterialIcons name="download" size={16} color="#fff" />
+              <Text style={[styles.updateBtnTxt, { color: '#fff', fontWeight: '800' }]}>
+                Scarica v{updateInfo.latestVersion}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
 
       {/* ── Sezione Backup ── */}
       <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>BACKUP</Text>
-      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }, colors.isDark && { elevation: 0, shadowOpacity: 0, borderWidth: 1 }]}>
-        <TouchableOpacity style={styles.row} onPress={handleExport} activeOpacity={0.8} disabled={exportingBackup}>
-          <View style={[styles.iconWrap, { backgroundColor: colors.primaryLight }]}>
+      <View style={styles.backupRow}>
+        {/* Esporta */}
+        <TouchableOpacity
+          style={[styles.backupTile, { backgroundColor: colors.card, borderColor: colors.border }, colors.isDark && { borderWidth: 1 }, exportingBackup && { opacity: 0.6 }]}
+          onPress={handleExport}
+          disabled={exportingBackup}
+          activeOpacity={0.8}
+        >
+          <View style={[styles.backupTileIcon, { backgroundColor: '#10B98122' }]}>
             {exportingBackup
-              ? <ActivityIndicator size={18} color={colors.primary} />
-              : <MaterialIcons name="backup" size={20} color={colors.primary} />}
+              ? <ActivityIndicator size={22} color="#10B981" />
+              : <MaterialIcons name="upload" size={26} color="#10B981" />}
           </View>
-          <View style={styles.rowText}>
-            <Text style={[styles.rowLabel, { color: colors.text }]}>Esporta backup</Text>
-            <Text style={[styles.rowSub, { color: colors.textMuted }]}>Salva note, password e impostazioni in un file JSON</Text>
-          </View>
-          <MaterialIcons name="chevron-right" size={20} color={colors.border} />
+          <Text style={[styles.backupTileLabel, { color: colors.text }]}>Esporta</Text>
+          <Text style={[styles.backupTileSub, { color: colors.textMuted }]}>Salva su file</Text>
         </TouchableOpacity>
-        <View style={[styles.divider, { backgroundColor: colors.border }]} />
-        <TouchableOpacity style={styles.row} onPress={handleImport} activeOpacity={0.8} disabled={importingBackup}>
-          <View style={[styles.iconWrap, { backgroundColor: colors.primaryLight }]}>
+        {/* Importa */}
+        <TouchableOpacity
+          style={[styles.backupTile, { backgroundColor: colors.card, borderColor: colors.border }, colors.isDark && { borderWidth: 1 }, importingBackup && { opacity: 0.6 }]}
+          onPress={handleImport}
+          disabled={importingBackup}
+          activeOpacity={0.8}
+        >
+          <View style={[styles.backupTileIcon, { backgroundColor: '#3B82F622' }]}>
             {importingBackup
-              ? <ActivityIndicator size={18} color={colors.primary} />
-              : <MaterialIcons name="restore" size={20} color={colors.primary} />}
+              ? <ActivityIndicator size={22} color="#3B82F6" />
+              : <MaterialIcons name="download" size={26} color="#3B82F6" />}
           </View>
-          <View style={styles.rowText}>
-            <Text style={[styles.rowLabel, { color: colors.text }]}>Importa backup</Text>
-            <Text style={[styles.rowSub, { color: colors.textMuted }]}>Ripristina un backup precedente da file</Text>
-          </View>
-          <MaterialIcons name="chevron-right" size={20} color={colors.border} />
+          <Text style={[styles.backupTileLabel, { color: colors.text }]}>Importa</Text>
+          <Text style={[styles.backupTileSub, { color: colors.textMuted }]}>Ripristina da file</Text>
         </TouchableOpacity>
       </View>
 
@@ -635,4 +652,34 @@ const styles = StyleSheet.create({
   modalActions: { flexDirection: 'row', gap: 10 },
   modalBtn: { flex: 1, borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
   modalBtnTxt: { fontSize: 14, fontWeight: '700' },
+
+  // Update card
+  updateCard: {
+    borderRadius: 16, marginBottom: 20, padding: 16,
+    borderWidth: 1,
+    shadowColor: '#F47B16', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 3,
+  },
+  updateTop:     { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14 },
+  updateIconWrap:{ width: 44, height: 44, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
+  updateTitle:   { fontSize: 15, fontWeight: '700' },
+  updateSub:     { fontSize: 12, marginTop: 2 },
+  newBadge:      { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 },
+  newBadgeTxt:   { fontSize: 11, fontWeight: '800', color: '#fff' },
+  updateActions: { flexDirection: 'row', gap: 10 },
+  updateBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    borderRadius: 12, paddingVertical: 10, paddingHorizontal: 16,
+  },
+  updateBtnTxt: { fontSize: 13, fontWeight: '700' },
+
+  // Backup tiles
+  backupRow: { flexDirection: 'row', gap: 12, marginBottom: 20 },
+  backupTile: {
+    flex: 1, borderRadius: 16, padding: 18, alignItems: 'center', gap: 8,
+    borderWidth: 1,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 6, elevation: 2,
+  },
+  backupTileIcon: { width: 52, height: 52, borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
+  backupTileLabel:{ fontSize: 14, fontWeight: '800' },
+  backupTileSub:  { fontSize: 11, textAlign: 'center' },
 });
