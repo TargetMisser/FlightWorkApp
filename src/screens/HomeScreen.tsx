@@ -259,8 +259,9 @@ export default function HomeScreen({ isFocused }: { isFocused?: boolean }) {
       d.setHours(0, 0, 0, 0);
       const dEnd = new Date(); dEnd.setHours(23, 59, 59, 999);
       const events = await Calendar.getEventsAsync([cal.id], d, dEnd);
-      const shift = events.find(e => e.title.includes('Lavoro') || e.title.includes('Riposo'));
-      setShiftEvent(shift || null);
+      const lavoro = events.find(e => e.title.includes('Lavoro'));
+      const riposo = events.find(e => e.title.includes('Riposo'));
+      setShiftEvent(lavoro ?? riposo ?? null);
     } catch (e) { if (__DEV__) console.error('[shift]', e); } finally { setLoadingShift(false); }
   };
 
