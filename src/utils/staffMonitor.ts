@@ -268,34 +268,25 @@ export async function fetchStaffMonitorData(nature: 'D' | 'A'): Promise<StaffMon
     `${base}?nature=${nature}&aviation=1`,
   ];
 
-  // Extra variants specific to arrivals — different param names the servlet might accept
+  // Extra variants for arrivals — all keep nature=A so the servlet returns arrivals data.
+  // Do NOT add URLs without nature=A: they return departures and produce garbage parse results.
   const arrivalExtras = [
     `${base}?nature=A&trans=false`,
-    `${base}?type=A`,
-    `${base}?nature=ARR`,
-    `${base}?inbound=true`,
     `${base}?nature=A&airport=PSA`,
     `${base}?nature=A&refresh=1`,
-  ];
-
-  // Combined pages with no nature filter — servlet may return all flights
-  const combinedUrls = [
-    `${base}?trans=true`,
-    `${base}?trans=false`,
-    base,
+    `${base}?nature=A&_=${Date.now()}`,
   ];
 
   try {
     let html = '';
-    let isCombined = false;
 
     if (nature === 'D') {
-      // Departures: sequential (known to work quickly)
+      // Departures: sequential — server is slow, use 25s to avoid false timeouts
       for (const url of primaryUrls) {
         try {
-          html = await tryFetch(url, 12_000);
+          html = await tryFetch(url, 25_000);
           _lastDebugStatus = `D:200 len=${html.length}`;
-          if (nature === 'D') _lastDebugHtml = html.replace(/\s+/g, ' ').slice(0, 300);
+          _lastDebugHtml = html.replace(/\s+/g, ' ').slice(0, 300);
           break;
         } catch (e: any) {
           _lastDebugStatus = `D:ERR ${String(e).slice(0, 60)}`;
@@ -303,26 +294,14 @@ export async function fetchStaffMonitorData(nature: 'D' | 'A'): Promise<StaffMon
         }
       }
     } else {
-      // Arrivals strategy 1: race all specific variants in parallel — fastest wins
-      html = await raceUrls([...primaryUrls, ...arrivalExtras], 22_000) ?? '';
+      // Arrivals: race all nature=A variants in parallel — fastest wins
+      html = await raceUrls([...primaryUrls, ...arrivalExtras], 30_000) ?? '';
       if (html) {
         _lastDebugStatus = `A:200 len=${html.length}`;
         console.warn(`[staffMonitor] A parallel race succeeded len=${html.length}`);
       } else {
-        // Strategy 2: combined pages (no nature filter) — try to extract arrivals section
-        console.warn('[staffMonitor] A parallel race failed — trying combined pages');
-        for (const url of combinedUrls) {
-          try {
-            html = await tryFetch(url, 25_000);
-            isCombined = true;
-            _lastDebugStatus = `A:COMBINED len=${html.length}`;
-            console.warn(`[staffMonitor] A combined fetch ok: ${url}`);
-            break;
-          } catch (e: any) {
-            _lastDebugStatus = `A:ERR ${String(e).slice(0, 60)}`;
-            console.warn(`[staffMonitor] A combined error: ${_lastDebugStatus}`);
-          }
-        }
+        _lastDebugStatus = `A:ERR all ${primaryUrls.length + arrivalExtras.length} URLs failed`;
+        console.warn(`[staffMonitor] ${_lastDebugStatus}`);
       }
     }
 
@@ -338,8 +317,7 @@ export async function fetchStaffMonitorData(nature: 'D' | 'A'): Promise<StaffMon
 
     if (__DEV__) console.log(`[staffMonitor] nature=${nature} HTML sample:\n`, html.slice(0, 2000));
 
-    const sectionHtml = isCombined ? extractSectionFor(html, nature) : html;
-    const results = parseSection(sectionHtml);
+    const results = parseSection(html);
 
     const summary = results.length === 0
       ? 'nessun volo parsato'
