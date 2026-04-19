@@ -12,7 +12,7 @@ import { useAppTheme, type ThemeColors } from '../context/ThemeContext';
 import { useAirport } from '../context/AirportContext';
 import { getAirlineOps, getAirlineColor, AIRLINE_COLORS, AIRLINE_DISPLAY_NAMES } from '../utils/airlineOps';
 import { fetchAirportScheduleRaw } from '../utils/fr24api';
-import { fetchStaffMonitorData, getStaffMonitorDebugStatus, getStaffMonitorDebugHtml, normalizeFlightNumber, type StaffMonitorFlight } from '../utils/staffMonitor';
+import { fetchStaffMonitorData, normalizeFlightNumber, type StaffMonitorFlight } from '../utils/staffMonitor';
 import { formatAirportHeader, getAirportAirlines } from '../utils/airportSettings';
 import { requestWidgetUpdate } from 'react-native-android-widget';
 import { WIDGET_CACHE_KEY, WIDGET_SHIFT_KEY } from '../widgets/widgetTaskHandler';
@@ -875,19 +875,6 @@ export default function FlightScreen() {
             </View>
           )}
         </TouchableOpacity>
-      </View>
-
-      {/* StaffMonitor debug banner — REMOVE BEFORE RELEASE */}
-      <View style={{ backgroundColor: '#1a1a2e', padding: 3 }}>
-        <Text style={{ color: '#aaa', fontSize: 9, textAlign: 'center' }}>
-          SM: D={staffMonitorDeps.length} A={staffMonitorArrs.length} | {getStaffMonitorDebugStatus()}
-        </Text>
-        <Text style={{ color: '#666', fontSize: 9, textAlign: 'center' }}>
-          d=[{staffMonitorDeps.slice(0,5).map(f=>f.flightNumber).join(',')}]
-        </Text>
-        <Text style={{ color: '#444', fontSize: 8, textAlign: 'center' }} numberOfLines={2}>
-          {getStaffMonitorDebugHtml()}
-        </Text>
       </View>
 
       {/* Dual segmented controls */}

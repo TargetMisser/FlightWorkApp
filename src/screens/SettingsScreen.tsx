@@ -22,6 +22,7 @@ import {
   type UpdateInfo,
 } from '../utils/updateChecker';
 import UpdateModal from '../components/UpdateModal';
+import { exportBackup, importBackup } from '../utils/backupManager';
 
 // ─── Tema picker ──────────────────────────────────────────────────────────────
 type ThemeOption = {
@@ -183,6 +184,8 @@ export default function SettingsScreen() {
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
+  const [exportingBackup, setExportingBackup] = useState(false);
+  const [importingBackup, setImportingBackup] = useState(false);
 
   useEffect(() => {
     getCachedUpdateInfo().then(setUpdateInfo);
@@ -205,6 +208,41 @@ export default function SettingsScreen() {
   const handleDownload = useCallback(() => {
     if (updateInfo?.downloadUrl) Linking.openURL(updateInfo.downloadUrl);
   }, [updateInfo]);
+
+  const handleExport = useCallback(async () => {
+    setExportingBackup(true);
+    const result = await exportBackup();
+    setExportingBackup(false);
+    if (result.ok) {
+      Alert.alert('Backup esportato', 'File salvato nella cartella selezionata.');
+    } else if (result.error !== 'Permesso negato' && result.error !== 'Annullato') {
+      Alert.alert('Errore', result.error);
+    }
+  }, []);
+
+  const handleImport = useCallback(async () => {
+    Alert.alert(
+      'Importa backup',
+      'I dati attuali (note, password, blocco note) saranno sovrascritti con quelli del backup. Continuare?',
+      [
+        { text: 'Annulla', style: 'cancel' },
+        {
+          text: 'Importa',
+          style: 'destructive',
+          onPress: async () => {
+            setImportingBackup(true);
+            const result = await importBackup();
+            setImportingBackup(false);
+            if (result.ok) {
+              Alert.alert('Backup importato', 'Riavvia l\'app per applicare tutte le modifiche.');
+            } else if (result.error !== 'Annullato') {
+              Alert.alert('Errore', result.error);
+            }
+          },
+        },
+      ],
+    );
+  }, []);
 
   const openAirportModal = () => {
     setAirportInput(airportCode);
@@ -352,6 +390,36 @@ export default function SettingsScreen() {
         )}
       </View>
 
+
+      {/* ── Sezione Backup ── */}
+      <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>BACKUP</Text>
+      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }, colors.isDark && { elevation: 0, shadowOpacity: 0, borderWidth: 1 }]}>
+        <TouchableOpacity style={styles.row} onPress={handleExport} activeOpacity={0.8} disabled={exportingBackup}>
+          <View style={[styles.iconWrap, { backgroundColor: colors.primaryLight }]}>
+            {exportingBackup
+              ? <ActivityIndicator size={18} color={colors.primary} />
+              : <MaterialIcons name="backup" size={20} color={colors.primary} />}
+          </View>
+          <View style={styles.rowText}>
+            <Text style={[styles.rowLabel, { color: colors.text }]}>Esporta backup</Text>
+            <Text style={[styles.rowSub, { color: colors.textMuted }]}>Salva note, password e impostazioni in un file JSON</Text>
+          </View>
+          <MaterialIcons name="chevron-right" size={20} color={colors.border} />
+        </TouchableOpacity>
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
+        <TouchableOpacity style={styles.row} onPress={handleImport} activeOpacity={0.8} disabled={importingBackup}>
+          <View style={[styles.iconWrap, { backgroundColor: colors.primaryLight }]}>
+            {importingBackup
+              ? <ActivityIndicator size={18} color={colors.primary} />
+              : <MaterialIcons name="restore" size={20} color={colors.primary} />}
+          </View>
+          <View style={styles.rowText}>
+            <Text style={[styles.rowLabel, { color: colors.text }]}>Importa backup</Text>
+            <Text style={[styles.rowSub, { color: colors.textMuted }]}>Ripristina un backup precedente da file</Text>
+          </View>
+          <MaterialIcons name="chevron-right" size={20} color={colors.border} />
+        </TouchableOpacity>
+      </View>
 
       {/* ── Sezione Lingua ── */}
       <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>{t('sectionLanguage')}</Text>
