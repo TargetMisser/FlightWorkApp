@@ -109,12 +109,12 @@ export default function NotepadScreen() {
           <Text style={s.title}>{t('notepadTitle')}</Text>
         </View>
         <View style={s.actions}>
-          <TouchableOpacity onPress={clear} style={s.iconBtn}>
+          <TouchableOpacity onPress={clear} style={s.iconBtn} accessible accessibilityRole="button" accessibilityLabel={t('notepadClearTitle')}>
             <MaterialIcons name="delete-outline" size={22} color="#EF4444" />
           </TouchableOpacity>
           <TouchableOpacity
             onPress={save}
-            style={[s.saveBtn, saved && s.saveBtnDim]}
+            style={[s.saveBtn, saved && s.saveBtnDim]} accessible accessibilityRole="button" accessibilityState={{ disabled: saved }}
           >
             <MaterialIcons name="save" size={18} color="#fff" />
             <Text style={s.saveTxt}>{saved ? t('notepadSaved') : t('notepadSave')}</Text>
@@ -137,7 +137,7 @@ export default function NotepadScreen() {
         multiline
         value={text}
         onChangeText={handleChange}
-        placeholder={'Scrivi qui le tue note...\n\nUsa questo blocco note per:\n• Annotazioni di turno\n• Promemoria procedure\n• Note personali'}
+        placeholder={t('notepadPlaceholder')}
         placeholderTextColor={colors.textSub}
         textAlignVertical="top"
         autoCorrect={false}
