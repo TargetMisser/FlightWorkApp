@@ -115,8 +115,8 @@ function cell(cells: string[], idx: number | undefined): string | undefined {
   const m = /^([A-Z0-9][A-Z0-9\-\/]{0,8})/i.exec(v);
   if (!m) return undefined;
   const code = m[1];
-  // Reject pure-letter tokens of 4+ chars — those are handler names ("FEDE", "MARCO") not codes.
-  if (/^[A-Za-z]{4,}$/.test(code)) return undefined;
+  // Reject pure-letter tokens of 3+ chars — handler abbreviations like "ana", "FEDE", "MARCO"
+  if (/^[A-Za-z]{3,}$/.test(code)) return undefined;
   return code;
 }
 
@@ -167,11 +167,14 @@ function parseSection(sectionHTML: string): StaffMonitorFlight[] {
 let _lastDebugStatus = 'init';
 let _lastDebugHtml = '';
 let _lastDebugColumns = 'non ancora rilevate';
-let _lastDebugFlights = 'nessun volo';
+let _lastDebugFlightsD = 'nessun volo';
+let _lastDebugFlightsA = 'nessun volo';
 export function getStaffMonitorDebugStatus(): string { return _lastDebugStatus; }
 export function getStaffMonitorDebugHtml(): string { return _lastDebugHtml; }
 export function getStaffMonitorDebugColumns(): string { return _lastDebugColumns; }
-export function getStaffMonitorDebugFlights(): string { return _lastDebugFlights; }
+export function getStaffMonitorDebugFlights(): string {
+  return `D:\n${_lastDebugFlightsD}\n\nA:\n${_lastDebugFlightsA}`;
+}
 
 export async function fetchStaffMonitorData(nature: 'D' | 'A'): Promise<StaffMonitorFlight[]> {
   try {
@@ -225,11 +228,11 @@ export async function fetchStaffMonitorData(nature: 'D' | 'A'): Promise<StaffMon
 
     const results = parseSection(html);
 
-    if (nature === 'D') {
-      _lastDebugFlights = results.length === 0
-        ? 'nessun volo parsato'
-        : results.slice(0, 5).map(f => `${f.flightNumber} S=${f.stand ?? '-'} CI=${f.checkin ?? '-'} G=${f.gate ?? '-'}`).join('\n');
-    }
+    const summary = results.length === 0
+      ? 'nessun volo parsato'
+      : results.slice(0, 5).map(f => `${f.flightNumber} S=${f.stand ?? '-'} CI=${f.checkin ?? '-'} G=${f.gate ?? '-'} B=${f.belt ?? '-'}`).join('\n');
+    if (nature === 'D') _lastDebugFlightsD = summary;
+    else _lastDebugFlightsA = summary;
 
     return results;
   } catch (e) {
