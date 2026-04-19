@@ -107,9 +107,17 @@ function detectColumns(headerRow: RawCell[]): ColMap | null {
 
 function cell(cells: string[], idx: number | undefined): string | undefined {
   if (idx === undefined) return undefined;
-  const v = cells[idx];
+  const v = cells[idx]?.trim();
   if (!v || isPhoneOrJunk(v)) return undefined;
-  return v;
+  // Extract only the leading operational code (stand "17", gate "674", desk "4").
+  // Cells often contain extra text after the code: "17◆ Federico" or "674 RICCARDO F".
+  // Stop at the first whitespace or non-alphanumeric-hyphen character.
+  const m = /^([A-Z0-9][A-Z0-9\-\/]{0,8})/i.exec(v);
+  if (!m) return undefined;
+  const code = m[1];
+  // Reject pure-letter tokens of 4+ chars — those are handler names ("FEDE", "MARCO") not codes.
+  if (/^[A-Za-z]{4,}$/.test(code)) return undefined;
+  return code;
 }
 
 /** Extract flight number from a cell that may contain "FR03747 B738" — take first token only. */
