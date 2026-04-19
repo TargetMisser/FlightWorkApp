@@ -1,3 +1,5 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 export type StaffMonitorFlight = {
   flightNumber: string;
   stand?: string;
@@ -38,10 +40,6 @@ function extractCellsRaw(trHTML: string): RawCell[] {
     cells.push({ text, colspan });
   }
   return cells;
-}
-
-function extractCells(trHTML: string): string[] {
-  return extractCellsRaw(trHTML).map(c => c.text);
 }
 
 /** Reject phone numbers, names-with-phones, and other junk. */
@@ -111,7 +109,6 @@ function cell(cells: string[], idx: number | undefined): string | undefined {
   if (!v || isPhoneOrJunk(v)) return undefined;
   // Extract only the leading operational code (stand "17", gate "674", desk "4").
   // Cells often contain extra text after the code: "17◆ Federico" or "674 RICCARDO F".
-  // Stop at the first whitespace or non-alphanumeric-hyphen character.
   const m = /^([A-Z0-9][A-Z0-9\-\/]{0,8})/i.exec(v);
   if (!m) return undefined;
   const code = m[1];
@@ -124,7 +121,7 @@ function cell(cells: string[], idx: number | undefined): string | undefined {
 function extractFlightCode(raw: string): string | null {
   const token = raw.trim().split(/\s+/)[0];
   if (!/^[A-Z0-9]{1,4}\d/i.test(token)) return null;
-  // Require at least 2 chars and at least one letter to avoid matching pure numbers
+  // Require at least one letter to avoid matching pure numbers
   if (!/[A-Z]/i.test(token)) return null;
   return normalizeFlightNumber(token);
 }
@@ -164,6 +161,91 @@ function parseSection(sectionHTML: string): StaffMonitorFlight[] {
   return results;
 }
 
+// ─── AsyncStorage flight cache (20-min TTL) ──────────────────────────────────────
+const SM_CACHE_KEY = 'sm_flights_v2';
+
+async function loadCached(nature: 'D' | 'A'): Promise<StaffMonitorFlight[] | null> {
+  try {
+    const raw = await AsyncStorage.getItem(SM_CACHE_KEY);
+    if (!raw) return null;
+    const c = JSON.parse(raw);
+    const e = c[nature];
+    if (!e || Date.now() - e.ts > 20 * 60 * 1000) return null;
+    return e.flights as StaffMonitorFlight[];
+  } catch { return null; }
+}
+
+async function saveCache(nature: 'D' | 'A', flights: StaffMonitorFlight[]): Promise<void> {
+  try {
+    const raw = await AsyncStorage.getItem(SM_CACHE_KEY) ?? '{}';
+    const c = JSON.parse(raw);
+    c[nature] = { flights, ts: Date.now() };
+    await AsyncStorage.setItem(SM_CACHE_KEY, JSON.stringify(c));
+  } catch {}
+}
+
+// ─── Fetch helpers ────────────────────────────────────────────────────────────────
+const FETCH_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 Chrome/120 Safari/537.36',
+  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+  'Accept-Language': 'it-IT,it;q=0.9,en;q=0.8',
+  'Referer': 'https://servizi.pisa-airport.com/staffMonitor/staffMonitor.html',
+};
+
+async function tryFetch(url: string, timeoutMs: number): Promise<string> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const resp = await fetch(url, { signal: controller.signal, headers: FETCH_HEADERS });
+    clearTimeout(timer);
+    const body = await resp.text();
+    if (!resp.ok || body.length < 200) throw new Error(`${resp.status} len=${body.length}`);
+    return body;
+  } catch (e) {
+    clearTimeout(timer);
+    throw e;
+  }
+}
+
+/**
+ * Fire all URLs simultaneously and resolve with the first successful HTML.
+ * Returns null only if every URL fails or times out.
+ */
+function raceUrls(urls: string[], timeoutMs: number): Promise<string | null> {
+  return new Promise(resolve => {
+    let done = false;
+    let pending = urls.length;
+    for (const url of urls) {
+      tryFetch(url, timeoutMs)
+        .then(html => { if (!done) { done = true; resolve(html); } })
+        .catch(() => { pending--; if (pending === 0 && !done) { done = true; resolve(null); } });
+    }
+  });
+}
+
+/**
+ * When a combined page (no nature filter) is fetched, split at <table> boundaries
+ * and return the chunk whose surrounding text best matches the requested nature.
+ */
+function extractSectionFor(html: string, nature: 'D' | 'A'): string {
+  const arrRx = /arriv[oi]|arrival|inbound/i;
+  const depRx = /partenz|departur|outbound/i;
+  const chunks = html.split(/(?=<table[\s>])/i).filter(s => /<tr[\s>]/i.test(s));
+  if (chunks.length < 2) return html;
+
+  let bestChunk = html;
+  let bestScore = -99;
+  for (const chunk of chunks) {
+    const header = chunk.slice(0, 500);
+    const score = nature === 'A'
+      ? (arrRx.test(header) ? 2 : depRx.test(header) ? -1 : 0)
+      : (depRx.test(header) ? 2 : arrRx.test(header) ? -1 : 0);
+    if (score > bestScore) { bestScore = score; bestChunk = chunk; }
+  }
+  return bestScore > 0 ? bestChunk : html;
+}
+
+// ─── Debug state ──────────────────────────────────────────────────────────────────
 let _lastDebugStatus = 'init';
 let _lastDebugHtml = '';
 let _lastDebugColumns = 'non ancora rilevate';
@@ -177,56 +259,87 @@ export function getStaffMonitorDebugFlights(): string {
 }
 
 export async function fetchStaffMonitorData(nature: 'D' | 'A'): Promise<StaffMonitorFlight[]> {
-  try {
-    // The dynamic Tomcat servlet that returns real data. The static .html
-    // wrapper is a saved-page frameset whose frame files don't exist on the server.
-    const urls = [
-      `https://servizi.pisa-airport.com/staffMonitor/staffMonitor?trans=true&nature=${nature}`,
-      `https://servizi.pisa-airport.com/staffMonitor/staffMonitor?nature=${nature}`,
-      `https://servizi.pisa-airport.com/staffMonitor/staffMonitor?nature=${nature}&aviation=1`,
-    ];
+  const base = 'https://servizi.pisa-airport.com/staffMonitor/staffMonitor';
 
+  // Primary URLs for the requested nature
+  const primaryUrls = [
+    `${base}?trans=true&nature=${nature}`,
+    `${base}?nature=${nature}`,
+    `${base}?nature=${nature}&aviation=1`,
+  ];
+
+  // Extra variants specific to arrivals — different param names the servlet might accept
+  const arrivalExtras = [
+    `${base}?nature=A&trans=false`,
+    `${base}?type=A`,
+    `${base}?nature=ARR`,
+    `${base}?inbound=true`,
+    `${base}?nature=A&airport=PSA`,
+    `${base}?nature=A&refresh=1`,
+  ];
+
+  // Combined pages with no nature filter — servlet may return all flights
+  const combinedUrls = [
+    `${base}?trans=true`,
+    `${base}?trans=false`,
+    base,
+  ];
+
+  try {
     let html = '';
-    for (const url of urls) {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 20_000);
-      try {
-        const resp = await fetch(url, {
-            signal: controller.signal,
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 Chrome/120 Safari/537.36',
-              'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-              'Accept-Language': 'it-IT,it;q=0.9,en;q=0.8',
-              'Referer': 'https://servizi.pisa-airport.com/staffMonitor/staffMonitor.html',
-            },
-          });
-        clearTimeout(timer);
-        const body = await resp.text();
-        _lastDebugStatus = `${nature}:${resp.status} len=${body.length}`;
-        console.warn(`[staffMonitor] ${_lastDebugStatus} url=${url}`);
-        // Accept any 200 OK; parser returns [] naturally for "no flights" pages
-        if (resp.ok && body.length > 200) {
-          html = body;
-          if (nature === 'D') _lastDebugHtml = body.replace(/\s+/g, ' ').slice(0, 300);
+    let isCombined = false;
+
+    if (nature === 'D') {
+      // Departures: sequential (known to work quickly)
+      for (const url of primaryUrls) {
+        try {
+          html = await tryFetch(url, 12_000);
+          _lastDebugStatus = `D:200 len=${html.length}`;
+          if (nature === 'D') _lastDebugHtml = html.replace(/\s+/g, ' ').slice(0, 300);
           break;
+        } catch (e: any) {
+          _lastDebugStatus = `D:ERR ${String(e).slice(0, 60)}`;
+          console.warn(`[staffMonitor] D fetch error: ${_lastDebugStatus}`);
         }
-      } catch (e: any) {
-        clearTimeout(timer);
-        _lastDebugStatus = `${nature}:ERR ${String(e).slice(0, 60)}`;
-        console.warn(`[staffMonitor] fetch error: ${_lastDebugStatus}`);
+      }
+    } else {
+      // Arrivals strategy 1: race all specific variants in parallel — fastest wins
+      html = await raceUrls([...primaryUrls, ...arrivalExtras], 22_000) ?? '';
+      if (html) {
+        _lastDebugStatus = `A:200 len=${html.length}`;
+        console.warn(`[staffMonitor] A parallel race succeeded len=${html.length}`);
+      } else {
+        // Strategy 2: combined pages (no nature filter) — try to extract arrivals section
+        console.warn('[staffMonitor] A parallel race failed — trying combined pages');
+        for (const url of combinedUrls) {
+          try {
+            html = await tryFetch(url, 25_000);
+            isCombined = true;
+            _lastDebugStatus = `A:COMBINED len=${html.length}`;
+            console.warn(`[staffMonitor] A combined fetch ok: ${url}`);
+            break;
+          } catch (e: any) {
+            _lastDebugStatus = `A:ERR ${String(e).slice(0, 60)}`;
+            console.warn(`[staffMonitor] A combined error: ${_lastDebugStatus}`);
+          }
+        }
       }
     }
 
     if (!html) {
-      console.warn('[staffMonitor] all URLs failed');
+      console.warn(`[staffMonitor] all URLs failed for ${nature} — trying cache`);
+      const cached = await loadCached(nature);
+      if (cached) {
+        _lastDebugStatus = `${nature}:CACHE(${cached.length})`;
+        return cached;
+      }
       return [];
     }
 
-    if (__DEV__) {
-      console.log(`[staffMonitor] nature=${nature} HTML sample:\n`, html.slice(0, 2000));
-    }
+    if (__DEV__) console.log(`[staffMonitor] nature=${nature} HTML sample:\n`, html.slice(0, 2000));
 
-    const results = parseSection(html);
+    const sectionHtml = isCombined ? extractSectionFor(html, nature) : html;
+    const results = parseSection(sectionHtml);
 
     const summary = results.length === 0
       ? 'nessun volo parsato'
@@ -234,9 +347,21 @@ export async function fetchStaffMonitorData(nature: 'D' | 'A'): Promise<StaffMon
     if (nature === 'D') _lastDebugFlightsD = summary;
     else _lastDebugFlightsA = summary;
 
+    if (results.length > 0) {
+      await saveCache(nature, results);
+      return results;
+    }
+
+    // Parse returned nothing — fall back to cache if available
+    const cached = await loadCached(nature);
+    if (cached && cached.length > 0) {
+      _lastDebugStatus += '+CACHE';
+      return cached;
+    }
     return results;
   } catch (e) {
     console.error(`[staffMonitor] error for nature=${nature}:`, e);
-    return [];
+    const cached = await loadCached(nature);
+    return cached ?? [];
   }
 }
