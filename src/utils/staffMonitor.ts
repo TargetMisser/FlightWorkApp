@@ -44,11 +44,12 @@ function extractCells(trHTML: string): string[] {
   return extractCellsRaw(trHTML).map(c => c.text);
 }
 
-/** Reject only obvious junk: very long strings or 8+ continuous digits (phone-like). */
+/** Reject phone numbers, names-with-phones, and other junk. */
 function isPhoneOrJunk(val: string): boolean {
   if (!val) return false;
   if (val.length > 30) return true;
-  if (/^\d{8,}$/.test(val.trim())) return true;
+  // Catch "Albe 3284693677" style: any run of 8+ consecutive digits anywhere in the value
+  if (/\d{8,}/.test(val)) return true;
   return false;
 }
 
@@ -83,7 +84,8 @@ function detectColumns(headerRow: RawCell[]): ColMap | null {
   // For "VOLO / FLIGHT" with colspan=2, logo is first sub-col, flight # is last.
   const flightCol = flightH.start + flightH.span - 1;
 
-  const standH   = findPos(n => n.includes('stand') || n.includes('parch') || n.includes('posiz') || n === 'pos' || n.includes('piazzola') || n.includes('park'));
+  // Use word-boundary checks: 'stand' as a whole word to avoid matching "addetto stand" / "standby"
+  const standH   = findPos(n => n === 'stand' || /\bstand\b/.test(n) || n.includes('parch') || n.includes('posiz') || n.includes('piazzola') || n === 'park');
   const checkinH = findPos(n => n.includes('check') || n === 'c/i' || n === 'ci' || n === 'banco' || n.includes('desk') || n.includes('bancone'));
   // gate: match 'gate', 'uscita', 'imbarco' exactly (avoid partial matches on status cols)
   const gateH    = findPos(n => n === 'gate' || n === 'uscita' || n === 'imbarco' || n.includes('uscit'));
