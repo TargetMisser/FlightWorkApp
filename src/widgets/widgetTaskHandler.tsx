@@ -42,21 +42,43 @@ export type WidgetShiftData = {
   isRestDay: boolean;
 };
 
+function fmtTs(ts: number): string {
+  const d = new Date(ts * 1000);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
 // ─── Read cached data written by the main app ──────────────────────────────────
 async function getWidgetData(): Promise<WidgetData> {
   try {
+    const todayIso = new Date().toISOString().split('T')[0];
+    const shiftRaw = await AsyncStorage.getItem(WIDGET_SHIFT_KEY);
+
+    if (shiftRaw) {
+      const shiftData: WidgetShiftData = JSON.parse(shiftRaw);
+      if (shiftData.date === todayIso) {
+        // Shift key is authoritative for today's work/rest classification.
+        if (shiftData.isRestDay) return { state: 'rest' };
+        if (!shiftData.shiftToday) return { state: 'no_shift' };
+
+        // It's a work day — return cached flight data only if it's also a 'work' state.
+        // A stale 'rest' in the cache must not override the shift key.
+        const cached = await AsyncStorage.getItem(WIDGET_CACHE_KEY);
+        if (cached) {
+          const data: WidgetData = JSON.parse(cached);
+          if (data.state === 'work' || data.state === 'work_empty') return data;
+        }
+        // Cache is stale or missing — show work_empty until periodic update runs.
+        const { start, end } = shiftData.shiftToday;
+        return { state: 'work_empty', shiftLabel: `${fmtTs(start)} – ${fmtTs(end)}`, updatedAt: '' };
+      }
+    }
+
+    // Shift key is missing or from a different day — fall back to cache.
     const cached = await AsyncStorage.getItem(WIDGET_CACHE_KEY);
     if (!cached) return { state: 'error' };
     const data: WidgetData = JSON.parse(cached);
-    // For rest/no_shift states validate against WIDGET_SHIFT_KEY date —
-    // otherwise a stale 'rest' from yesterday would persist until the app reopens.
-    if (data.state === 'rest' || data.state === 'no_shift') {
-      const todayIso = new Date().toISOString().split('T')[0];
-      const shiftRaw = await AsyncStorage.getItem(WIDGET_SHIFT_KEY);
-      if (!shiftRaw) return { state: 'no_shift' };
-      const shiftData: WidgetShiftData = JSON.parse(shiftRaw);
-      if (shiftData.date !== todayIso) return { state: 'no_shift' };
-    }
+    // Rest/no_shift cached but shift key is stale → treat as no_shift.
+    if (data.state === 'rest' || data.state === 'no_shift') return { state: 'no_shift' };
     return data;
   } catch {}
   return { state: 'error' };
@@ -94,13 +116,9 @@ async function fetchFreshWidgetData(): Promise<WidgetData> {
       clearTimeout(timer);
     }
 
-    const fmtT = (ts: number) => {
-      const d = new Date(ts * 1000);
-      return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-    };
-    const fmtOff = (dep: number, off: number) => fmtT(dep - off * 60);
-    const nowHH = fmtT(Date.now() / 1000);
-    const shiftLabel = `${fmtT(shiftToday.start)} – ${fmtT(shiftToday.end)}`;
+    const fmtOff = (dep: number, off: number) => fmtTs(dep - off * 60);
+    const nowHH = fmtTs(Date.now() / 1000);
+    const shiftLabel = `${fmtTs(shiftToday.start)} – ${fmtTs(shiftToday.end)}`;
 
     const filteredDeps = allDepartures.filter(item =>
       allowedAirlines.some(key => (item.flight?.airline?.name || '').toLowerCase().includes(key)),
@@ -125,7 +143,7 @@ async function fetchFreshWidgetData(): Promise<WidgetData> {
           flightNumber: fn,
           destinationIata: item.flight?.airport?.destination?.code?.iata || '???',
           departureTs: ts,
-          departureTime: fmtT(ts),
+          departureTime: fmtTs(ts),
           ciOpen: fmtOff(ts, ops.checkInOpen), ciClose: fmtOff(ts, ops.checkInClose),
           gateOpen: fmtOff(ts, ops.gateOpen), gateClose: fmtOff(ts, ops.gateClose),
           airlineColor: getAirlineColor(airline),
