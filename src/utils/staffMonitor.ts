@@ -159,9 +159,11 @@ function parseSection(sectionHTML: string): StaffMonitorFlight[] {
 let _lastDebugStatus = 'init';
 let _lastDebugHtml = '';
 let _lastDebugColumns = 'non ancora rilevate';
+let _lastDebugFlights = 'nessun volo';
 export function getStaffMonitorDebugStatus(): string { return _lastDebugStatus; }
 export function getStaffMonitorDebugHtml(): string { return _lastDebugHtml; }
 export function getStaffMonitorDebugColumns(): string { return _lastDebugColumns; }
+export function getStaffMonitorDebugFlights(): string { return _lastDebugFlights; }
 
 export async function fetchStaffMonitorData(nature: 'D' | 'A'): Promise<StaffMonitorFlight[]> {
   try {
@@ -215,8 +217,10 @@ export async function fetchStaffMonitorData(nature: 'D' | 'A'): Promise<StaffMon
 
     const results = parseSection(html);
 
-    if (__DEV__) {
-      console.log(`[staffMonitor] nature=${nature} → ${results.length} flights`, results.slice(0, 5));
+    if (nature === 'D') {
+      _lastDebugFlights = results.length === 0
+        ? 'nessun volo parsato'
+        : results.slice(0, 5).map(f => `${f.flightNumber} S=${f.stand ?? '-'} CI=${f.checkin ?? '-'} G=${f.gate ?? '-'}`).join('\n');
     }
 
     return results;

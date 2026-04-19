@@ -23,7 +23,7 @@ import {
 } from '../utils/updateChecker';
 import UpdateModal from '../components/UpdateModal';
 import { exportBackup, importBackup } from '../utils/backupManager';
-import { getStaffMonitorDebugStatus, getStaffMonitorDebugColumns } from '../utils/staffMonitor';
+import { getStaffMonitorDebugStatus, getStaffMonitorDebugColumns, getStaffMonitorDebugFlights } from '../utils/staffMonitor';
 
 // ─── Tema picker ──────────────────────────────────────────────────────────────
 type ThemeOption = {
@@ -390,7 +390,7 @@ export default function SettingsScreen() {
           </TouchableOpacity>
         )}
         <View style={[styles.divider, { backgroundColor: colors.border }]} />
-        <TouchableOpacity style={styles.row} onPress={() => Alert.alert('StaffMonitor debug', `Stato: ${getStaffMonitorDebugStatus()}\n\nColonne:\n${getStaffMonitorDebugColumns()}`)} activeOpacity={0.8}>
+        <TouchableOpacity style={styles.row} onPress={() => Alert.alert('StaffMonitor debug', `Stato: ${getStaffMonitorDebugStatus()}\n\nColonne:\n${getStaffMonitorDebugColumns()}\n\nVoli (D, primi 5):\n${getStaffMonitorDebugFlights()}`)} activeOpacity={0.8}>
           <View style={[styles.iconWrap, { backgroundColor: colors.primaryLight }]}>
             <MaterialIcons name="bug-report" size={20} color={colors.primary} />
           </View>
