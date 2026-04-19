@@ -106,16 +106,27 @@ jobs:
             ## 📦 AeroStaff Pro ${{ steps.meta.outputs.tag }}
 
             ### Novità
-            - Aggiornamento in-app: popup stile Mihon con changelog e download APK diretto
-            - Controllo aggiornamenti automatico all'avvio (una volta ogni 24h)
-            - Sezione aggiornamenti in Impostazioni con badge NEW e bottoni GitHub / Scarica APK
+            - **Backup / Ripristino**: esporta tutti i dati dell'app in un file JSON e reimportali in qualsiasi momento da Impostazioni
+            - **Aggiornamento in-app**: popup stile Mihon con changelog e download APK diretto; controllo automatico all'avvio ogni 24h
+            - **Impostazioni riprogettate**: sezione aggiornamenti con card dedicata e badge NEW; backup con due tile colorate (esporta verde, importa blu)
 
-            ### Bug fixes
-            - StaffMonitor: accetta risposte con tag HTML maiuscoli (fix AbortError inutili)
-            - StaffMonitor: timeout 20s, URL corretto con trans=true
-            - Widget: fix "Giorno di riposo" mostrato a casaccio il giorno dopo un riposo
-            - Voli: rimossi duplicati con stesso numero volo e orario programmato
-            - Impostazioni: versione app corretta (era hardcoded v1.1.0)
+            ### Bug fix – Turni e Home
+            - **HomeScreen "Giorno di riposo" errato**: l'evento Lavoro nel calendario ora ha sempre la precedenza su un eventuale evento Riposo dello stesso giorno
+            - **Widget "Giorno di riposo" errato**: WIDGET_SHIFT_KEY è ora la fonte autoritativa per classificare lavoro/riposo, impedendo che dati in cache stantii sovrascrivano il turno reale
+            - **FlightScreen**: trovato evento Lavoro nel calendario non azzerava `isRestDay` se preceduto da un evento Riposo; corretto
+
+            ### Bug fix – Voli
+            - **Aggiornamento automatico voli**: i dati FR24 ora si ricaricano ogni 2 minuti senza riaprire l'app
+            - **Duplicati voli**: chiave di merge stabilizzata su `numeroVolo_tsPartenza` (prima usava `identification.id` che FR24 a volte omette)
+
+            ### Bug fix – StaffMonitor stand / gate
+            - **Colonne non rilevate**: il parser non richiedeva più la presenza di colonne stand/gate/belt per avviare il parsing; prima saltava tutte le righe
+            - **Nomi handler nella colonna stand**: `cell()` ora estrae solo il primo token alfanumerico (`17`, `674`, `4`) scartando tutto ciò che segue (es. `17◆ Federico`, `674 RICCARDO F`)
+            - **Numeri di telefono come stand**: `isPhoneOrJunk` ora individua sequenze di 8+ cifre ovunque nella stringa (prima cercava solo stringhe composte da soli numeri)
+            - **Colonna "ADDETTO STAND" rilevata come stand**: ora si usa una word-boundary (`\bstand\b`) per evitare falsi positivi
+            - **Arrivi sempre in errore (AbortError)**: 7 varianti URL con `nature=A` vengono ora inviate in parallelo (race); la prima risposta valida vince in ≤30s invece di 3×20s sequenziali. Cache AsyncStorage da 20 minuti: un fetch riuscito sopravvive ai cali di rete successivi
+            - **Numeri volo corrotti negli arrivi**: rimossi URL di fallback senza `nature=A` (restituivano dati partenze interpretati come arrivi)
+            - **Timeout partenze regredito**: ripristinato timeout a 25s (il server Pisa è lento; 12s era troppo corto)
 
             Scarica `AeroStaffPro-${{ steps.meta.outputs.tag }}.apk` e installalo sul tuo dispositivo Android.
           files: ${{ env.apk }}
