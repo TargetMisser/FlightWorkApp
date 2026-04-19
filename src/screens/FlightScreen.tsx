@@ -31,8 +31,12 @@ const FLIGHT_FILTER_KEY = 'aerostaff_flight_filter_v1';
 const FLIGHTS_CACHE_KEY = 'aerostaff_flights_cache_v2';
 
 function flightKey(item: any, tsField: string): string {
-  return item.flight?.identification?.id
-    || `${item.flight?.identification?.number?.default ?? ''}_${item.flight?.time?.scheduled?.[tsField] ?? ''}`;
+  // Use flight number + scheduled time as a stable key.
+  // Avoid using identification.id: FR24 sometimes omits it, which would cause
+  // the same flight to be stored under two different keys (one per fetch).
+  const fn = item.flight?.identification?.number?.default ?? '';
+  const ts = item.flight?.time?.scheduled?.[tsField] ?? '';
+  return `${fn}_${ts}`;
 }
 
 function mergeFlights(cached: any[], fresh: any[], tsField: string): any[] {
@@ -687,6 +691,13 @@ export default function FlightScreen() {
     if (airportLoading) return;
     setLoading(true);
     fetchAll();
+  }, [airportLoading, fetchAll]);
+
+  // Auto-refresh flight data every 2 minutes so status/times stay current
+  useEffect(() => {
+    if (airportLoading) return;
+    const iv = setInterval(() => { fetchAll(); }, 2 * 60 * 1000);
+    return () => clearInterval(iv);
   }, [airportLoading, fetchAll]);
 
   useEffect(() => {
