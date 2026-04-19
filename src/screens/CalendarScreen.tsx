@@ -668,6 +668,10 @@ export default function CalendarScreen() {
                   keyExtractor={(_, i) => String(i)}
                   style={{ maxHeight: 400 }}
                   nestedScrollEnabled
+                  initialNumToRender={10}
+                  windowSize={5}
+                  maxToRenderPerBatch={10}
+                  removeClippedSubviews={true}
                   renderItem={({ item }) => (
                     <TouchableOpacity
                       style={[s.nameRow, { borderColor: colors.border }]}
@@ -822,4 +826,3 @@ function makeStyles(c: ThemeColors) {
     manualTypeBtn: { flex: 1, paddingVertical: 12, borderRadius: 10, borderWidth: 1.5, alignItems: 'center' },
   });
 }
-
