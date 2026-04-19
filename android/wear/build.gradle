@@ -30,8 +30,8 @@ android {
         applicationId 'com.anonymous.FlightWorkApp'
         minSdkVersion 30
         targetSdkVersion 36
-        versionCode 6
-        versionName "2.6.0"
+        versionCode 7
+        versionName "2.6.1"
     }
 
     signingConfigs {
