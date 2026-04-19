@@ -77,29 +77,27 @@ function detectColumns(headerRow: RawCell[]): ColMap | null {
 
   const findPos = (pred: (n: string) => boolean) => positions.find(p => pred(p.name));
 
-  const flightH = findPos(n => n.includes('volo') || n.includes('flight') || n === 'flt');
+  const flightH = findPos(n => n.includes('volo') || n.includes('flight') || n.includes('flt') || n === 'num' || n.includes('numero'));
   if (!flightH) return null;
 
   // For "VOLO / FLIGHT" with colspan=2, logo is first sub-col, flight # is last.
   const flightCol = flightH.start + flightH.span - 1;
 
-  const standH   = findPos(n => n.includes('stand') || n.includes('parch'));
-  const checkinH = findPos(n => n.includes('check') || n === 'c/i' || n === 'ci' || n === 'banco');
-  // gate keywords: avoid matching "imbarco" in STATUS header, so prefer exact 'gate' or 'uscita'
-  const gateH    = findPos(n => n === 'gate' || n.includes('uscita'));
-  const beltH    = findPos(n => n.includes('belt') || n.includes('nastro') || n.includes('tapis'));
+  const standH   = findPos(n => n.includes('stand') || n.includes('parch') || n.includes('posiz') || n === 'pos' || n.includes('piazzola') || n.includes('park'));
+  const checkinH = findPos(n => n.includes('check') || n === 'c/i' || n === 'ci' || n === 'banco' || n.includes('desk') || n.includes('bancone'));
+  // gate: match 'gate', 'uscita', 'imbarco' exactly (avoid partial matches on status cols)
+  const gateH    = findPos(n => n === 'gate' || n === 'uscita' || n === 'imbarco' || n.includes('uscit'));
+  const beltH    = findPos(n => n.includes('belt') || n.includes('nastro') || n.includes('tapis') || n.includes('baggage') || n.includes('reclam') || n.includes('bggl'));
 
   const map: ColMap = { flight: flightCol };
   if (standH)   map.stand   = standH.start;
   if (checkinH) map.checkin = checkinH.start;
   if (gateH)    map.gate    = gateH.start;
   if (beltH)    map.belt    = beltH.start;
+  // Do NOT return null when only flight column is found — better to parse flight numbers
+  // with empty stand/gate/belt than to skip every row because keyword didn't match.
 
-  if (map.stand === undefined && map.checkin === undefined && map.gate === undefined && map.belt === undefined) {
-    return null;
-  }
-
-  if (__DEV__) console.log('[staffMonitor] detected columns:', map, '| headers:', positions.map(p => `${p.start}:${p.name}`));
+  console.warn('[staffMonitor] columns detected:', JSON.stringify(map), '| headers:', positions.map(p => `${p.start}:"${p.name}"`).join(' '));
   return map;
 }
 
@@ -131,6 +129,8 @@ function parseSection(sectionHTML: string): StaffMonitorFlight[] {
 
     if (!colMap) {
       colMap = detectColumns(rawCells);
+      // Always skip this row whether it was the header or a pre-header title row.
+      // If colMap is still null we'll keep trying on the next row.
       continue;
     }
 
@@ -148,6 +148,7 @@ function parseSection(sectionHTML: string): StaffMonitorFlight[] {
     });
   }
 
+  if (!colMap) console.warn('[staffMonitor] header row never detected — table may use unknown column names');
   return results;
 }
 
