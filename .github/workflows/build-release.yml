@@ -4,6 +4,15 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      version_override:
+        description: 'Tag to release (e.g. v2.6.2). Leave empty to use app.json version.'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -13,78 +22,118 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: 22
+          cache: npm
 
-      - name: Set up Java 17
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
-          distribution: 'temurin'
+          distribution: temurin
+          java-version: 21
 
-      - name: Set up Android SDK
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('android/**/*.gradle*', 'android/gradle.properties') }}
+          restore-keys: gradle-
+
+      - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Install SDK components
+        run: |
+          echo "y" | sdkmanager \
+            "ndk;27.1.12297006" \
+            "build-tools;36.0.0" \
+            "platforms;android-36" \
+            "cmake;3.22.1"
+
       - name: Install dependencies
-        run: npm ci
+        run: npm install --legacy-peer-deps
 
-      - name: Bundle JS for Android
+      - name: Fix expo-modules-core Gradle bugs
         run: |
-          mkdir -p android/app/src/main/assets
-          node_modules/.bin/expo export:embed \
-            --platform android \
-            --entry-file index.ts \
-            --bundle-output android/app/src/main/assets/index.android.bundle \
-            --assets-dest android/app/src/main/res
+          FILE="node_modules/expo-modules-core/android/build.gradle"
+          sed -i "s|apply plugin: 'com.android.library'|// Fix: project-level re-declaration\ndef _coreFeatures = project.findProperty(\"coreFeatures\") ?: []\next.shouldIncludeCompose = _coreFeatures.contains(\"compose\")\n\napply plugin: 'com.android.library'|" "$FILE"
+          sed -i 's/^\s*compose shouldIncludeCompose\s*$/    compose = shouldIncludeCompose/' "$FILE"
 
-      - name: Generate debug keystore (for signing)
+      - name: Compute release tag
+        id: meta
         run: |
-          keytool -genkey -v \
-            -keystore android/app/debug.keystore \
-            -storepass android \
-            -alias androiddebugkey \
-            -keypass android \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -dname "CN=Android Debug,O=Android,C=US"
+          VERSION=$(node -p "require('./app.json').expo.version")
+          if [[ -n "${{ github.event.inputs.version_override }}" ]]; then
+            TAG="${{ github.event.inputs.version_override }}"
+          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            TAG="${{ github.ref_name }}"
+          else
+            TAG="v${VERSION}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG"         >> "$GITHUB_OUTPUT"
+
+      - name: Make gradlew executable
+        run: chmod +x android/gradlew
+
+      - name: Restore stable keystore
+        run: |
+          mkdir -p android/app
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/app/debug.keystore
 
       - name: Build release APK
         run: |
           cd android
-          chmod +x gradlew
-          ./gradlew assembleRelease
-
-      - name: Get version name
-        id: version
-        run: |
-          VERSION=$(grep versionName android/app/build.gradle | sed "s/.*versionName \"\\(.*\\)\"/\\1/")
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          ./gradlew :app:assembleRelease \
+            --no-daemon \
+            -Pandroid.overridePathCheck=true
+        env:
+          ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
+          GRADLE_OPTS: "-Xmx4g -XX:MaxMetaspaceSize=512m"
 
       - name: Rename APK
         run: |
-          mv android/app/build/outputs/apk/release/app-release.apk \
-             FlightWorkApp-${{ github.ref_name }}.apk
+          APK=$(find android/app/build/outputs/apk/release -name "*.apk" -type f | head -1)
+          DEST="AeroStaffPro-${{ steps.meta.outputs.tag }}.apk"
+          cp "$APK" "$DEST"
+          echo "apk=$DEST" >> "$GITHUB_ENV"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: "${{ github.ref_name }} - Shift Permissions & Widget Fix"
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: "AeroStaff Pro ${{ steps.meta.outputs.tag }}"
           body: |
-            ## 🐛 Bug Fixes
+            ## 📦 AeroStaff Pro ${{ steps.meta.outputs.tag }}
 
-            🔧 **Permessi calendario** — Quando il permesso è rifiutato permanentemente, ora mostra un tasto "Apri Impostazioni" per abilitarlo direttamente
-            🔧 **Modal Aggiungi Turno** — Il form è ora scrollabile: il tasto "Salva Turno" è sempre raggiungibile su schermi piccoli
-            🔧 **Widget auto-aggiornante** — Il widget ora scarica dati freschi da FR24 ad ogni aggiornamento Android (30 min) senza dover aprire l'app
-            🔧 **Widget si aggiorna dopo salvataggio turno** — Salvando un turno dal CalendarScreen il widget si aggiorna immediatamente
+            ### Novità
+            - **Backup / Ripristino**: esporta tutti i dati dell'app in un file JSON e reimportali in qualsiasi momento da Impostazioni
+            - **Aggiornamento in-app**: popup stile Mihon con changelog e download APK diretto; controllo automatico all'avvio ogni 24h
+            - **Impostazioni riprogettate**: sezione aggiornamenti con card dedicata e badge NEW; backup con due tile colorate (esporta verde, importa blu)
 
-            ## 📦 Technical
+            ### Bug fix – Turni e Home
+            - **HomeScreen "Giorno di riposo" errato**: l'evento Lavoro nel calendario ora ha sempre la precedenza su un eventuale evento Riposo dello stesso giorno
+            - **Widget "Giorno di riposo" errato**: WIDGET_SHIFT_KEY è ora la fonte autoritativa per classificare lavoro/riposo, impedendo che dati in cache stantii sovrascrivano il turno reale
+            - **FlightScreen**: trovato evento Lavoro nel calendario non azzerava `isRestDay` se preceduto da un evento Riposo; corretto
 
-            - versionCode bumped to 7
-            - versionName ${{ steps.version.outputs.version }}
-          files: FlightWorkApp-${{ github.ref_name }}.apk
+            ### Bug fix – Voli
+            - **Aggiornamento automatico voli**: i dati FR24 ora si ricaricano ogni 2 minuti senza riaprire l'app
+            - **Duplicati voli**: chiave di merge stabilizzata su `numeroVolo_tsPartenza` (prima usava `identification.id` che FR24 a volte omette)
+
+            ### Bug fix – StaffMonitor stand / gate
+            - **Colonne non rilevate**: il parser non richiedeva più la presenza di colonne stand/gate/belt per avviare il parsing; prima saltava tutte le righe
+            - **Nomi handler nella colonna stand**: `cell()` ora estrae solo il primo token alfanumerico scartando tutto ciò che segue (es. `17◆ Federico`, `674 RICCARDO F`)
+            - **Numeri di telefono come stand**: `isPhoneOrJunk` ora individua sequenze di 8+ cifre ovunque nella stringa
+            - **Colonna "ADDETTO STAND" rilevata come stand**: ora si usa una word-boundary per evitare falsi positivi
+            - **Arrivi sempre in errore (AbortError)**: 7 varianti URL con `nature=A` vengono ora inviate in parallelo; la prima risposta valida vince in ≤30s. Cache AsyncStorage da 20 minuti
+            - **Numeri volo corrotti negli arrivi**: rimossi URL di fallback senza `nature=A`
+            - **Timeout partenze regredito**: ripristinato timeout a 25s
+
+            Scarica `AeroStaffPro-${{ steps.meta.outputs.tag }}.apk` e installalo sul tuo dispositivo Android.
+          files: ${{ env.apk }}
           draft: false
           prerelease: false
