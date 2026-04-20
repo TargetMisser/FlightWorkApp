@@ -113,17 +113,17 @@ function PasswordRowComponent({ item, onEdit, onDelete }: { item: PasswordEntry;
         {item.username ? <Text style={s.username}>{item.username}</Text> : null}
         <View style={s.pwRow}>
           <Text style={s.pw}>{revealed ? item.password : '••••••••'}</Text>
-          <TouchableOpacity onPress={() => setRevealed(r => !r)} style={s.eyeBtn}>
+          <TouchableOpacity onPress={() => setRevealed(r => !r)} style={s.eyeBtn} accessible accessibilityRole="button" accessibilityLabel={revealed ? 'Nascondi password' : 'Mostra password'}>
             <MaterialIcons name={revealed ? 'visibility-off' : 'visibility'} size={16} color={colors.textSub} />
           </TouchableOpacity>
         </View>
         {item.notes ? <Text style={s.notes}>{item.notes}</Text> : null}
       </View>
       <View style={s.actions}>
-        <TouchableOpacity style={s.editBtn} onPress={onEdit}>
+        <TouchableOpacity style={s.editBtn} onPress={onEdit} accessible accessibilityRole="button" accessibilityLabel="Modifica password">
           <MaterialIcons name="edit" size={17} color={colors.primary} />
         </TouchableOpacity>
-        <TouchableOpacity style={s.delBtn} onPress={onDelete}>
+        <TouchableOpacity style={s.delBtn} onPress={onDelete} accessible accessibilityRole="button" accessibilityLabel="Elimina password">
           <MaterialIcons name="delete-outline" size={17} color="#EF4444" />
         </TouchableOpacity>
       </View>
@@ -330,7 +330,7 @@ export default function PasswordScreen() {
                 secureTextEntry={!showPw}
                 autoCapitalize="none"
               />
-              <TouchableOpacity onPress={() => setShowPw(p => !p)} style={s.eyeModal}>
+              <TouchableOpacity onPress={() => setShowPw(p => !p)} style={s.eyeModal} accessible accessibilityRole="button" accessibilityLabel={showPw ? 'Nascondi password' : 'Mostra password'}>
                 <MaterialIcons name={showPw ? 'visibility-off' : 'visibility'} size={20} color={colors.textSub} />
               </TouchableOpacity>
             </View>

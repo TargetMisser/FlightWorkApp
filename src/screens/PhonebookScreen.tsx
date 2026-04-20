@@ -273,13 +273,13 @@ function ContactRowComponent({ contact, onEdit, onDelete }: ContactRowProps) {
         <Text style={rowStyles.number} numberOfLines={1}>{contact.number}</Text>
         {!!contact.note && <Text style={rowStyles.note}>{contact.note}</Text>}
       </View>
-      <TouchableOpacity style={[rowStyles.callBtn, { backgroundColor: color }]} onPress={call}>
+      <TouchableOpacity style={[rowStyles.callBtn, { backgroundColor: color }]} onPress={call} accessible accessibilityRole="button" accessibilityLabel="Chiama">
         <MaterialIcons name="call" size={18} color="#fff" />
       </TouchableOpacity>
-      <TouchableOpacity style={rowStyles.editBtn} onPress={() => onEdit(contact)}>
+      <TouchableOpacity style={rowStyles.editBtn} onPress={() => onEdit(contact)} accessible accessibilityRole="button" accessibilityLabel="Modifica contatto">
         <MaterialIcons name="edit" size={18} color={colors.textSub} />
       </TouchableOpacity>
-      <TouchableOpacity style={rowStyles.editBtn} onPress={confirmDelete}>
+      <TouchableOpacity style={rowStyles.editBtn} onPress={confirmDelete} accessible accessibilityRole="button" accessibilityLabel="Elimina contatto">
         <MaterialIcons name="delete-outline" size={18} color="#EF4444" />
       </TouchableOpacity>
     </View>
@@ -421,7 +421,7 @@ export default function PhonebookScreen() {
           autoCorrect={false}
         />
         {!!search && (
-          <TouchableOpacity onPress={() => setSearch('')}>
+          <TouchableOpacity onPress={() => setSearch('')} accessible accessibilityRole="button" accessibilityLabel="Cancella ricerca">
             <MaterialIcons name="close" size={18} color={colors.textSub} />
           </TouchableOpacity>
         )}
