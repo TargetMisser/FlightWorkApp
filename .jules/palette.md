@@ -1,0 +1,3 @@
+## 2025-05-14 - Enhancing Custom Gestures with Haptics and Accessibility
+**Learning:** Custom gesture interactions, like swiping on a flight card, can be opaque to users if they lack sensory feedback (haptics) or a programmatic way to be triggered (accessibility actions). Adding haptics provides a tactile confirmation of threshold crossing, while accessibility actions make the same functionality available to screen reader users.
+**Action:** When implementing custom PanResponders, always include haptic feedback for threshold crossing and define equivalent accessibilityActions for non-visual navigation.
