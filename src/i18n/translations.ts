@@ -121,6 +121,7 @@ const it = {
   contactNoResults: 'Nessun risultato',
   // Password
   passwordTitle: 'Password', passwordAdd: 'Aggiungi',
+  passwordShow: 'Mostra password', passwordHide: 'Nascondi password',
   passwordModalNew: 'Nuova voce', passwordModalEdit: 'Modifica voce',
   passwordNameLabel: 'Nome *', passwordNamePh: 'es. Portale HR EasyJet',
   passwordUsernameLabel: 'Username / Email', passwordUsernamePh: 'es. mario.rossi@easyjet.com',
@@ -279,6 +280,7 @@ const en: typeof it = {
   contactNoResults: 'No results',
   // Password
   passwordTitle: 'Password', passwordAdd: 'Add',
+  passwordShow: 'Show password', passwordHide: 'Hide password',
   passwordModalNew: 'New entry', passwordModalEdit: 'Edit entry',
   passwordNameLabel: 'Name *', passwordNamePh: 'e.g. EasyJet HR Portal',
   passwordUsernameLabel: 'Username / Email', passwordUsernamePh: 'e.g. mario.rossi@easyjet.com',
