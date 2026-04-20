@@ -51,7 +51,6 @@ const EMPTY_MODAL: ModalState = {
 // ─── PIN Overlay ─────────────────────────────────────────────────────────────
 function PinOverlay({ onUnlock, onCancel, title }: { onUnlock: (pin: string) => void; onCancel?: () => void; title: string }) {
   const { colors } = useAppTheme();
-  const { t } = useLanguage();
   const s = useMemo(() => makePinStyles(colors), [colors]);
   const [digits, setDigits] = useState('');
 
@@ -103,6 +102,7 @@ function PinOverlay({ onUnlock, onCancel, title }: { onUnlock: (pin: string) => 
 // ─── Password Row ─────────────────────────────────────────────────────────────
 function PasswordRowComponent({ item, onEdit, onDelete }: { item: PasswordEntry; onEdit: () => void; onDelete: () => void }) {
   const { colors } = useAppTheme();
+  const { t } = useLanguage();
   const s = useMemo(() => makeRowStyles(colors), [colors]);
   const [revealed, setRevealed] = useState(false);
 
@@ -113,7 +113,7 @@ function PasswordRowComponent({ item, onEdit, onDelete }: { item: PasswordEntry;
         {item.username ? <Text style={s.username}>{item.username}</Text> : null}
         <View style={s.pwRow}>
           <Text style={s.pw}>{revealed ? item.password : '••••••••'}</Text>
-          <TouchableOpacity onPress={() => setRevealed(r => !r)} style={s.eyeBtn}>
+          <TouchableOpacity onPress={() => setRevealed(r => !r)} style={s.eyeBtn} accessible accessibilityRole="button" accessibilityLabel={revealed ? t('passwordHide') : t('passwordShow')}>
             <MaterialIcons name={revealed ? 'visibility-off' : 'visibility'} size={16} color={colors.textSub} />
           </TouchableOpacity>
         </View>
@@ -136,8 +136,8 @@ const PasswordRow = React.memo(PasswordRowComponent);
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function PasswordScreen() {
-  const { colors } = useAppTheme();
   const { t } = useLanguage();
+  const { colors } = useAppTheme();
   const s = useMemo(() => makeStyles(colors), [colors]);
 
   const [entries, setEntries]       = useState<PasswordEntry[]>([]);
@@ -330,7 +330,7 @@ export default function PasswordScreen() {
                 secureTextEntry={!showPw}
                 autoCapitalize="none"
               />
-              <TouchableOpacity onPress={() => setShowPw(p => !p)} style={s.eyeModal}>
+              <TouchableOpacity onPress={() => setShowPw(p => !p)} style={s.eyeModal} accessible accessibilityRole="button" accessibilityLabel={showPw ? t('passwordHide') : t('passwordShow')}>
                 <MaterialIcons name={showPw ? 'visibility-off' : 'visibility'} size={20} color={colors.textSub} />
               </TouchableOpacity>
             </View>
