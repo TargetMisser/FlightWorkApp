@@ -1,0 +1,4 @@
+## 2024-05-24 - Fix Insecure Password Storage
+**Vulnerability:** User passwords were saved to `AsyncStorage` in plain text.
+**Learning:** `AsyncStorage` is unencrypted and exposes sensitive data on rooted/jailbroken devices or via app backup extraction. However, `SecureStore` on Android has a 2048-byte limit, which is too small to store an entire list of passwords in one go.
+**Prevention:** Always use `SecureStore` (or equivalent encrypted storage) for sensitive secrets. When dealing with lists of sensitive objects that may exceed the 2048-byte limit, implement a hybrid storage pattern: store the metadata list in `AsyncStorage` with secrets masked (e.g., `password: '***'`), and store each actual secret individually in `SecureStore` using row-specific dynamic keys (e.g., `aerostaff_pwd_${id}`).
