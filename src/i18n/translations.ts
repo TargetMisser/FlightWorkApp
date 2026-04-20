@@ -106,6 +106,10 @@ const it = {
   flightNotifMsg1: 'Programmate {count} notifiche: arrivi voli (15 min prima) + fine turno.',
   flightNotifMsg0: 'Nessun volo futuro trovato, ma riceverai la notifica di fine turno.',
   flightNotifAccessEnable: 'Attiva notifiche voli', flightNotifAccessDisable: 'Disattiva notifiche voli',
+  flightAccessibilityPin: 'Pinna volo', flightAccessibilityUnpin: 'Rimuovi pin volo',
+  flightAccessibilityPinHint: 'Aggiunge il volo alle notifiche e alla visualizzazione rapida',
+  flightAccessibilityUnpinHint: 'Rimuove il volo dalle notifiche e dalla visualizzazione rapida',
+  flightFrom: 'da', flightTo: 'per',
   // Phonebook
   phonebookTitle: 'Rubrica', contactAdd: 'Aggiungi',
   contactSearch: 'Cerca nome o numero...', contactAll: 'Tutti',
@@ -264,6 +268,10 @@ const en: typeof it = {
   flightNotifMsg1: '{count} notifications scheduled: flight arrivals (15 min before) + end of shift.',
   flightNotifMsg0: 'No future flights found, but you will receive the end-of-shift notification.',
   flightNotifAccessEnable: 'Enable flight notifications', flightNotifAccessDisable: 'Disable flight notifications',
+  flightAccessibilityPin: 'Pin flight', flightAccessibilityUnpin: 'Unpin flight',
+  flightAccessibilityPinHint: 'Adds the flight to notifications and quick view',
+  flightAccessibilityUnpinHint: 'Removes the flight from notifications and quick view',
+  flightFrom: 'from', flightTo: 'to',
   // Phonebook
   phonebookTitle: 'Phonebook', contactAdd: 'Add',
   contactSearch: 'Search name or number...', contactAll: 'All',
