@@ -31,11 +31,11 @@ export default function ShiftScreen() {
         setOcrText('');
         
         const base64List = result.assets.map(a => `data:image/jpeg;base64,${a.base64}`);
-        const base64Json = JSON.stringify(base64List).replace(/'/g, "\\'");
+        const base64Json = JSON.stringify(base64List);
         
         const jsCode = `
           if (window.runTesseract) {
-            window.runTesseract('${base64Json}');
+            window.runTesseract(${JSON.stringify(base64Json)});
           } else {
             window.ReactNativeWebView.postMessage(JSON.stringify({ success: false, error: "Motore OCR non pronto." }));
           }
