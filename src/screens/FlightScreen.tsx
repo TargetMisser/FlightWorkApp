@@ -539,8 +539,10 @@ export default function FlightScreen() {
 
   const userShift = activeDay === 'today' ? shifts.today : shifts.tomorrow;
   const selectedDate = activeDay === 'today' ? new Date() : (() => { const d = new Date(); d.setDate(d.getDate() + 1); return d; })();
-  const isSameDay = (d1: Date, d2: Date) =>
-    d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
+
+  // Calculate day boundaries in seconds to avoid instantiating new Date objects during filter
+  const startOfDayTs = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate()).getTime() / 1000;
+  const endOfDayTs = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate() + 1).getTime() / 1000;
 
   const currentData = (() => {
     const source = filterMode === 'all'
@@ -550,7 +552,7 @@ export default function FlightScreen() {
       const ts = activeTab === 'arrivals'
         ? item.flight?.time?.scheduled?.arrival
         : item.flight?.time?.scheduled?.departure;
-      return ts && isSameDay(new Date(ts * 1000), selectedDate);
+      return ts && ts >= startOfDayTs && ts < endOfDayTs;
     });
   })();
 
