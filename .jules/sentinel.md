@@ -1,0 +1,4 @@
+## 2025-02-17 - React Native WebView XSS via injectJavaScript
+**Vulnerability:** Constructing stringified JavaScript payloads and inserting them directly via `WebView.injectJavaScript` inside `HomeScreen.tsx` and `ShiftScreen.tsx` (e.g. `window.runTesseract(${JSON.stringify(base64Json)});`) is susceptible to Cross-Site Scripting (XSS).
+**Learning:** `injectJavaScript` behaves like `eval()` in a web context. If the data being injected isn't strictly controlled or escaped properly, a malicious payload inside an image base64 sequence or filename could theoretically escape the JSON string context and execute arbitrary JavaScript.
+**Prevention:** Always use the postMessage API bridge for communicating between the React Native layer and the WebView. Establish event listeners (`window.addEventListener('message', ...)`) in the WebView's HTML template and invoke `webViewRef.current.postMessage(data)` from React Native.
