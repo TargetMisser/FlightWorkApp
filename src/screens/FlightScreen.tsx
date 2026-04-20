@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import * as Calendar from 'expo-calendar';
 import * as Notifications from 'expo-notifications';
+import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../context/ThemeContext';
@@ -70,14 +71,24 @@ function SwipeableFlightCardComponent({
   const translateX = useRef(new Animated.Value(0)).current;
   const onToggleRef = useRef(onToggle);
   onToggleRef.current = onToggle;
+  const hasTriggeredHaptic = useRef(false);
 
   const panResponder = useMemo(() => PanResponder.create({
     onMoveShouldSetPanResponder: (_, g) =>
       Math.abs(g.dx) > 15 && Math.abs(g.dx) > Math.abs(g.dy) * 1.5,
     onPanResponderMove: (_, g) => {
-      if (g.dx < 0) translateX.setValue(g.dx);
+      if (g.dx < 0) {
+        translateX.setValue(g.dx);
+        if (g.dx < -SWIPE_THRESHOLD && !hasTriggeredHaptic.current) {
+          Haptics.selectionAsync();
+          hasTriggeredHaptic.current = true;
+        } else if (g.dx >= -SWIPE_THRESHOLD && hasTriggeredHaptic.current) {
+          hasTriggeredHaptic.current = false;
+        }
+      }
     },
     onPanResponderRelease: (_, g) => {
+      hasTriggeredHaptic.current = false;
       if (g.dx < -SWIPE_THRESHOLD) {
         Animated.timing(translateX, { toValue: -SWIPE_THRESHOLD, duration: 100, useNativeDriver: true }).start(() => {
           onToggleRef.current();
@@ -88,6 +99,7 @@ function SwipeableFlightCardComponent({
       }
     },
     onPanResponderTerminate: () => {
+      hasTriggeredHaptic.current = false;
       Animated.spring(translateX, { toValue: 0, useNativeDriver: true }).start();
     },
   }), []);
@@ -504,6 +516,7 @@ export default function FlightScreen() {
       const tab = activeTab;
       await AsyncStorage.setItem(PINNED_FLIGHT_KEY, JSON.stringify({ ...item, _pinTab: tab, _pinnedAt: Date.now() }));
       setPinnedFlightId(id);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       try { await schedulePinnedNotifications(item, tab, locale); } catch (e) { if (__DEV__) console.warn('[pinnedNotif]', e); }
       // Send to watch
       if (WearDataSender) {
@@ -533,6 +546,7 @@ export default function FlightScreen() {
       await AsyncStorage.removeItem(PINNED_FLIGHT_KEY);
       try { await cancelPinnedNotifications(); } catch (e) { if (__DEV__) console.warn('[cancelPinNotif]', e); }
       setPinnedFlightId(null);
+      Haptics.selectionAsync();
       if (WearDataSender) WearDataSender.clearPinnedFlight();
     } catch (e) { if (__DEV__) console.error('[unpin]', e); }
   }, []);
@@ -790,7 +804,14 @@ export default function FlightScreen() {
         {/* Arrivi / Partenze */}
         <View style={s.segment}>
           {(['arrivals', 'departures'] as const).map(tab => (
-            <TouchableOpacity key={tab} style={[s.segBtn, activeTab === tab && s.segBtnActive]} onPress={() => setActiveTab(tab)}>
+            <TouchableOpacity
+              key={tab}
+              style={[s.segBtn, activeTab === tab && s.segBtnActive]}
+              onPress={() => {
+                setActiveTab(tab);
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              }}
+            >
               <Text style={[s.segBtnText, activeTab === tab && s.segBtnTextActive]}>{tab === 'arrivals' ? t('flightArrivals') : t('flightDepartures')}</Text>
             </TouchableOpacity>
           ))}
@@ -798,7 +819,14 @@ export default function FlightScreen() {
         {/* Oggi / Domani */}
         <View style={s.segment}>
           {(['today', 'tomorrow'] as const).map(d => (
-            <TouchableOpacity key={d} style={[s.segBtn, activeDay === d && s.segBtnActive]} onPress={() => setActiveDay(d)}>
+            <TouchableOpacity
+              key={d}
+              style={[s.segBtn, activeDay === d && s.segBtnActive]}
+              onPress={() => {
+                setActiveDay(d);
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              }}
+            >
               <Text style={[s.segBtnText, activeDay === d && s.segBtnTextActive]}>{d === 'today' ? t('flightToday') : t('flightTomorrow')}</Text>
             </TouchableOpacity>
           ))}
