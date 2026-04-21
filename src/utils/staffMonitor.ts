@@ -192,12 +192,29 @@ const FETCH_HEADERS = {
   'Referer': 'https://servizi.pisa-airport.com/staffMonitor/staffMonitor.html',
 };
 
+// Tomcat JSESSIONID captured from D responses and forwarded to A requests.
+// The arrivals servlet likely requires an active session; departures may not.
+let _sessionCookie: string | null = null;
+
+function captureSessionCookie(resp: Response): void {
+  const raw = resp.headers.get('set-cookie') ?? '';
+  const m = /JSESSIONID=([^;,\s]+)/i.exec(raw);
+  if (m) {
+    _sessionCookie = `JSESSIONID=${m[1]}`;
+    console.warn('[staffMonitor] JSESSIONID captured');
+  }
+}
+
 async function tryFetch(url: string, timeoutMs: number): Promise<string> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const resp = await fetch(url, { signal: controller.signal, headers: FETCH_HEADERS });
+    const headers: Record<string, string> = { ...FETCH_HEADERS };
+    if (_sessionCookie) headers['Cookie'] = _sessionCookie;
+
+    const resp = await fetch(url, { signal: controller.signal, headers });
     clearTimeout(timer);
+    captureSessionCookie(resp);
     const body = await resp.text();
     if (!resp.ok || body.length < 200) throw new Error(`${resp.status} len=${body.length}`);
     return body;
@@ -294,13 +311,24 @@ export async function fetchStaffMonitorData(nature: 'D' | 'A'): Promise<StaffMon
         }
       }
     } else {
-      // Arrivals: race all nature=A variants in parallel — fastest wins
-      html = await raceUrls([...primaryUrls, ...arrivalExtras], 30_000) ?? '';
+      // Prime session cookie via a quick D request if we don't have one yet.
+      // The Tomcat arrivals servlet likely requires an active JSESSIONID.
+      if (!_sessionCookie) {
+        try {
+          await tryFetch(`${base}?trans=true&nature=D`, 12_000);
+          console.warn('[staffMonitor] session primed for A:', _sessionCookie ?? 'none');
+        } catch {
+          console.warn('[staffMonitor] session prime failed, proceeding anyway');
+        }
+      }
+
+      // Race all nature=A variants in parallel — fastest wins
+      html = await raceUrls([...primaryUrls, ...arrivalExtras], 40_000) ?? '';
       if (html) {
-        _lastDebugStatus = `A:200 len=${html.length}`;
+        _lastDebugStatus = `A:200 len=${html.length} cookie=${_sessionCookie ? 'yes' : 'no'}`;
         console.warn(`[staffMonitor] A parallel race succeeded len=${html.length}`);
       } else {
-        _lastDebugStatus = `A:ERR all ${primaryUrls.length + arrivalExtras.length} URLs failed`;
+        _lastDebugStatus = `A:ERR all ${primaryUrls.length + arrivalExtras.length} URLs failed cookie=${_sessionCookie ? 'yes' : 'no'}`;
         console.warn(`[staffMonitor] ${_lastDebugStatus}`);
       }
     }
