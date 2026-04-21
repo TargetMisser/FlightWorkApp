@@ -84,7 +84,7 @@ export default function DrawerMenu({ visible, onClose, onSelect }: Props) {
               style={styles.headerGradient}
             >
               <AeroStaffLogo variant="large" monochrome />
-              <TouchableOpacity onPress={onClose} style={styles.closeIconBtn}>
+              <TouchableOpacity accessible={true} accessibilityRole="button" accessibilityLabel={t('drawerClose')} onPress={onClose} style={styles.closeIconBtn}>
                 <MaterialIcons name="close" size={20} color="rgba(255,255,255,0.7)" />
               </TouchableOpacity>
             </LinearGradient>
