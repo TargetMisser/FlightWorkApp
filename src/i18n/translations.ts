@@ -138,6 +138,7 @@ const it = {
   pinVerifyErr: 'Impossibile verificare il PIN. Riprova.',
   pinAccessEnable: 'Attiva protezione PIN', pinAccessDisable: 'Disattiva protezione PIN',
   // DrawerMenu
+  appBarBack: 'Indietro', appBarMenu: 'Menu', drawerClose: 'Chiudi menu',
   drawerNotepadTitle: 'Blocco Note',
   drawerNotepadSub: 'Note personali',
   drawerPhonebookTitle: 'Rubrica',
@@ -295,6 +296,7 @@ const en: typeof it = {
   pinDisableBtn: 'Disable', pinErrMsg: 'Could not set PIN. Try again.',
   pinVerifyErr: 'Could not verify PIN. Try again.',
   pinAccessEnable: 'Enable PIN protection', pinAccessDisable: 'Disable PIN protection',
+  appBarBack: 'Back', appBarMenu: 'Menu', drawerClose: 'Close menu',
   // DrawerMenu
   drawerNotepadTitle: 'Notepad',
   drawerNotepadSub: 'Personal notes',
