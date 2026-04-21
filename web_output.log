@@ -1,0 +1,23 @@
+
+> flightworkapp@1.1.0 web /app
+> expo start --web
+
+Starting project at /app
+Starting Metro Bundler
+The following packages should be updated for best compatibility with the installed expo version:
+  @react-native-picker/picker@2.11.4 - expected version: 2.11.1
+  react-native-webview@13.16.1 - expected version: 13.15.0
+Your project may not work correctly until you install the expected versions of the packages.
+Waiting on http://localhost:8081
+Logs for your project will appear below.
+Web ./index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web ./index.ts ▓▓▓▓▓▓▓▓░░░░░░░░ 54.7% (118/205)
+Web ./index.ts ▓▓▓▓▓▓▓▓▓▓▓▓░░░░ 78.6% (468/528)
+Web Bundled 8877ms index.ts (664 modules)
+ LOG  [web] Logs will appear in the browser console
+Web ./index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 40ms index.ts (1 module)
+ LOG  [web] Logs will appear in the browser console
+Web ./index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 37ms index.ts (1 module)
+ LOG  [web] Logs will appear in the browser console

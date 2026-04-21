@@ -1,0 +1,3 @@
+## 2025-05-14 - Haptic Feedback in Continuous Gestures
+**Learning:** In 'PanResponder' implementations within functional components, store dynamic callbacks (like 'onToggle') in a 'useRef' to provide the responder with access to the latest state/functions without re-instantiating the responder object. When implementing haptic feedback with 'expo-haptics' in continuous gestures (like 'PanResponder'), use a 'useRef' toggle (e.g., 'hasTriggeredHaptic') to ensure the feedback triggers only once when a threshold is crossed.
+**Action:** Use 'useRef' for both callbacks and haptic triggers in gesture-based components to ensure performance and prevent multiple haptic triggers during a single gesture.
