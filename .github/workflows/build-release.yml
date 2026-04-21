@@ -124,14 +124,15 @@ jobs:
             - **Aggiornamento automatico voli**: i dati FR24 ora si ricaricano ogni 2 minuti senza riaprire l'app
             - **Duplicati voli**: chiave di merge stabilizzata su `numeroVolo_tsPartenza` (prima usava `identification.id` che FR24 a volte omette)
 
-            ### Bug fix – StaffMonitor stand / gate
+            ### Bug fix – StaffMonitor stand / gate / arrivi
             - **Colonne non rilevate**: il parser non richiedeva più la presenza di colonne stand/gate/belt per avviare il parsing; prima saltava tutte le righe
             - **Nomi handler nella colonna stand**: `cell()` ora estrae solo il primo token alfanumerico scartando tutto ciò che segue (es. `17◆ Federico`, `674 RICCARDO F`)
             - **Numeri di telefono come stand**: `isPhoneOrJunk` ora individua sequenze di 8+ cifre ovunque nella stringa
             - **Colonna "ADDETTO STAND" rilevata come stand**: ora si usa una word-boundary per evitare falsi positivi
-            - **Arrivi sempre in errore (AbortError)**: 7 varianti URL con `nature=A` vengono ora inviate in parallelo; la prima risposta valida vince in ≤30s. Cache AsyncStorage da 20 minuti
+            - **Arrivi in parallelo + cache**: 7 varianti URL con `nature=A` inviate simultaneamente; prima risposta valida vince in ≤40s. Cache AsyncStorage 20 min per sopravvivere ai cali di rete
+            - **Sessione Tomcat (JSESSIONID)**: il cookie di sessione viene catturato dalla risposta D e inoltrato alle richieste A; il servlet arrivi probabilmente richiede una sessione attiva
             - **Numeri volo corrotti negli arrivi**: rimossi URL di fallback senza `nature=A`
-            - **Timeout partenze regredito**: ripristinato timeout a 25s
+            - **Timeout partenze**: ripristinato a 25s (il server Pisa è lento)
 
             Scarica `AeroStaffPro-${{ steps.meta.outputs.tag }}.apk` e installalo sul tuo dispositivo Android.
           files: ${{ env.apk }}
