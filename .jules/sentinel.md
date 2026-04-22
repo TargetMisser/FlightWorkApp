@@ -1,0 +1,4 @@
+## 2026-04-20 - Insecure Password Storage Migration
+**Vulnerability:** User passwords were saved in plain text in `AsyncStorage`, an unencrypted storage mechanism.
+**Learning:** The entire list of passwords was originally stored in `AsyncStorage` because `SecureStore` has a 2048-byte limit on Android, which makes storing large JSON arrays of passwords fail. This led to storing secrets in plain text as a naive workaround.
+**Prevention:** Use a hybrid storage pattern: lists of metadata are stored in `AsyncStorage` with secrets masked (e.g., `password: '***'`), and the actual secrets are stored individually in `SecureStore` using row-specific dynamic keys (e.g., `aerostaff_pwd_${id}`). When migrating, always overwrite the legacy unencrypted data with masked values immediately to prevent plain text persistence.
