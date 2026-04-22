@@ -88,18 +88,11 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
-      - name: Generate debug keystore (used by release signing config)
+      - name: Restore stable keystore
         run: |
-          mkdir -p android/app
-          keytool -genkey -v \
-            -keystore android/app/debug.keystore \
-            -storepass android \
-            -alias androiddebugkey \
-            -keypass android \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -dname "CN=Android Debug,O=Android,C=US"
+          mkdir -p android/app "$HOME/.android"
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/app/debug.keystore
+          cp android/app/debug.keystore "$HOME/.android/debug.keystore"
 
       - name: Build release APK (standalone, JS bundle embedded)
         run: |
@@ -116,8 +109,8 @@ jobs:
         run: |
           APK=$(find android/app/build/outputs/apk/release -name "*.apk" -type f | head -1)
           echo "Found: $APK"
-          VERSION=${{ steps.meta.outputs.version }}
-          DEST="AeroStaffPro-v${VERSION}.apk"
+          TAG=${{ steps.meta.outputs.tag }}
+          DEST="AeroStaffPro-${TAG}.apk"
           mkdir -p artifacts
           cp "$APK" "artifacts/$DEST"
           echo "apk_path=artifacts/$DEST" >> "$GITHUB_OUTPUT"
@@ -127,7 +120,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AeroStaffPro-v${{ steps.meta.outputs.version }}
+          name: AeroStaffPro-${{ steps.meta.outputs.tag }}
           path: ${{ steps.apk.outputs.apk_path }}
 
   release:
@@ -138,29 +131,23 @@ jobs:
       - name: Download APK artifact
         uses: actions/download-artifact@v4
         with:
-          name: AeroStaffPro-v${{ needs.build.outputs.version }}
+          name: AeroStaffPro-${{ needs.build.outputs.tag }}
           path: artifacts/
 
       - name: Create or update GitHub release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.build.outputs.tag }}
-          name: "AeroStaff Pro ${{ needs.build.outputs.version }} — Liquid Glass + Orange"
+          name: "AeroStaff Pro ${{ needs.build.outputs.tag }}"
           body: |
-            ## 🍊 AeroStaff Pro ${{ needs.build.outputs.version }}
+            ## AeroStaff Pro ${{ needs.build.outputs.tag }}
 
-            ### Design Overhaul: Liquid Glass + Orange
-            - Nuovo colore primario arancione `#F47B16`
-            - Stile iOS 26 liquid glass (BlurView + shimmer cards)
-            - Nuovo logo AeroStaff PRO con gradiente arancione
-            - GlassCard component con fallback Android
-            - Tab bar, AppBar e DrawerMenu aggiornati
-            - Tutti gli hardcoded blue rimossi
+            APK standalone generato dalla linea principale aggiornata.
 
             ### ✅ APK Standalone
             Bundle JavaScript incorporato — funziona senza Metro dev server.
 
             ### Download
-            Installa `AeroStaffPro-v${{ needs.build.outputs.version }}.apk` sul tuo dispositivo Android.
-          prerelease: true
+            Installa `AeroStaffPro-${{ needs.build.outputs.tag }}.apk` sul tuo dispositivo Android.
+          prerelease: false
           files: artifacts/*.apk
