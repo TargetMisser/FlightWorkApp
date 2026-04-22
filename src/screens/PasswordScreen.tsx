@@ -150,7 +150,25 @@ export default function PasswordScreen() {
   useEffect(() => {
     (async () => {
       const raw = await AsyncStorage.getItem(PASSWORDS_KEY);
-      if (raw) setEntries(JSON.parse(raw));
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        let migrated = false;
+        const loaded = await Promise.all(parsed.map(async (e: PasswordEntry) => {
+          if (e.password !== '***') {
+            await SecureStore.setItemAsync(`aerostaff_pwd_${e.id}`, e.password);
+            migrated = true;
+            return e;
+          } else {
+            const pwd = await SecureStore.getItemAsync(`aerostaff_pwd_${e.id}`);
+            return { ...e, password: pwd || '' };
+          }
+        }));
+        setEntries(loaded);
+        if (migrated) {
+          const masked = loaded.map(e => ({ ...e, password: '***' }));
+          await AsyncStorage.setItem(PASSWORDS_KEY, JSON.stringify(masked));
+        }
+      }
       const enabled = await AsyncStorage.getItem(PIN_ENABLED_KEY);
       const isEnabled = enabled === 'true';
       setPinEnabled(isEnabled);
@@ -160,7 +178,9 @@ export default function PasswordScreen() {
 
   const persist = useCallback(async (next: PasswordEntry[]) => {
     setEntries(next);
-    await AsyncStorage.setItem(PASSWORDS_KEY, JSON.stringify(next));
+    const masked = next.map(e => ({ ...e, password: '***' }));
+    await AsyncStorage.setItem(PASSWORDS_KEY, JSON.stringify(masked));
+    await Promise.all(next.map(e => SecureStore.setItemAsync(`aerostaff_pwd_${e.id}`, e.password)));
   }, []);
 
   // PIN toggle
@@ -243,9 +263,10 @@ export default function PasswordScreen() {
       { text: 'Annulla', style: 'cancel' },
       { text: 'Elimina', style: 'destructive', onPress: async () => {
         await persist(entries.filter(e => e.id !== id));
+        await SecureStore.deleteItemAsync(`aerostaff_pwd_${id}`).catch(() => {});
       }},
     ]);
-  }, [entries, persist]);
+  }, [entries, persist, t]);
 
   // PIN overlays (setup and unlock)
   if (pinMode === 'unlock') {
