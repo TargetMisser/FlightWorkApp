@@ -119,6 +119,7 @@ const it = {
   contactEmptyTitle: 'Rubrica vuota',
   contactEmptyHint: 'Tocca "Aggiungi" per inserire il primo contatto',
   contactNoResults: 'Nessun risultato',
+  contactCall: 'Chiama', contactEditBtn: 'Modifica', contactDeleteBtn: 'Elimina', contactClearSearch: 'Cancella ricerca',
   // Password
   passwordTitle: 'Password', passwordAdd: 'Aggiungi',
   passwordModalNew: 'Nuova voce', passwordModalEdit: 'Modifica voce',
@@ -277,6 +278,7 @@ const en: typeof it = {
   contactEmptyTitle: 'Empty phonebook',
   contactEmptyHint: 'Tap "Add" to insert the first contact',
   contactNoResults: 'No results',
+  contactCall: 'Call', contactEditBtn: 'Edit', contactDeleteBtn: 'Delete', contactClearSearch: 'Clear search',
   // Password
   passwordTitle: 'Password', passwordAdd: 'Add',
   passwordModalNew: 'New entry', passwordModalEdit: 'Edit entry',
