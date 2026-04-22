@@ -111,8 +111,8 @@ android {
         applicationId 'com.anonymous.FlightWorkApp'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 12
-        versionName "2.6.1"
+        versionCode 13
+        versionName "2.6.3"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
     }

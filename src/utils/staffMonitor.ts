@@ -11,9 +11,25 @@ type StaffMonitorCell = {
   text: string;
 };
 
+type HeaderColumns = {
+  flight?: number;
+  stand?: number;
+  checkin?: number;
+  gate?: number;
+  belt?: number;
+};
+
+type StaffMonitorColumnOffsets = {
+  stand?: number;
+  checkin?: number;
+  gate?: number;
+  belt?: number;
+};
+
 /** Normalize flight number: FR07146 → FR7146, FR00770 → FR770 */
 export function normalizeFlightNumber(raw: string): string {
-  return raw.trim().toUpperCase().replace(/^([A-Z]{2,3})0+([0-9])/, '$1$2');
+  const compact = raw.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return compact.replace(/^([A-Z]{2,3})0+([0-9])/, '$1$2');
 }
 
 function stripHTML(html: string): string {
@@ -50,16 +66,93 @@ function getCellText(cells: StaffMonitorCell[], index: number): string | undefin
   return value ? value : undefined;
 }
 
+function normalizeHeaderToken(value: string): string {
+  return value.toUpperCase().replace(/[^A-Z]/g, '');
+}
+
+function extractColumnsFromHeader(cells: StaffMonitorCell[]): HeaderColumns {
+  const columns: HeaderColumns = {};
+
+  for (let i = 0; i < cells.length; i++) {
+    const token = normalizeHeaderToken(cells[i].text);
+    if (!token) continue;
+
+    if (token === 'VOLOFLIGHT' || token === 'FLIGHT' || token === 'VOLO') {
+      columns.flight = i;
+      continue;
+    }
+    if (token === 'STAND') {
+      columns.stand = i;
+      continue;
+    }
+    if (token === 'CHECKIN' || token === 'CHECKINDESK' || token === 'CHECKINDESKS') {
+      columns.checkin = i;
+      continue;
+    }
+    if (token === 'GATE') {
+      columns.gate = i;
+      continue;
+    }
+    if (token === 'BELT' || token === 'NASTROBELT' || token === 'NASTRO') {
+      columns.belt = i;
+      continue;
+    }
+  }
+
+  return columns;
+}
+
+function hasAtLeastOneColumn(columns: HeaderColumns, nature: 'D' | 'A'): boolean {
+  if (nature === 'D') {
+    return columns.stand !== undefined || columns.checkin !== undefined || columns.gate !== undefined;
+  }
+  return columns.stand !== undefined || columns.belt !== undefined;
+}
+
+function toOffsets(columns: HeaderColumns): StaffMonitorColumnOffsets {
+  if (columns.flight === undefined) return {};
+  const offsets: StaffMonitorColumnOffsets = {};
+  if (columns.stand !== undefined) offsets.stand = columns.stand - columns.flight;
+  if (columns.checkin !== undefined) offsets.checkin = columns.checkin - columns.flight;
+  if (columns.gate !== undefined) offsets.gate = columns.gate - columns.flight;
+  if (columns.belt !== undefined) offsets.belt = columns.belt - columns.flight;
+  return offsets;
+}
+
+function isPhoneOrJunk(value: string): boolean {
+  // Reject anything that looks like a phone number (8+ digits anywhere).
+  if ((value.match(/\d/g) || []).length >= 8) return true;
+  return false;
+}
+
+function sanitizeStandGateBelt(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  const upper = value.toUpperCase().trim();
+  if (!upper || isPhoneOrJunk(upper)) return undefined;
+
+  const tokenWithDigits = upper.match(/\b[A-Z]*\d+[A-Z]*\b/);
+  if (tokenWithDigits) return tokenWithDigits[0];
+
+  const shortAlphaToken = upper.match(/\b[A-Z]\b/);
+  return shortAlphaToken ? shortAlphaToken[0] : undefined;
+}
+
+function sanitizeCheckin(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  const clean = value
+    .toUpperCase()
+    .replace(/[^0-9A-Z\s\-/]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!clean || isPhoneOrJunk(clean) || !/\d/.test(clean)) return undefined;
+  return clean;
+}
+
 /**
  * Fetch and parse stand/gate/check-in data from the Pisa Airport staffMonitor.
  *
- * The live staff monitor currently includes a logo column before the flight
- * number, but we key off the `clsFlight` cell so the parser survives either
- * layout.
- *
- * Relative to the flight-number cell:
- * Departures: +11=STAND, +12=CHECKIN, +13=GATE
- * Arrivals:   +10=STAND, +11=BELT
+ * We resolve columns from header labels when available, with an offset fallback
+ * from the flight-number cell for layout variants.
  */
 export async function fetchStaffMonitorData(nature: 'D' | 'A'): Promise<StaffMonitorFlight[]> {
   try {
@@ -74,35 +167,46 @@ export async function fetchStaffMonitorData(nature: 'D' | 'A'): Promise<StaffMon
     const results: StaffMonitorFlight[] = [];
     const trRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
     let match: RegExpExecArray | null;
+    let offsets: StaffMonitorColumnOffsets = {};
 
     while ((match = trRegex.exec(html)) !== null) {
       const rowHTML = match[1];
-      // Only rows that carry a flight number cell (match clsFlight as a substring of the class attribute)
-      if (!/class\s*=\s*["'][^"']*clsFlight[^"']*["']/i.test(rowHTML)) continue;
 
       const cells = extractTDCells(rowHTML);
       if (cells.length < 2) continue;
 
-      const flightCellIndex = cells.findIndex(cell => /\bclsFlight\b/i.test(cell.className));
+      const headerColumns = extractColumnsFromHeader(cells);
+      if (headerColumns.flight !== undefined || hasAtLeastOneColumn(headerColumns, nature)) {
+        offsets = { ...offsets, ...toOffsets(headerColumns) };
+      }
+
+      const flightCellIndexFromClass = cells.findIndex(cell => /\bclsFlight\b/i.test(cell.className));
+      const flightCellIndex = flightCellIndexFromClass;
       if (flightCellIndex === -1) continue;
 
-      const rawFlight = cells[flightCellIndex]?.text;
+      const rawFlight = getCellText(cells, flightCellIndex);
       if (!rawFlight) continue;
 
       const flightNumber = normalizeFlightNumber(rawFlight);
+      if (!flightNumber || flightNumber === 'VOLOFLIGHT') continue;
 
       if (nature === 'D') {
+        const standIdx = flightCellIndex + (offsets.stand ?? 11);
+        const checkinIdx = flightCellIndex + (offsets.checkin ?? 12);
+        const gateIdx = flightCellIndex + (offsets.gate ?? 13);
         results.push({
           flightNumber,
-          stand: getCellText(cells, flightCellIndex + 11),
-          checkin: getCellText(cells, flightCellIndex + 12),
-          gate: getCellText(cells, flightCellIndex + 13),
+          stand: sanitizeStandGateBelt(getCellText(cells, standIdx)),
+          checkin: sanitizeCheckin(getCellText(cells, checkinIdx)),
+          gate: sanitizeStandGateBelt(getCellText(cells, gateIdx)),
         });
       } else {
+        const standIdx = flightCellIndex + (offsets.stand ?? 10);
+        const beltIdx = flightCellIndex + (offsets.belt ?? 11);
         results.push({
           flightNumber,
-          stand: getCellText(cells, flightCellIndex + 10),
-          belt: getCellText(cells, flightCellIndex + 11),
+          stand: sanitizeStandGateBelt(getCellText(cells, standIdx)),
+          belt: sanitizeStandGateBelt(getCellText(cells, beltIdx)),
         });
       }
     }
