@@ -4,6 +4,7 @@ import {
   KeyboardAvoidingView, Platform,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Haptics from 'expo-haptics';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -75,6 +76,7 @@ export default function NotepadScreen() {
   const save = useCallback(async () => {
     await AsyncStorage.setItem(STORAGE_KEY, text);
     setSaved(true);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   }, [text]);
 
   const clear = useCallback(() => {
@@ -109,12 +111,20 @@ export default function NotepadScreen() {
           <Text style={s.title}>{t('notepadTitle')}</Text>
         </View>
         <View style={s.actions}>
-          <TouchableOpacity onPress={clear} style={s.iconBtn}>
+          <TouchableOpacity
+            onPress={clear}
+            style={s.iconBtn}
+            accessibilityLabel={t('notepadAccessibilityClear')}
+            accessibilityRole="button"
+          >
             <MaterialIcons name="delete-outline" size={22} color="#EF4444" />
           </TouchableOpacity>
           <TouchableOpacity
             onPress={save}
             style={[s.saveBtn, saved && s.saveBtnDim]}
+            accessibilityLabel={t('notepadAccessibilitySave')}
+            accessibilityRole="button"
+            disabled={saved}
           >
             <MaterialIcons name="save" size={18} color="#fff" />
             <Text style={s.saveTxt}>{saved ? t('notepadSaved') : t('notepadSave')}</Text>

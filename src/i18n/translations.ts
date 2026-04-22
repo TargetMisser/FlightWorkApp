@@ -40,6 +40,8 @@ const it = {
   notepadClearTitle: 'Cancella note',
   notepadClearMsg: 'Sei sicuro di voler cancellare tutte le note?',
   notepadClearConfirm: 'Cancella', notepadPlaceholder: 'Inizia a scrivere...',
+  notepadAccessibilityClear: 'Cancella tutte le note',
+  notepadAccessibilitySave: 'Salva note',
   // TravelDoc
   traveldocSub: 'Verifica documenti di viaggio',
   traveldocLoading: 'Caricamento TravelDoc…',
@@ -106,6 +108,10 @@ const it = {
   flightNotifMsg1: 'Programmate {count} notifiche: arrivi voli (15 min prima) + fine turno.',
   flightNotifMsg0: 'Nessun volo futuro trovato, ma riceverai la notifica di fine turno.',
   flightNotifAccessEnable: 'Attiva notifiche voli', flightNotifAccessDisable: 'Disattiva notifiche voli',
+  flightAccessibilityPin: 'Pinna volo',
+  flightAccessibilityUnpin: 'Rimuovi pin volo',
+  flightAccessibilityPinHint: 'Sposta il volo in cima alla lista e abilita il monitoraggio',
+  flightAccessibilityUnpinHint: 'Rimuovi il volo dalla posizione in cima',
   // Phonebook
   phonebookTitle: 'Rubrica', contactAdd: 'Aggiungi',
   contactSearch: 'Cerca nome o numero...', contactAll: 'Tutti',
@@ -198,6 +204,8 @@ const en: typeof it = {
   notepadClearTitle: 'Clear notes',
   notepadClearMsg: 'Are you sure you want to clear all notes?',
   notepadClearConfirm: 'Clear', notepadPlaceholder: 'Start writing...',
+  notepadAccessibilityClear: 'Clear all notes',
+  notepadAccessibilitySave: 'Save notes',
   // TravelDoc
   traveldocSub: 'Travel document check',
   traveldocLoading: 'Loading TravelDoc…',
@@ -264,6 +272,10 @@ const en: typeof it = {
   flightNotifMsg1: '{count} notifications scheduled: flight arrivals (15 min before) + end of shift.',
   flightNotifMsg0: 'No future flights found, but you will receive the end-of-shift notification.',
   flightNotifAccessEnable: 'Enable flight notifications', flightNotifAccessDisable: 'Disable flight notifications',
+  flightAccessibilityPin: 'Pin flight',
+  flightAccessibilityUnpin: 'Unpin flight',
+  flightAccessibilityPinHint: 'Move flight to the top of the list and enable tracking',
+  flightAccessibilityUnpinHint: 'Remove flight from the top position',
   // Phonebook
   phonebookTitle: 'Phonebook', contactAdd: 'Add',
   contactSearch: 'Search name or number...', contactAll: 'All',
