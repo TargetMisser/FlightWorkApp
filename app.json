@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "FlightWorkApp",
+    "name": "AeroStaff Pro",
     "slug": "FlightWorkApp",
-    "version": "2.6.3",
+    "version": "2.6.4",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
