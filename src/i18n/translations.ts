@@ -107,7 +107,7 @@ const it = {
   flightNotifMsg0: 'Nessun volo futuro trovato, ma riceverai la notifica di fine turno.',
   flightNotifAccessEnable: 'Attiva notifiche voli', flightNotifAccessDisable: 'Disattiva notifiche voli',
   // Phonebook
-  phonebookTitle: 'Rubrica', contactAdd: 'Aggiungi',
+  phonebookTitle: 'Rubrica', contactAdd: 'Aggiungi', phonebookCall: 'Chiama', phonebookEdit: 'Modifica', phonebookDelete: 'Elimina',
   contactSearch: 'Cerca nome o numero...', contactAll: 'Tutti',
   contactModalNew: 'Nuovo contatto', contactModalEdit: 'Modifica contatto',
   contactNameLabel: 'Nome *', contactNamePh: 'es. OPS Malpensa',
@@ -265,7 +265,7 @@ const en: typeof it = {
   flightNotifMsg0: 'No future flights found, but you will receive the end-of-shift notification.',
   flightNotifAccessEnable: 'Enable flight notifications', flightNotifAccessDisable: 'Disable flight notifications',
   // Phonebook
-  phonebookTitle: 'Phonebook', contactAdd: 'Add',
+  phonebookTitle: 'Phonebook', contactAdd: 'Add', phonebookCall: 'Call', phonebookEdit: 'Edit', phonebookDelete: 'Delete',
   contactSearch: 'Search name or number...', contactAll: 'All',
   contactModalNew: 'New contact', contactModalEdit: 'Edit contact',
   contactNameLabel: 'Name *', contactNamePh: 'e.g. OPS Malpensa',
