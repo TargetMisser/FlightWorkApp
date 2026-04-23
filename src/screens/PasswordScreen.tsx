@@ -101,7 +101,7 @@ function PinOverlay({ onUnlock, onCancel, title }: { onUnlock: (pin: string) => 
 }
 
 // ─── Password Row ─────────────────────────────────────────────────────────────
-function PasswordRowComponent({ item, onEdit, onDelete }: { item: PasswordEntry; onEdit: () => void; onDelete: () => void }) {
+function PasswordRowComponent({ item, onEdit, onDelete }: { item: PasswordEntry; onEdit: (item: PasswordEntry) => void; onDelete: (id: string) => void }) {
   const { colors } = useAppTheme();
   const s = useMemo(() => makeRowStyles(colors), [colors]);
   const [revealed, setRevealed] = useState(false);
@@ -120,10 +120,10 @@ function PasswordRowComponent({ item, onEdit, onDelete }: { item: PasswordEntry;
         {item.notes ? <Text style={s.notes}>{item.notes}</Text> : null}
       </View>
       <View style={s.actions}>
-        <TouchableOpacity style={s.editBtn} onPress={onEdit}>
+        <TouchableOpacity style={s.editBtn} onPress={() => onEdit(item)}>
           <MaterialIcons name="edit" size={17} color={colors.primary} />
         </TouchableOpacity>
-        <TouchableOpacity style={s.delBtn} onPress={onDelete}>
+        <TouchableOpacity style={s.delBtn} onPress={() => onDelete(item.id)}>
           <MaterialIcons name="delete-outline" size={17} color="#EF4444" />
         </TouchableOpacity>
       </View>
@@ -287,8 +287,8 @@ export default function PasswordScreen() {
         renderItem={({ item }) => (
           <PasswordRow
             item={item}
-            onEdit={() => openEdit(item)}
-            onDelete={() => deleteEntry(item.id)}
+            onEdit={openEdit}
+            onDelete={deleteEntry}
           />
         )}
         contentContainerStyle={{ padding: 16, paddingBottom: 96 }}
@@ -300,6 +300,10 @@ export default function PasswordScreen() {
           </View>
         }
         showsVerticalScrollIndicator={false}
+        initialNumToRender={10}
+        windowSize={5}
+        maxToRenderPerBatch={10}
+        removeClippedSubviews={true}
       />
 
       {/* Add / Edit modal */}
