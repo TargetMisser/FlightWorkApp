@@ -82,7 +82,7 @@ export default function NotepadScreen() {
       t('notepadClearTitle'),
       t('notepadClearMsg'),
       [
-        { text: 'Annulla', style: 'cancel' },
+        { text: t('cancel'), style: 'cancel' },
         {
           text: t('notepadClearConfirm'),
           style: 'destructive',
@@ -109,7 +109,13 @@ export default function NotepadScreen() {
           <Text style={s.title}>{t('notepadTitle')}</Text>
         </View>
         <View style={s.actions}>
-          <TouchableOpacity onPress={clear} style={s.iconBtn}>
+          <TouchableOpacity
+            onPress={clear}
+            style={s.iconBtn}
+            accessible
+            accessibilityRole="button"
+            accessibilityLabel={t('notepadClearTitle')}
+          >
             <MaterialIcons name="delete-outline" size={22} color="#EF4444" />
           </TouchableOpacity>
           <TouchableOpacity
