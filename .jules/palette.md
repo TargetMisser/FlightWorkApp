@@ -1,0 +1,3 @@
+## 2026-04-11 - Prevent Redundant Actions in Notepad
+**Learning:** Icon-only buttons (like the 'Clear' button) lacking proper disabled states and visual feedback can confuse users when actions aren't applicable (e.g., clearing an empty notepad). Additionally, they often lack screen reader labels out of the box in React Native.
+**Action:** When working with `TouchableOpacity` for actions that have an invalid state (like clearing empty text or saving when already saved), always use the `disabled` prop combined with a visual cue (like `opacity: 0.5`). Concurrently, ensure icon-only buttons include `accessible`, `accessibilityRole="button"`, and a translated `accessibilityLabel` for screen reader compatibility.
