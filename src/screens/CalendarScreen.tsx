@@ -263,17 +263,36 @@ export default function CalendarScreen() {
     try {
       const { arrivals, departures } = await fetchAirportScheduleRaw(airportCode);
       const allF = [...arrivals, ...departures];
+
+      const ranges: { sTS: number, eTS: number, iso: string }[] = [];
       Object.keys(localData).forEach(iso => {
         const sh = localData[iso].find(e => e.title.includes('Lavoro'));
         if (sh) {
-          const sTS = new Date(sh.startDate).getTime() / 1000;
-          const eTS = new Date(sh.endDate).getTime() / 1000;
-          const cnt = allF.filter(f => {
-            const ts = f.flight?.time?.scheduled?.arrival || f.flight?.time?.scheduled?.departure;
-            return ts && ts >= sTS && ts <= eTS;
-          }).length;
-          if (dict[iso]) dict[iso].flightCount = cnt; else dict[iso] = { weatherText: 'N/A', weatherIcon: '❓', flightCount: cnt };
+          ranges.push({
+            sTS: new Date(sh.startDate).getTime() / 1000,
+            eTS: new Date(sh.endDate).getTime() / 1000,
+            iso
+          });
         }
+      });
+
+      const counts: Record<string, number> = {};
+      ranges.forEach(r => counts[r.iso] = 0);
+
+      allF.forEach(f => {
+        const ts = f.flight?.time?.scheduled?.arrival || f.flight?.time?.scheduled?.departure;
+        if (ts) {
+          for (const r of ranges) {
+            if (ts >= r.sTS && ts <= r.eTS) {
+              counts[r.iso]++;
+            }
+          }
+        }
+      });
+
+      ranges.forEach(r => {
+        const cnt = counts[r.iso];
+        if (dict[r.iso]) dict[r.iso].flightCount = cnt; else dict[r.iso] = { weatherText: 'N/A', weatherIcon: '❓', flightCount: cnt };
       });
     } catch (e) { if (__DEV__) console.warn('[calFlights]', e); }
     setDailyStats(dict);
