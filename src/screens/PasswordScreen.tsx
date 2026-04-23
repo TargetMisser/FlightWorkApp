@@ -150,7 +150,28 @@ export default function PasswordScreen() {
   useEffect(() => {
     (async () => {
       const raw = await AsyncStorage.getItem(PASSWORDS_KEY);
-      if (raw) setEntries(JSON.parse(raw));
+      if (raw) {
+        const loaded: PasswordEntry[] = JSON.parse(raw);
+        let needsMigration = false;
+
+        const withSecrets = await Promise.all(loaded.map(async (entry) => {
+          if (entry.password !== '***') {
+            await SecureStore.setItemAsync(`aerostaff_pwd_${entry.id}`, entry.password);
+            needsMigration = true;
+            return entry;
+          } else {
+            const secret = await SecureStore.getItemAsync(`aerostaff_pwd_${entry.id}`);
+            return { ...entry, password: secret || '' };
+          }
+        }));
+
+        setEntries(withSecrets);
+
+        if (needsMigration) {
+          const masked = withSecrets.map(e => ({ ...e, password: '***' }));
+          await AsyncStorage.setItem(PASSWORDS_KEY, JSON.stringify(masked));
+        }
+      }
       const enabled = await AsyncStorage.getItem(PIN_ENABLED_KEY);
       const isEnabled = enabled === 'true';
       setPinEnabled(isEnabled);
@@ -160,7 +181,9 @@ export default function PasswordScreen() {
 
   const persist = useCallback(async (next: PasswordEntry[]) => {
     setEntries(next);
-    await AsyncStorage.setItem(PASSWORDS_KEY, JSON.stringify(next));
+    await Promise.all(next.map(e => SecureStore.setItemAsync(`aerostaff_pwd_${e.id}`, e.password)));
+    const masked = next.map(e => ({ ...e, password: '***' }));
+    await AsyncStorage.setItem(PASSWORDS_KEY, JSON.stringify(masked));
   }, []);
 
   // PIN toggle
@@ -243,9 +266,10 @@ export default function PasswordScreen() {
       { text: 'Annulla', style: 'cancel' },
       { text: 'Elimina', style: 'destructive', onPress: async () => {
         await persist(entries.filter(e => e.id !== id));
+        await SecureStore.deleteItemAsync(`aerostaff_pwd_${id}`).catch(() => {});
       }},
     ]);
-  }, [entries, persist]);
+  }, [entries, persist, t]);
 
   // PIN overlays (setup and unlock)
   if (pinMode === 'unlock') {
