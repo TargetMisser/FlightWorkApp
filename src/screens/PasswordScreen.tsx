@@ -149,7 +149,19 @@ export default function PasswordScreen() {
   // Load on mount
   useEffect(() => {
     (async () => {
-      const raw = await AsyncStorage.getItem(PASSWORDS_KEY);
+      let raw = null;
+      try {
+        raw = await SecureStore.getItemAsync(PASSWORDS_KEY);
+      } catch (e) {
+        if (__DEV__) console.warn('Failed to read from SecureStore', e);
+      }
+
+      // Fallback for legacy installs
+      if (!raw) {
+        raw = await AsyncStorage.getItem(PASSWORDS_KEY);
+        // If we found legacy data, we'll try to migrate it on next save
+      }
+
       if (raw) setEntries(JSON.parse(raw));
       const enabled = await AsyncStorage.getItem(PIN_ENABLED_KEY);
       const isEnabled = enabled === 'true';
@@ -160,7 +172,17 @@ export default function PasswordScreen() {
 
   const persist = useCallback(async (next: PasswordEntry[]) => {
     setEntries(next);
-    await AsyncStorage.setItem(PASSWORDS_KEY, JSON.stringify(next));
+    const serialized = JSON.stringify(next);
+    try {
+      await SecureStore.setItemAsync(PASSWORDS_KEY, serialized);
+      // Clean up legacy storage if successful
+      await AsyncStorage.removeItem(PASSWORDS_KEY).catch(() => {});
+    } catch (e) {
+      if (__DEV__) console.error('[passwords] save error', e);
+      Alert.alert('Errore', 'Impossibile salvare in modo sicuro. Verifica di avere spazio o prova a ridurre le note.');
+      // Optionally fallback to AsyncStorage if SecureStore fails (e.g. size limits)
+      // await AsyncStorage.setItem(PASSWORDS_KEY, serialized);
+    }
   }, []);
 
   // PIN toggle
