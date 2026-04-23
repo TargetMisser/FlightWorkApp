@@ -193,11 +193,11 @@ function AppInner() {
       >
         <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.appBar }]} />
         {overlay ? (
-          <TouchableOpacity onPress={handleBack} style={styles.iconBtn}>
+          <TouchableOpacity onPress={handleBack} style={styles.iconBtn} accessible={true} accessibilityRole="button" accessibilityLabel={t("back")}>
             <MaterialIcons name="arrow-back" size={22} color={colors.primaryDark} />
           </TouchableOpacity>
         ) : (
-          <TouchableOpacity onPress={() => setDrawerOpen(true)} style={styles.iconBtn}>
+          <TouchableOpacity onPress={() => setDrawerOpen(true)} style={styles.iconBtn} accessible={true} accessibilityRole="button" accessibilityLabel={t("menu")}>
             <MaterialIcons name="menu" size={24} color={colors.primaryDark} />
           </TouchableOpacity>
         )}
