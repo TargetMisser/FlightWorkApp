@@ -150,7 +150,40 @@ export default function PasswordScreen() {
   useEffect(() => {
     (async () => {
       const raw = await AsyncStorage.getItem(PASSWORDS_KEY);
-      if (raw) setEntries(JSON.parse(raw));
+      if (raw) {
+        const parsed = JSON.parse(raw) as PasswordEntry[];
+        let needsMigration = false;
+        let migrationFailed = false;
+
+        const loadedEntries = await Promise.all(parsed.map(async (entry) => {
+          if (entry.password && entry.password !== '***') {
+            // Needs migration from old plaintext AsyncStorage
+            try {
+              await SecureStore.setItemAsync(`aerostaff_pwd_${entry.id}`, entry.password);
+              needsMigration = true;
+            } catch (e) {
+              if (__DEV__) console.error('Migration failed for', entry.id, e);
+              migrationFailed = true;
+            }
+          } else {
+            // Load from SecureStore
+            try {
+              const securePw = await SecureStore.getItemAsync(`aerostaff_pwd_${entry.id}`);
+              if (securePw) entry.password = securePw;
+            } catch (e) {
+              if (__DEV__) console.error('Failed to load secure password for', entry.id, e);
+            }
+          }
+          return entry;
+        }));
+
+        setEntries(loadedEntries);
+
+        if (needsMigration && !migrationFailed) {
+          const masked = loadedEntries.map(e => ({ ...e, password: '***' }));
+          await AsyncStorage.setItem(PASSWORDS_KEY, JSON.stringify(masked));
+        }
+      }
       const enabled = await AsyncStorage.getItem(PIN_ENABLED_KEY);
       const isEnabled = enabled === 'true';
       setPinEnabled(isEnabled);
@@ -160,7 +193,18 @@ export default function PasswordScreen() {
 
   const persist = useCallback(async (next: PasswordEntry[]) => {
     setEntries(next);
-    await AsyncStorage.setItem(PASSWORDS_KEY, JSON.stringify(next));
+    // Important: if a password hasn't been migrated securely, keep it plaintext in AsyncStorage to avoid data loss
+    const masked = await Promise.all(next.map(async (e) => {
+      if (e.password === '***') return e;
+      try {
+         const exists = await SecureStore.getItemAsync(`aerostaff_pwd_${e.id}`);
+         if (exists) return { ...e, password: '***' };
+         return e; // It's failed migration or hasn't been saved yet, keep plain
+      } catch {
+         return e;
+      }
+    }));
+    await AsyncStorage.setItem(PASSWORDS_KEY, JSON.stringify(masked));
   }, []);
 
   // PIN toggle
@@ -219,16 +263,27 @@ export default function PasswordScreen() {
     if (!modal.name.trim()) { Alert.alert('Errore', t('passwordErrName')); return; }
     if (!modal.password.trim()) { Alert.alert('Errore', t('passwordErrPw')); return; }
     let next: PasswordEntry[];
+    const entryId = modal.editingId || Date.now().toString();
+    const finalPassword = modal.password.trim();
+
+    try {
+      await SecureStore.setItemAsync(`aerostaff_pwd_${entryId}`, finalPassword);
+    } catch (e) {
+      if (__DEV__) console.error('Failed to save password securely:', e);
+      Alert.alert('Errore', 'Impossibile salvare la password.');
+      return;
+    }
+
     if (modal.editingId) {
-      next = entries.map(e => e.id === modal.editingId
-        ? { ...e, name: modal.name.trim(), username: modal.username.trim(), password: modal.password.trim(), notes: modal.notes.trim() }
+      next = entries.map(e => e.id === entryId
+        ? { ...e, name: modal.name.trim(), username: modal.username.trim(), password: finalPassword, notes: modal.notes.trim() }
         : e);
     } else {
       const entry: PasswordEntry = {
-        id: Date.now().toString(),
+        id: entryId,
         name: modal.name.trim(),
         username: modal.username.trim(),
-        password: modal.password.trim(),
+        password: finalPassword,
         notes: modal.notes.trim(),
       };
       next = [...entries, entry];
@@ -242,6 +297,11 @@ export default function PasswordScreen() {
     Alert.alert(t('passwordDeleteTitle'), t('passwordDeleteMsg'), [
       { text: 'Annulla', style: 'cancel' },
       { text: 'Elimina', style: 'destructive', onPress: async () => {
+        try {
+          await SecureStore.deleteItemAsync(`aerostaff_pwd_${id}`);
+        } catch (e) {
+          if (__DEV__) console.error('Failed to delete secure password:', e);
+        }
         await persist(entries.filter(e => e.id !== id));
       }},
     ]);
