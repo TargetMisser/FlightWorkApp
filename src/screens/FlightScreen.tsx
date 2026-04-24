@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import * as Calendar from 'expo-calendar';
 import * as Notifications from 'expo-notifications';
+import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../context/ThemeContext';
@@ -61,24 +62,36 @@ function LogoPill({ iataCode, airlineName, color }: { iataCode: string; airlineN
 const SWIPE_THRESHOLD = 80;
 
 function SwipeableFlightCardComponent({
-  children, isPinned, onToggle,
+  children, isPinned, onToggle, ...rest
 }: {
   children: React.ReactNode;
   isPinned: boolean;
   onToggle: () => void;
+  [key: string]: any;
 }) {
   const translateX = useRef(new Animated.Value(0)).current;
   const onToggleRef = useRef(onToggle);
   onToggleRef.current = onToggle;
+  const hasTriggeredHaptic = useRef(false);
 
   const panResponder = useMemo(() => PanResponder.create({
     onMoveShouldSetPanResponder: (_, g) =>
       Math.abs(g.dx) > 15 && Math.abs(g.dx) > Math.abs(g.dy) * 1.5,
     onPanResponderMove: (_, g) => {
-      if (g.dx < 0) translateX.setValue(g.dx);
+      if (g.dx < 0) {
+        translateX.setValue(g.dx);
+        if (g.dx < -SWIPE_THRESHOLD && !hasTriggeredHaptic.current) {
+          Haptics.selectionAsync();
+          hasTriggeredHaptic.current = true;
+        } else if (g.dx >= -SWIPE_THRESHOLD && hasTriggeredHaptic.current) {
+          hasTriggeredHaptic.current = false;
+        }
+      }
     },
     onPanResponderRelease: (_, g) => {
+      hasTriggeredHaptic.current = false;
       if (g.dx < -SWIPE_THRESHOLD) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         Animated.timing(translateX, { toValue: -SWIPE_THRESHOLD, duration: 100, useNativeDriver: true }).start(() => {
           onToggleRef.current();
           Animated.spring(translateX, { toValue: 0, useNativeDriver: true, tension: 120, friction: 10 }).start();
@@ -88,13 +101,18 @@ function SwipeableFlightCardComponent({
       }
     },
     onPanResponderTerminate: () => {
+      hasTriggeredHaptic.current = false;
       Animated.spring(translateX, { toValue: 0, useNativeDriver: true }).start();
     },
   }), []);
 
   return (
     <View style={{ marginBottom: 10 }}>
-      <Animated.View style={{ transform: [{ translateX }] }} {...panResponder.panHandlers}>
+      <Animated.View
+        style={{ transform: [{ translateX }] }}
+        {...panResponder.panHandlers}
+        {...rest}
+      >
         {children}
       </Animated.View>
     </View>
@@ -594,6 +612,15 @@ export default function FlightScreen() {
     const flightId = item.flight?.identification?.number?.default || null;
     const isPinned = flightId !== null && flightId === pinnedFlightId;
 
+    const a11yLabel = [
+      isPinned ? t('flightPinnedLabel') : '',
+      flightNumber,
+      airline,
+      activeTab === 'arrivals' ? `${t('homeArrival')} ${originDest}` : `${t('homeDeparture')} ${originDest}`,
+      time,
+      statusText,
+    ].filter(Boolean).join(', ');
+
     const normFn = normalizeFlightNumber(flightNumber);
     const normalizeForMatching = (s: string) => s.replace(/[\s\-_]/g, '').toUpperCase();
     const normFnStripped = normalizeForMatching(normFn);
@@ -609,6 +636,15 @@ export default function FlightScreen() {
       <SwipeableFlightCard
         isPinned={isPinned}
         onToggle={() => isPinned ? unpinFlight() : pinFlight(item)}
+        accessible={true}
+        accessibilityLabel={a11yLabel}
+        accessibilityHint={isPinned ? t('flightAccessibilityUnpinHint') : t('flightAccessibilityPinHint')}
+        accessibilityActions={[{ name: 'activate', label: isPinned ? t('flightPinnedLabel') : t('save') }]}
+        onAccessibilityAction={(e: any) => {
+          if (e.nativeEvent.actionName === 'activate') {
+            isPinned ? unpinFlight() : pinFlight(item);
+          }
+        }}
       >
         <View style={[s.card, isPinned && s.cardPinned, { marginBottom: 0 }]}>
           {isPinned && <View style={s.pinBanner}><Text style={s.pinBannerText}>{t('flightPinned')}</Text></View>}
