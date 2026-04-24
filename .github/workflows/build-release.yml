@@ -6,8 +6,12 @@ on:
       - 'v*'
   workflow_dispatch:
     inputs:
+      ref:
+        description: 'Branch o commit da buildare'
+        required: false
+        default: 'claude/fix-shift-permissions-Cn8gk'
       version_override:
-        description: 'Tag to release (e.g. v2.6.2). Leave empty to use app.json version.'
+        description: 'Tag release (es. v2.6.2). Vuoto = legge app.json'
         required: false
         default: ''
 
@@ -21,6 +25,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || github.ref }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -125,14 +131,14 @@ jobs:
             - **Duplicati voli**: chiave di merge stabilizzata su `numeroVolo_tsPartenza` (prima usava `identification.id` che FR24 a volte omette)
 
             ### Bug fix – StaffMonitor stand / gate / arrivi
-            - **Colonne non rilevate**: il parser non richiedeva più la presenza di colonne stand/gate/belt per avviare il parsing; prima saltava tutte le righe
-            - **Nomi handler nella colonna stand**: `cell()` ora estrae solo il primo token alfanumerico scartando tutto ciò che segue (es. `17◆ Federico`, `674 RICCARDO F`)
-            - **Numeri di telefono come stand**: `isPhoneOrJunk` ora individua sequenze di 8+ cifre ovunque nella stringa
-            - **Colonna "ADDETTO STAND" rilevata come stand**: ora si usa una word-boundary per evitare falsi positivi
-            - **Arrivi in parallelo + cache**: 7 varianti URL con `nature=A` inviate simultaneamente; prima risposta valida vince in ≤40s. Cache AsyncStorage 20 min per sopravvivere ai cali di rete
-            - **Sessione Tomcat (JSESSIONID)**: il cookie di sessione viene catturato dalla risposta D e inoltrato alle richieste A; il servlet arrivi probabilmente richiede una sessione attiva
-            - **Numeri volo corrotti negli arrivi**: rimossi URL di fallback senza `nature=A`
-            - **Timeout partenze**: ripristinato a 25s (il server Pisa è lento)
+            - **Colonne non rilevate**: rimosso il requisito di trovare stand/gate/belt prima di parsare; prima saltava tutte le righe
+            - **Nomi handler nella colonna stand**: `cell()` ora estrae solo il primo token alfanumerico (es. `17◆ Federico` → `17`)
+            - **Numeri di telefono come stand**: `isPhoneOrJunk` individua sequenze di 8+ cifre ovunque nella stringa
+            - **Colonna "ADDETTO STAND"**: word-boundary `\bstand\b` per evitare falsi positivi
+            - **Arrivi in parallelo + cache**: 7 varianti URL `nature=A` in simultanea, prima risposta vince in ≤40s; cache AsyncStorage 20 min
+            - **Sessione Tomcat (JSESSIONID)**: cookie catturato dalla risposta D e inoltrato alle richieste A
+            - **Numeri volo corrotti**: rimossi URL fallback senza `nature=A`
+            - **Timeout partenze**: ripristinato a 25s
 
             Scarica `AeroStaffPro-${{ steps.meta.outputs.tag }}.apk` e installalo sul tuo dispositivo Android.
           files: ${{ env.apk }}
