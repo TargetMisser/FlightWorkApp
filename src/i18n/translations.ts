@@ -6,7 +6,7 @@ const it = {
   overlayNotepad: 'Blocco Note', overlayPhonebook: 'Rubrica', overlayPasswords: 'Password',
   overlayManuals: 'Manuali DCS', overlaySettings: 'Impostazioni',
   // Common
-  cancel: 'Annulla', save: 'Salva', delete: 'Elimina', error: 'Errore',
+  close: 'Chiudi', cancel: 'Annulla', save: 'Salva', delete: 'Elimina', error: 'Errore',
   confirm: 'Conferma', ok: 'OK', add: 'Aggiungi',
   // Settings
   settingsTitle: 'Impostazioni',
@@ -164,7 +164,7 @@ const en: typeof it = {
   overlayNotepad: 'Notepad', overlayPhonebook: 'Phonebook', overlayPasswords: 'Password',
   overlayManuals: 'DCS Manuals', overlaySettings: 'Settings',
   // Common
-  cancel: 'Cancel', save: 'Save', delete: 'Delete', error: 'Error',
+  close: 'Close', cancel: 'Cancel', save: 'Save', delete: 'Delete', error: 'Error',
   confirm: 'Confirm', ok: 'OK', add: 'Add',
   // Settings
   settingsTitle: 'Settings',
