@@ -90,7 +90,7 @@ export function parseShiftCells(cells: Cell[]): ParsedSchedule {
 }
 
 /** HTML to inject into a hidden WebView for PDF text extraction */
-export function getPdfExtractorHtml(base64Data: string): string {
+export function getPdfExtractorHtml(): string {
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.9.155/pdf.min.mjs" type="module"></script>
@@ -98,9 +98,9 @@ export function getPdfExtractorHtml(base64Data: string): string {
 import * as pdfjsLib from 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.9.155/pdf.min.mjs';
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.9.155/pdf.worker.min.mjs';
 
-async function extract() {
+async function extract(base64Data) {
   try {
-    const raw = atob('${base64Data}');
+    const raw = atob(base64Data);
     const uint8 = new Uint8Array(raw.length);
     for (let i = 0; i < raw.length; i++) uint8[i] = raw.charCodeAt(i);
 
@@ -127,6 +127,19 @@ async function extract() {
     window.ReactNativeWebView.postMessage(JSON.stringify({ ok: false, error: e.message }));
   }
 }
-extract();
+
+const handleMessage = (event) => {
+  try {
+    const data = JSON.parse(event.data);
+    if (data.type === 'extract') {
+      extract(data.base64Data);
+    }
+  } catch (e) {}
+};
+window.addEventListener('message', handleMessage);
+document.addEventListener('message', handleMessage);
+
+// Send READY message back to React Native
+window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'READY' }));
 </script></body></html>`;
 }

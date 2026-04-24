@@ -55,6 +55,21 @@ window.runTesseract = async function(base64JsonStr) {
     window.ReactNativeWebView.postMessage(JSON.stringify({ success: false, error: e.message || e.toString() }));
   }
 };
+
+const handleMessage = (event) => {
+  try {
+    const data = JSON.parse(event.data);
+    if (data.type === 'runTesseract') {
+      if (window.runTesseract) {
+        window.runTesseract(data.images);
+      } else {
+        window.ReactNativeWebView.postMessage(JSON.stringify({ success: false, error: "Motore OCR non pronto." }));
+      }
+    }
+  } catch (e) {}
+};
+window.addEventListener('message', handleMessage);
+document.addEventListener('message', handleMessage);
 </script></body></html>`;
 
 function PinnedFlightCardComponent({ item, colors }: { item: any; colors: any }) {
@@ -288,14 +303,7 @@ export default function HomeScreen() {
         const base64List = result.assets.map(a => `data:image/jpeg;base64,${a.base64}`);
         const base64Json = JSON.stringify(base64List);
         // Use postMessage pattern to avoid script-injection risks with injectJavaScript
-        webViewRef.current?.injectJavaScript(`
-          if(window.runTesseract){
-            window.runTesseract(${JSON.stringify(base64Json)});
-          } else {
-            window.ReactNativeWebView.postMessage(JSON.stringify({success:false,error:'OCR non pronto'}));
-          }
-          true;
-        `);
+        webViewRef.current?.postMessage(JSON.stringify({ type: 'runTesseract', images: base64Json }));
       }
     } catch (e) { if (__DEV__) console.error('[imagePicker]', e); setProcessing(false); }
   };
