@@ -380,8 +380,9 @@ export default function PhonebookScreen() {
     });
   }, []);
 
-  const openAdd = () => { setEditing(null); setModalVisible(true); };
-  const openEdit = (c: Contact) => { setEditing(c); setModalVisible(true); };
+  // Performance optimization: stabilize callbacks to prevent unnecessary ContactRow re-renders
+  const openAdd = useCallback(() => { setEditing(null); setModalVisible(true); }, []);
+  const openEdit = useCallback((c: Contact) => { setEditing(c); setModalVisible(true); }, []);
 
   // Filter
   const filtered = contacts.filter(c => {
