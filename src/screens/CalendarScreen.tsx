@@ -70,6 +70,8 @@ export default function CalendarScreen() {
   const [importModalVisible, setImportModalVisible] = useState(false);
   const [importStep, setImportStep] = useState<'idle' | 'extracting' | 'pickName' | 'preview' | 'saving' | 'done'>('idle');
   const [pdfHtml, setPdfHtml] = useState<string | null>(null);
+  const [pendingBase64, setPendingBase64] = useState<string | null>(null);
+  const webViewRef = useRef<WebView>(null);
   const [parsedSchedule, setParsedSchedule] = useState<ParsedSchedule | null>(null);
   const [selectedEmployee, setSelectedEmployee] = useState<ParsedEmployee | null>(null);
   const [savedName, setSavedName] = useState<string | null>(null);
@@ -303,7 +305,10 @@ export default function CalendarScreen() {
       step = 'webview';
       setImportStep('extracting');
       setImportModalVisible(true);
-      setPdfHtml(getPdfExtractorHtml(base64));
+
+      setPendingBase64(base64);
+      setPdfHtml(getPdfExtractorHtml());
+
     } catch (e: any) {
       if (__DEV__) console.error(`Import error at step=${step}:`, e);
       Alert.alert('Errore', `Errore (${step}): ${e?.message || e}`);
@@ -313,6 +318,13 @@ export default function CalendarScreen() {
   const onWebViewMessage = (event: any) => {
     try {
       const data = JSON.parse(event.nativeEvent.data);
+      if (data.type === 'READY') {
+        if (pendingBase64) {
+          webViewRef.current?.postMessage(JSON.stringify({ type: 'extract', base64Data: pendingBase64 }));
+          setPendingBase64(null);
+        }
+        return;
+      }
       setPdfHtml(null); // Remove WebView
 
       if (!data.ok) {
@@ -624,6 +636,7 @@ export default function CalendarScreen() {
       {/* Hidden WebView for PDF extraction */}
       {pdfHtml && (
         <WebView
+          ref={webViewRef}
           originWhitelist={['*']}
           source={{ html: pdfHtml }}
           onMessage={onWebViewMessage}
