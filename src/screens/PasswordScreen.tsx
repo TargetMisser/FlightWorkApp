@@ -149,8 +149,31 @@ export default function PasswordScreen() {
   // Load on mount
   useEffect(() => {
     (async () => {
-      const raw = await AsyncStorage.getItem(PASSWORDS_KEY);
-      if (raw) setEntries(JSON.parse(raw));
+      try {
+        const raw = await AsyncStorage.getItem(PASSWORDS_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          let needsMigration = false;
+          const hydrated = await Promise.all(parsed.map(async (e: PasswordEntry) => {
+            if (e.password === '***') {
+              const sec = await SecureStore.getItemAsync(`aerostaff_pwd_${e.id}`);
+              return { ...e, password: sec || '' };
+            } else {
+              needsMigration = true;
+              if (e.password) {
+                await SecureStore.setItemAsync(`aerostaff_pwd_${e.id}`, e.password);
+              }
+              return e;
+            }
+          }));
+          setEntries(hydrated);
+          if (needsMigration) {
+            const masked = hydrated.map(e => ({ ...e, password: '***' }));
+            await AsyncStorage.setItem(PASSWORDS_KEY, JSON.stringify(masked));
+          }
+        }
+      } catch(e) { console.error('Error loading passwords', e); }
+
       const enabled = await AsyncStorage.getItem(PIN_ENABLED_KEY);
       const isEnabled = enabled === 'true';
       setPinEnabled(isEnabled);
@@ -160,7 +183,15 @@ export default function PasswordScreen() {
 
   const persist = useCallback(async (next: PasswordEntry[]) => {
     setEntries(next);
-    await AsyncStorage.setItem(PASSWORDS_KEY, JSON.stringify(next));
+    const masked = await Promise.all(next.map(async (e) => {
+      if (e.password) {
+        await SecureStore.setItemAsync(`aerostaff_pwd_${e.id}`, e.password);
+      } else {
+        await SecureStore.deleteItemAsync(`aerostaff_pwd_${e.id}`).catch(() => {});
+      }
+      return { ...e, password: '***' };
+    }));
+    await AsyncStorage.setItem(PASSWORDS_KEY, JSON.stringify(masked));
   }, []);
 
   // PIN toggle
@@ -243,6 +274,7 @@ export default function PasswordScreen() {
       { text: 'Annulla', style: 'cancel' },
       { text: 'Elimina', style: 'destructive', onPress: async () => {
         await persist(entries.filter(e => e.id !== id));
+        await SecureStore.deleteItemAsync(`aerostaff_pwd_${id}`).catch(() => {});
       }},
     ]);
   }, [entries, persist]);
