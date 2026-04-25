@@ -149,7 +149,7 @@ jobs:
             - **Numeri di telefono come stand**: `isPhoneOrJunk` individua sequenze di 8+ cifre ovunque nella stringa
             - **Colonna "ADDETTO STAND"**: word-boundary `\bstand\b` per evitare falsi positivi
             - **Arrivi in parallelo + cache**: 7 varianti URL `nature=A` in simultanea, prima risposta vince in ≤40s; cache AsyncStorage 20 min
-            - **Sessione Tomcat (JSESSIONID)**: cookie catturato dalla risposta D e inoltrato alle richieste A
+            - **Sessione Tomcat (JSESSIONID)**: cookie catturato dalla risposta D e inoltrato alle richieste A — fix AbortError sugli arrivi
             - **Numeri volo corrotti**: rimossi URL fallback senza `nature=A`
             - **Timeout partenze**: ripristinato a 25s
 
