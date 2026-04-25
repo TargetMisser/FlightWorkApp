@@ -538,21 +538,28 @@ export default function FlightScreen() {
   }, []);
 
   const userShift = activeDay === 'today' ? shifts.today : shifts.tomorrow;
-  const selectedDate = activeDay === 'today' ? new Date() : (() => { const d = new Date(); d.setDate(d.getDate() + 1); return d; })();
-  const isSameDay = (d1: Date, d2: Date) =>
-    d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
-
-  const currentData = (() => {
+  const currentData = useMemo(() => {
     const source = filterMode === 'all'
       ? (activeTab === 'arrivals' ? allArrivalsFull : allDeparturesFull)
       : (activeTab === 'arrivals' ? arrivals : departures);
+
+    // ⚡ Bolt: Pre-calculate boundaries to avoid instantiating Date objects in the high-frequency filter loop
+    const d = new Date();
+    if (activeDay !== 'today') d.setDate(d.getDate() + 1);
+
+    const startOfDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const endOfDay = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);
+
+    const startTs = Math.floor(startOfDay.getTime() / 1000);
+    const endTs = Math.floor(endOfDay.getTime() / 1000);
+
     return source.filter(item => {
       const ts = activeTab === 'arrivals'
         ? item.flight?.time?.scheduled?.arrival
         : item.flight?.time?.scheduled?.departure;
-      return ts && isSameDay(new Date(ts * 1000), selectedDate);
+      return ts && ts >= startTs && ts < endTs;
     });
-  })();
+  }, [filterMode, activeTab, arrivals, departures, allArrivalsFull, allDeparturesFull, activeDay]);
 
   const renderFlight = useCallback(({ item }: { item: any }) => {
     const flightNumber = item.flight?.identification?.number?.default || 'N/A';
@@ -818,6 +825,11 @@ export default function FlightScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchAll(); }} tintColor={colors.primary} />}
           ListEmptyComponent={<Text style={{ textAlign: 'center', marginTop: 40, color: '#9CA3AF', fontSize: 15 }}>{t('flightNoFlights')}</Text>}
           showsVerticalScrollIndicator={false}
+          // ⚡ Bolt: Virtualization settings for long lists to improve memory and render speed
+          initialNumToRender={10}
+          windowSize={5}
+          maxToRenderPerBatch={10}
+          removeClippedSubviews={true}
         />
       )}
 
