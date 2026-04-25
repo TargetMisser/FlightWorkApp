@@ -30,7 +30,10 @@ type RawCell = { text: string; colspan: number };
 
 function extractCellsRaw(trHTML: string): RawCell[] {
   const cells: RawCell[] = [];
-  const regex = /<t[dh]([^>]*)>([\s\S]*?)<\/t[dh]>/gi;
+  // Lookahead instead of requiring </td>: empty cells in the StaffMonitor HTML have no
+  // closing tag (SLOT, BLKOFF, TKOFF in departures; LAND, BLKON, STATUS in pending arrivals).
+  // Skipping those shifts every subsequent column index, breaking stand/gate/belt detection.
+  const regex = /<t[dh]([^>]*)>([\s\S]*?)(?=<t[dh][\s>]|<\/t[rh]|$)/gi;
   let m: RegExpExecArray | null;
   while ((m = regex.exec(trHTML)) !== null) {
     const attrs = m[1];
