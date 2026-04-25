@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - 'v*'
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       ref:
@@ -23,10 +25,21 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Compute checkout ref
+        id: co
+        run: |
+          if [[ -n "${{ github.event.inputs.ref }}" ]]; then
+            echo "ref=${{ github.event.inputs.ref }}" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            echo "ref=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=claude/fix-shift-permissions-Cn8gk" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.ref || github.ref }}
+          ref: ${{ steps.co.outputs.ref }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
