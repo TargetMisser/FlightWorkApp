@@ -55,6 +55,21 @@ window.runTesseract = async function(base64JsonStr) {
     window.ReactNativeWebView.postMessage(JSON.stringify({ success: false, error: e.message || e.toString() }));
   }
 };
+const handler = function(event) {
+  try {
+    const data = JSON.parse(event.data);
+    if (data.type === 'RUN_OCR') {
+      if(window.runTesseract){
+        window.runTesseract(data.payload);
+      } else {
+        window.ReactNativeWebView.postMessage(JSON.stringify({success:false,error:'OCR non pronto'}));
+      }
+    }
+  } catch(e) {}
+};
+window.addEventListener("message", handler);
+document.addEventListener("message", handler);
+window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'READY' }));
 </script></body></html>`;
 
 function PinnedFlightCardComponent({ item, colors }: { item: any; colors: any }) {
@@ -290,15 +305,8 @@ export default function HomeScreen({ isFocused }: { isFocused?: boolean }) {
         setProcessing(true); setOcrText('');
         const base64List = result.assets.map(a => `data:image/jpeg;base64,${a.base64}`);
         const base64Json = JSON.stringify(base64List);
-        // Use postMessage pattern to avoid script-injection risks with injectJavaScript
-        webViewRef.current?.injectJavaScript(`
-          if(window.runTesseract){
-            window.runTesseract(${JSON.stringify(base64Json)});
-          } else {
-            window.ReactNativeWebView.postMessage(JSON.stringify({success:false,error:'OCR non pronto'}));
-          }
-          true;
-        `);
+                // Use postMessage pattern to avoid script-injection risks with injectJavaScript
+        webViewRef.current?.postMessage(JSON.stringify({ type: 'RUN_OCR', payload: base64Json }));
       }
     } catch (e) { if (__DEV__) console.error('[imagePicker]', e); setProcessing(false); }
   };
@@ -306,6 +314,7 @@ export default function HomeScreen({ isFocused }: { isFocused?: boolean }) {
   const handleWebViewMessage = (event: any) => {
     try {
       const r = JSON.parse(event.nativeEvent.data);
+      if (r.type === 'READY') return;
       if (r.success) setOcrText(r.text);
       else Alert.alert('Errore riconoscimento testo', r.error || 'Prova con un\'immagine più nitida o meglio illuminata.');
     } catch (e) { if (__DEV__) console.error('[ocrMessage]', e); } finally { setProcessing(false); }
