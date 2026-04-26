@@ -919,6 +919,10 @@ export default function FlightScreen() {
           data={currentData}
           keyExtractor={(item, i) => item.flight?.identification?.id || String(i)}
           renderItem={renderFlight}
+          initialNumToRender={10}
+          windowSize={5}
+          maxToRenderPerBatch={10}
+          removeClippedSubviews={true}
           contentContainerStyle={{ padding: 16, paddingBottom: 96 }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchAll(); }} tintColor={colors.primary} />}
           ListEmptyComponent={<Text style={{ textAlign: 'center', marginTop: 40, color: '#9CA3AF', fontSize: 15 }}>{t('flightNoFlights')}</Text>}
