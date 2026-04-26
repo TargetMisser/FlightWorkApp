@@ -307,6 +307,10 @@ export default function PasswordScreen() {
       <FlatList
         data={entries}
         keyExtractor={item => item.id}
+        initialNumToRender={15}
+        windowSize={5}
+        maxToRenderPerBatch={10}
+        removeClippedSubviews={true}
         renderItem={({ item }) => (
           <PasswordRow
             item={item}

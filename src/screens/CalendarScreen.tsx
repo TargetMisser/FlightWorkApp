@@ -668,6 +668,10 @@ export default function CalendarScreen() {
                   keyExtractor={(_, i) => String(i)}
                   style={{ maxHeight: 400 }}
                   nestedScrollEnabled
+                  initialNumToRender={15}
+                  windowSize={5}
+                  maxToRenderPerBatch={10}
+                  removeClippedSubviews={true}
                   renderItem={({ item }) => (
                     <TouchableOpacity
                       style={[s.nameRow, { borderColor: colors.border }]}
