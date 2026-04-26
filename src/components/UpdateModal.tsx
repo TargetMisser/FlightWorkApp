@@ -1,10 +1,17 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
-  Modal, View, Text, TouchableOpacity, ScrollView, StyleSheet, Linking,
+  Modal, View, Text, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator, Alert,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAppTheme } from '../context/ThemeContext';
 import { type UpdateInfo, APP_VERSION } from '../utils/updateChecker';
+import {
+  downloadUpdatePackage,
+  getDownloadedUpdateUri,
+  installDownloadedUpdate,
+  openUnknownSourcesSettings,
+  openUpdateReleasePage,
+} from '../utils/updateDownload';
 
 interface Props {
   info: UpdateInfo;
@@ -23,11 +30,122 @@ function renderNotes(raw: string): string {
 
 export default function UpdateModal({ info, onDismiss }: Props) {
   const { colors } = useAppTheme();
+  const [downloadState, setDownloadState] = useState<'idle' | 'downloading' | 'downloaded' | 'error'>('idle');
+  const [progress, setProgress] = useState<number | null>(null);
+  const [localUri, setLocalUri] = useState<string | null>(null);
+  const [errorText, setErrorText] = useState<string | null>(null);
 
   const notes = renderNotes(info.releaseNotes);
+  const latestVersionLabel = info.latestVersion.replace(/^v/i, '');
+  const hasDirectDownload = Boolean(info.downloadUrl);
+
+  useEffect(() => {
+    let active = true;
+
+    getDownloadedUpdateUri(info).then(uri => {
+      if (!active || !uri) {
+        return;
+      }
+
+      setLocalUri(uri);
+      setDownloadState('downloaded');
+    }).catch(() => {});
+
+    return () => {
+      active = false;
+    };
+  }, [info]);
+
+  const statusLabel = useMemo(() => {
+    if (downloadState === 'downloading') {
+      if (progress == null) {
+        return 'Download in corso…';
+      }
+
+      return `Download ${Math.round(progress * 100)}%`;
+    }
+
+    if (downloadState === 'downloaded') {
+      return 'APK pronto per l’installazione';
+    }
+
+    if (downloadState === 'error' && errorText) {
+      return errorText;
+    }
+
+    if (!hasDirectDownload) {
+      return 'La release non include un APK scaricabile direttamente.';
+    }
+
+    return null;
+  }, [downloadState, errorText, hasDirectDownload, progress]);
+
+  const primaryLabel = useMemo(() => {
+    if (!hasDirectDownload) {
+      return 'Apri release';
+    }
+
+    if (downloadState === 'downloading') {
+      return 'Scaricamento…';
+    }
+
+    if (downloadState === 'downloaded') {
+      return 'Installa APK';
+    }
+
+    if (downloadState === 'error') {
+      return 'Riprova download';
+    }
+
+    return 'Scarica in app';
+  }, [downloadState, hasDirectDownload]);
+
+  const handlePrimaryAction = async () => {
+    if (!hasDirectDownload) {
+      await openUpdateReleasePage(info);
+      onDismiss();
+      return;
+    }
+
+    if (downloadState === 'downloading') {
+      return;
+    }
+
+    if (downloadState === 'downloaded' && localUri) {
+      try {
+        await installDownloadedUpdate(localUri);
+      } catch {
+        Alert.alert(
+          'Installazione bloccata',
+          'Android potrebbe richiedere il permesso per installare app da questa sorgente.',
+          [
+            { text: 'Annulla', style: 'cancel' },
+            { text: 'Apri impostazioni', onPress: () => { openUnknownSourcesSettings().catch(() => {}); } },
+          ],
+        );
+      }
+      return;
+    }
+
+    try {
+      setDownloadState('downloading');
+      setErrorText(null);
+      setProgress(0);
+      const uri = await downloadUpdatePackage(info, next => {
+        setProgress(next.progress);
+      });
+      setLocalUri(uri);
+      setDownloadState('downloaded');
+      setProgress(1);
+    } catch {
+      setDownloadState('error');
+      setErrorText('Download non riuscito. Riprova oppure apri GitHub.');
+      setProgress(null);
+    }
+  };
 
   return (
-    <Modal visible transparent animationType="fade" onRequestClose={onDismiss}>
+    <Modal visible transparent animationType="fade" onRequestClose={downloadState === 'downloading' ? undefined : onDismiss}>
       <View style={styles.overlay}>
         <View style={[styles.sheet, { backgroundColor: colors.card }]}>
           {/* Header */}
@@ -36,10 +154,33 @@ export default function UpdateModal({ info, onDismiss }: Props) {
             <View style={{ marginLeft: 12, flex: 1 }}>
               <Text style={styles.headerTitle}>Aggiornamento disponibile</Text>
               <Text style={styles.headerSub}>
-                v{APP_VERSION} → {info.latestVersion}
+                v{APP_VERSION} → v{latestVersionLabel}
               </Text>
             </View>
           </View>
+
+          {statusLabel && (
+            <View style={[styles.statusBox, { backgroundColor: colors.cardSecondary, borderBottomColor: colors.border }]}>
+              <View style={styles.statusRow}>
+                {downloadState === 'downloading'
+                  ? <ActivityIndicator size="small" color={colors.primary} />
+                  : <MaterialIcons name={downloadState === 'downloaded' ? 'check-circle' : 'info-outline'} size={18} color={downloadState === 'error' ? '#DC2626' : colors.primary} />}
+                <Text style={[styles.statusText, { color: downloadState === 'error' ? '#DC2626' : colors.text }]}>
+                  {statusLabel}
+                </Text>
+              </View>
+              {downloadState === 'downloading' && (
+                <View style={[styles.progressTrack, { backgroundColor: colors.border }]}>
+                  <View
+                    style={[
+                      styles.progressFill,
+                      { backgroundColor: colors.primary, width: `${Math.max(6, Math.round((progress ?? 0) * 100))}%` },
+                    ]}
+                  />
+                </View>
+              )}
+            </View>
+          )}
 
           {/* Release notes */}
           {notes.length > 0 && (
@@ -54,13 +195,18 @@ export default function UpdateModal({ info, onDismiss }: Props) {
 
           {/* Buttons */}
           <View style={[styles.footer, { borderTopColor: colors.border }]}>
-            <TouchableOpacity style={styles.btnLater} onPress={onDismiss} activeOpacity={0.7}>
+            <TouchableOpacity
+              style={[styles.btnLater, downloadState === 'downloading' && styles.btnDisabled]}
+              onPress={onDismiss}
+              activeOpacity={0.7}
+              disabled={downloadState === 'downloading'}
+            >
               <Text style={[styles.btnLaterText, { color: colors.textMuted }]}>Più tardi</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={[styles.btn, { borderColor: colors.primary }]}
-              onPress={() => { Linking.openURL(info.releaseUrl); onDismiss(); }}
+              onPress={() => { openUpdateReleasePage(info).catch(() => {}); }}
               activeOpacity={0.8}
             >
               <MaterialIcons name="open-in-browser" size={16} color={colors.primary} />
@@ -68,12 +214,17 @@ export default function UpdateModal({ info, onDismiss }: Props) {
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.btn, styles.btnPrimary, { backgroundColor: colors.primary }]}
-              onPress={() => { Linking.openURL(info.downloadUrl); onDismiss(); }}
+              style={[styles.btn, styles.btnPrimary, { backgroundColor: colors.primary }, downloadState === 'downloading' && styles.btnDisabled]}
+              onPress={() => { handlePrimaryAction().catch(() => {}); }}
+              disabled={downloadState === 'downloading'}
               activeOpacity={0.8}
             >
-              <MaterialIcons name="download" size={16} color="#fff" />
-              <Text style={[styles.btnText, { color: '#fff' }]}>Scarica APK</Text>
+              <MaterialIcons
+                name={downloadState === 'downloaded' ? 'install-mobile' : 'download'}
+                size={16}
+                color="#fff"
+              />
+              <Text style={[styles.btnText, { color: '#fff' }]}>{primaryLabel}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -122,6 +273,32 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 20,
   },
+  statusBox: {
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+  },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  statusText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  progressTrack: {
+    height: 8,
+    borderRadius: 999,
+    overflow: 'hidden',
+    marginTop: 10,
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 999,
+  },
   footer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -149,6 +326,9 @@ const styles = StyleSheet.create({
   },
   btnPrimary: {
     borderWidth: 0,
+  },
+  btnDisabled: {
+    opacity: 0.6,
   },
   btnText: {
     fontSize: 13,

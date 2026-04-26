@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, ActivityIndicator,
-  Alert, Modal, KeyboardAvoidingView, Platform, TextInput, Linking,
+  Alert, Modal, KeyboardAvoidingView, Platform, TextInput,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -207,7 +207,9 @@ export default function SettingsScreen() {
   }, []);
 
   const handleDownload = useCallback(() => {
-    if (updateInfo?.downloadUrl) Linking.openURL(updateInfo.downloadUrl);
+    if (updateInfo?.available) {
+      setShowUpdateModal(true);
+    }
   }, [updateInfo]);
 
   const handleExport = useCallback(async () => {
@@ -407,7 +409,7 @@ export default function SettingsScreen() {
             >
               <MaterialIcons name="download" size={16} color="#fff" />
               <Text style={[styles.updateBtnTxt, { color: '#fff', fontWeight: '800' }]}>
-                Scarica v{updateInfo.latestVersion}
+                Gestisci v{updateInfo.latestVersion.replace(/^v/i, '')}
               </Text>
             </TouchableOpacity>
           )}

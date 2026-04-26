@@ -11,7 +11,7 @@ on:
       ref:
         description: 'Branch o commit da buildare'
         required: false
-        default: 'claude/fix-shift-permissions-Cn8gk'
+        default: 'main'
       version_override:
         description: 'Tag release (es. v2.6.2). Vuoto = legge app.json'
         required: false
@@ -38,7 +38,7 @@ jobs:
           elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
             echo "ref=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
           else
-            echo "ref=claude/fix-shift-permissions-Cn8gk" >> "$GITHUB_OUTPUT"
+            echo "ref=main" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Checkout
@@ -135,28 +135,14 @@ jobs:
             ## 📦 AeroStaff Pro ${{ steps.meta.outputs.tag }}
 
             ### Novità
-            - **Backup / Ripristino**: esporta tutti i dati dell'app in un file JSON e reimportali in qualsiasi momento da Impostazioni
-            - **Aggiornamento in-app**: popup stile Mihon con changelog e download APK diretto; controllo automatico all'avvio ogni 24h
-            - **Impostazioni riprogettate**: sezione aggiornamenti con card dedicata e badge NEW; backup con due tile colorate (esporta verde, importa blu)
+            - **Aggiornamento in-app completo**: l'app ora scarica l'APK direttamente da GitHub, mostra il progresso e apre l'installazione Android senza passare dal browser
+            - **APK riutilizzabile**: se l'ultima versione e gia stata scaricata, il popup la riconosce e propone subito l'installazione
+            - **Versione sincronizzata**: controllo aggiornamenti e metadata release usano la versione nativa reale dell'app, evitando falsi positivi
 
-            ### Bug fix – Turni e Home
-            - **HomeScreen "Giorno di riposo" errato**: l'evento Lavoro nel calendario ora ha sempre la precedenza su un eventuale evento Riposo dello stesso giorno
-            - **Widget "Giorno di riposo" errato**: WIDGET_SHIFT_KEY è ora la fonte autoritativa per classificare lavoro/riposo, impedendo che dati in cache stantii sovrascrivano il turno reale
-            - **FlightScreen**: trovato evento Lavoro nel calendario non azzerava `isRestDay` se preceduto da un evento Riposo; corretto
-
-            ### Bug fix – Voli
-            - **Aggiornamento automatico voli**: i dati FR24 ora si ricaricano ogni 2 minuti senza riaprire l'app
-            - **Duplicati voli**: chiave di merge stabilizzata su `numeroVolo_tsPartenza` (prima usava `identification.id` che FR24 a volte omette)
-
-            ### Bug fix – StaffMonitor stand / gate / arrivi
-            - **Colonne non rilevate**: rimosso il requisito di trovare stand/gate/belt prima di parsare; prima saltava tutte le righe
-            - **Nomi handler nella colonna stand**: `cell()` ora estrae solo il primo token alfanumerico (es. `17◆ Federico` → `17`)
-            - **Numeri di telefono come stand**: `isPhoneOrJunk` individua sequenze di 8+ cifre ovunque nella stringa
-            - **Colonna "ADDETTO STAND"**: word-boundary `\bstand\b` per evitare falsi positivi
-            - **Arrivi in parallelo + cache**: 7 varianti URL `nature=A` in simultanea, prima risposta vince in ≤40s; cache AsyncStorage 20 min
-            - **Sessione Tomcat (JSESSIONID)**: cookie catturato dalla risposta D e inoltrato alle richieste A — fix AbortError sugli arrivi
-            - **Numeri volo corrotti**: rimossi URL fallback senza `nature=A`
-            - **Timeout partenze**: ripristinato a 25s
+            ### Migliorie tecniche
+            - Gestione sicura delle release GitHub senza asset APK allegato
+            - Supporto Android per intent di installazione e permesso "Origini sconosciute"
+            - Workflow release GitHub allineato a `main` come branch predefinito per i build manuali
 
             Scarica `AeroStaffPro-${{ steps.meta.outputs.tag }}.apk` e installalo sul tuo dispositivo Android.
           files: ${{ env.apk }}
