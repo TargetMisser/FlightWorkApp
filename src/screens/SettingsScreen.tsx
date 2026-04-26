@@ -217,7 +217,7 @@ export default function SettingsScreen() {
     const result = await exportBackup();
     setExportingBackup(false);
     if (result.ok) {
-      Alert.alert('Backup esportato', 'File salvato nella cartella selezionata.');
+      Alert.alert('Backup esportato', 'File salvato nella cartella selezionata. Password e PIN non vengono inclusi per sicurezza.');
     } else if (result.error !== 'Permesso negato' && result.error !== 'Annullato') {
       Alert.alert('Errore', result.error);
     }
@@ -226,7 +226,7 @@ export default function SettingsScreen() {
   const handleImport = useCallback(async () => {
     Alert.alert(
       'Importa backup',
-      'I dati attuali (note, password, blocco note) saranno sovrascritti con quelli del backup. Continuare?',
+      'I dati compatibili del backup (note, rubrica, manuali e impostazioni) sovrascriveranno quelli attuali. I backup recenti non includono password e PIN. Continuare?',
       [
         { text: 'Annulla', style: 'cancel' },
         {

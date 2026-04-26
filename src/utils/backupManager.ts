@@ -1,15 +1,17 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
+import * as SecureStore from 'expo-secure-store';
 
-const BACKUP_VERSION = 1;
+const BACKUP_VERSION = 2;
 
-// Keys that represent user data worth preserving across reinstalls
-const BACKUP_KEYS = [
+const PASSWORDS_KEY = 'aerostaff_passwords_v1';
+const PIN_KEY = 'aerostaff_pin_v1';
+const PIN_ENABLED_KEY = 'aerostaff_pin_enabled_v1';
+
+// Only non-sensitive data is exported. Passwords and PINs stay in SecureStore.
+const SAFE_BACKUP_KEYS = [
   'aerostaff_notepad_v1',
-  'aerostaff_passwords_v1',
-  'aerostaff_pin_v1',
-  'aerostaff_pin_enabled_v1',
   'aerostaff_phonebook_v1',
   'aerostaff_airport_code_v1',
   'aerostaff_language_v1',
@@ -22,9 +24,38 @@ const BACKUP_KEYS = [
 
 export type BackupResult = { ok: true } | { ok: false; error: string };
 
+async function importLegacySensitiveData(data: Record<string, unknown>): Promise<number> {
+  let imported = 0;
+  let hasImportedPin = false;
+
+  const legacyPasswords = data[PASSWORDS_KEY];
+  if (typeof legacyPasswords === 'string' && legacyPasswords.trim()) {
+    await SecureStore.setItemAsync(PASSWORDS_KEY, legacyPasswords);
+    await AsyncStorage.removeItem(PASSWORDS_KEY).catch(() => {});
+    imported += 1;
+  }
+
+  const legacyPin = data[PIN_KEY];
+  if (typeof legacyPin === 'string' && legacyPin.trim()) {
+    await SecureStore.setItemAsync(PIN_KEY, legacyPin);
+    await AsyncStorage.removeItem(PIN_KEY).catch(() => {});
+    hasImportedPin = true;
+    imported += 1;
+  }
+
+  const legacyPinEnabled = data[PIN_ENABLED_KEY];
+  if (typeof legacyPinEnabled === 'string') {
+    const nextPinEnabled = legacyPinEnabled === 'true' && hasImportedPin ? 'true' : 'false';
+    await AsyncStorage.setItem(PIN_ENABLED_KEY, nextPinEnabled);
+    imported += 1;
+  }
+
+  return imported;
+}
+
 export async function exportBackup(): Promise<BackupResult> {
   try {
-    const pairs = await AsyncStorage.multiGet(BACKUP_KEYS);
+    const pairs = await AsyncStorage.multiGet(SAFE_BACKUP_KEYS);
     const data: Record<string, string | null> = {};
     for (const [key, value] of pairs) data[key] = value;
 
@@ -67,13 +98,19 @@ export async function importBackup(): Promise<BackupResult> {
       return { ok: false, error: 'Formato backup non riconosciuto' };
     }
 
-    const pairs: [string, string][] = Object.entries(parsed.data)
-      .filter(([key, val]) => BACKUP_KEYS.includes(key) && val !== null && val !== undefined)
+    const data = parsed.data as Record<string, unknown>;
+    const pairs: [string, string][] = Object.entries(data)
+      .filter(([key, val]) => SAFE_BACKUP_KEYS.includes(key) && val !== null && val !== undefined)
       .map(([key, val]) => [key, val as string]);
+    const importedLegacySensitive = await importLegacySensitiveData(data);
 
-    if (pairs.length === 0) return { ok: false, error: 'Nessun dato trovato nel backup' };
+    if (pairs.length === 0 && importedLegacySensitive === 0) {
+      return { ok: false, error: 'Nessun dato trovato nel backup' };
+    }
 
-    await AsyncStorage.multiSet(pairs);
+    if (pairs.length > 0) {
+      await AsyncStorage.multiSet(pairs);
+    }
     return { ok: true };
   } catch (e: any) {
     return { ok: false, error: e?.message ?? 'Errore sconosciuto' };

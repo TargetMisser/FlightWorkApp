@@ -28,6 +28,11 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      RELEASE_STORE_FILE: ${{ github.workspace }}/android/app/release.keystore
+      RELEASE_STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+      RELEASE_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+      RELEASE_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
     steps:
       - name: Compute checkout ref
@@ -104,10 +109,20 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
-      - name: Restore stable keystore
+      - name: Restore release keystore
         run: |
+          if [[ -z "${{ secrets.KEYSTORE_BASE64 }}" ]]; then
+            echo "Missing KEYSTORE_BASE64 secret"
+            exit 1
+          fi
+          for var in RELEASE_STORE_PASSWORD RELEASE_KEY_ALIAS RELEASE_KEY_PASSWORD; do
+            if [[ -z "${!var}" ]]; then
+              echo "Missing $var secret"
+              exit 1
+            fi
+          done
           mkdir -p android/app
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/app/debug.keystore
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > "$RELEASE_STORE_FILE"
 
       - name: Build release APK
         run: |
@@ -131,20 +146,7 @@ jobs:
         with:
           tag_name: ${{ steps.meta.outputs.tag }}
           name: "AeroStaff Pro ${{ steps.meta.outputs.tag }}"
-          body: |
-            ## 📦 AeroStaff Pro ${{ steps.meta.outputs.tag }}
-
-            ### Novità
-            - **Aggiornamento in-app completo**: l'app ora scarica l'APK direttamente da GitHub, mostra il progresso e apre l'installazione Android senza passare dal browser
-            - **APK riutilizzabile**: se l'ultima versione e gia stata scaricata, il popup la riconosce e propone subito l'installazione
-            - **Versione sincronizzata**: controllo aggiornamenti e metadata release usano la versione nativa reale dell'app, evitando falsi positivi
-
-            ### Migliorie tecniche
-            - Gestione sicura delle release GitHub senza asset APK allegato
-            - Supporto Android per intent di installazione e permesso "Origini sconosciute"
-            - Workflow release GitHub allineato a `main` come branch predefinito per i build manuali
-
-            Scarica `AeroStaffPro-${{ steps.meta.outputs.tag }}.apk` e installalo sul tuo dispositivo Android.
+          generate_release_notes: true
           files: ${{ env.apk }}
           draft: false
           prerelease: false

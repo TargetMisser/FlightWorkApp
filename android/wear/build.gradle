@@ -2,6 +2,20 @@ apply plugin: 'com.android.application'
 apply plugin: 'org.jetbrains.kotlin.android'
 apply plugin: 'org.jetbrains.kotlin.plugin.compose'
 
+def releaseStoreFile = System.getenv("RELEASE_STORE_FILE") ?: findProperty("android.releaseStoreFile")
+def releaseStorePassword = System.getenv("RELEASE_STORE_PASSWORD") ?: findProperty("android.releaseStorePassword")
+def releaseKeyAlias = System.getenv("RELEASE_KEY_ALIAS") ?: findProperty("android.releaseKeyAlias")
+def releaseKeyPassword = System.getenv("RELEASE_KEY_PASSWORD") ?: findProperty("android.releaseKeyPassword")
+def hasReleaseSigning = [releaseStoreFile, releaseStorePassword, releaseKeyAlias, releaseKeyPassword]
+    .every { it != null && it.toString().trim() }
+def wantsReleaseBuild = gradle.startParameter.taskNames.any { it.toLowerCase().contains("release") }
+
+if (wantsReleaseBuild && !hasReleaseSigning) {
+    throw new GradleException(
+        "Missing release signing config. Set RELEASE_STORE_FILE, RELEASE_STORE_PASSWORD, RELEASE_KEY_ALIAS, and RELEASE_KEY_PASSWORD."
+    )
+}
+
 android {
     namespace 'com.anonymous.flightworkapp.wear'
     compileSdk 36
@@ -21,11 +35,21 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+        if (hasReleaseSigning) {
+            release {
+                storeFile file(releaseStoreFile)
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+            }
+        }
     }
 
     buildTypes {
         release {
-            signingConfig signingConfigs.debug
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 
