@@ -477,7 +477,14 @@ async function schedulePinnedNotifications(item: any, tab: 'arrivals' | 'departu
 export default function FlightScreen() {
   const { colors } = useAppTheme();
   const { t, locale } = useLanguage();
-  const { airport, airportCode, isLoading: airportLoading } = useAirport();
+  const {
+    airport,
+    airportCode,
+    isLoading: airportLoading,
+    activeProfile,
+    activeProfileId,
+    setSelectedAirlines: persistSelectedAirlines,
+  } = useAirport();
   const s = useMemo(() => makeStyles(colors), [colors]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -497,6 +504,10 @@ export default function FlightScreen() {
   const [selectedAirlines, setSelectedAirlines] = useState<string[]>([]);
   const [staffMonitorDeps, setStaffMonitorDeps] = useState<StaffMonitorFlight[]>([]);
   const [staffMonitorArrs, setStaffMonitorArrs] = useState<StaffMonitorFlight[]>([]);
+  const applySelectedAirlines = useCallback((next: string[]) => {
+    setSelectedAirlines(next);
+    persistSelectedAirlines(next).catch(() => {});
+  }, [persistSelectedAirlines]);
 
   useEffect(() => {
     AsyncStorage.getItem(NOTIF_ENABLED_KEY).then(v => setNotifsEnabled(v === 'true'));
@@ -518,16 +529,10 @@ export default function FlightScreen() {
   useEffect(() => {
     const airlines = getAirportAirlines(airportCode);
     setAirportAirlines(airlines);
-    AsyncStorage.getItem(FLIGHT_FILTER_KEY).then(raw => {
-      try {
-        const saved: string[] = JSON.parse(raw ?? '[]');
-        const valid = saved.filter(k => airlines.includes(k));
-        setSelectedAirlines(valid.length > 0 ? valid : [...airlines]);
-      } catch {
-        setSelectedAirlines([...airlines]);
-      }
-    });
-  }, [airportCode]);
+    const saved = activeProfile?.airportCode === airportCode ? activeProfile.airlines : [];
+    const valid = saved.filter(key => airlines.includes(key));
+    setSelectedAirlines(valid.length > 0 ? valid : [...airlines]);
+  }, [activeProfile, activeProfileId, airportCode]);
 
   const fetchAll = useCallback(async () => {
     if (airportLoading) return;
@@ -973,8 +978,7 @@ export default function FlightScreen() {
               <TouchableOpacity
                 onPress={() => {
                   const next = allSelected ? [] : [...airportAirlines];
-                  setSelectedAirlines(next);
-                  AsyncStorage.setItem(FLIGHT_FILTER_KEY, JSON.stringify(next));
+                  applySelectedAirlines(next);
                 }}
               >
                 <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 13 }}>
@@ -996,8 +1000,7 @@ export default function FlightScreen() {
                       const next = checked
                         ? selectedAirlines.filter(k => k !== key)
                         : [...selectedAirlines, key];
-                      setSelectedAirlines(next);
-                      AsyncStorage.setItem(FLIGHT_FILTER_KEY, JSON.stringify(next));
+                      applySelectedAirlines(next);
                     }}
                   >
                     <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: dot }} />

@@ -17,9 +17,11 @@ import PhonebookScreen from './src/screens/PhonebookScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import PasswordScreen from './src/screens/PasswordScreen';
 import DrawerMenu from './src/components/DrawerMenu';
+import ProfileSwitcherModal from './src/components/ProfileSwitcherModal';
 import { autoScheduleNotifications } from './src/utils/autoNotifications';
 import { checkForUpdate, wasUpdateSeen, markUpdateSeen, type UpdateInfo } from './src/utils/updateChecker';
 import UpdateModal from './src/components/UpdateModal';
+import { useAirport } from './src/context/AirportContext';
 
 type Tab = 'Shifts' | 'Calendar' | 'Flights' | 'TravelDoc';
 type OverlayScreen = 'Notepad' | 'Phonebook' | 'Passwords' | 'Manuals' | 'Settings' | null;
@@ -81,10 +83,12 @@ function GlassTab({ icon, label, focused, activeColor, inactiveColor, onPress }:
 function AppInner() {
   const { colors, mode } = useAppTheme();
   const { t } = useLanguage();
+  const { profileInitials } = useAirport();
   const [activeTab, setActiveTab]   = useState<Tab>('Shifts');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [overlay, setOverlay]       = useState<OverlayScreen>(null);
   const [pendingUpdate, setPendingUpdate] = useState<UpdateInfo | null>(null);
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
 
   const tabLabels: Record<Tab, string> = {
     Shifts: t('tabHome'), Calendar: t('tabShifts'), Flights: t('tabFlights'), TravelDoc: t('tabTravelDoc'),
@@ -216,14 +220,16 @@ function AppInner() {
             <Text style={styles.weatherChip}>{colors.weatherIcon} {colors.weatherLabel}</Text>
           )}
         </View>
-        <LinearGradient
-          colors={[colors.primaryLight, colors.primary]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.avatar}
-        >
-          <Text style={styles.avatarText}>MR</Text>
-        </LinearGradient>
+        <TouchableOpacity onPress={() => setProfileModalOpen(true)} activeOpacity={0.85}>
+          <LinearGradient
+            colors={[colors.primaryLight, colors.primary]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.avatar}
+          >
+            <Text style={styles.avatarText}>{profileInitials}</Text>
+          </LinearGradient>
+        </TouchableOpacity>
       </ExpoBlurView>
 
       {/* Screen Content */}
@@ -291,6 +297,10 @@ function AppInner() {
         visible={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         onSelect={handleDrawerSelect}
+      />
+      <ProfileSwitcherModal
+        visible={profileModalOpen}
+        onClose={() => setProfileModalOpen(false)}
       />
       {pendingUpdate && (
         <UpdateModal

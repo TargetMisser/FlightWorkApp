@@ -16,6 +16,13 @@ export type UpdateInfo = {
   checkedAt: number;
 };
 
+function normalizeUpdateInfo(info: UpdateInfo): UpdateInfo {
+  return {
+    ...info,
+    available: isNewer(info.latestVersion, APP_VERSION),
+  };
+}
+
 function parseVersion(v: string): number[] {
   return v.replace(/^v/, '').split('.').map(n => parseInt(n, 10) || 0);
 }
@@ -37,7 +44,7 @@ export async function checkForUpdate(force = false): Promise<UpdateInfo | null> 
     if (!force) {
       const raw = await AsyncStorage.getItem(CHECK_KEY);
       if (raw) {
-        const cached: UpdateInfo = JSON.parse(raw);
+        const cached = normalizeUpdateInfo(JSON.parse(raw) as UpdateInfo);
         if (now - cached.checkedAt < 24 * 60 * 60 * 1000) return cached;
       }
     }
@@ -70,7 +77,7 @@ export async function checkForUpdate(force = false): Promise<UpdateInfo | null> 
     });
     const releaseUrl = typeof json.html_url === 'string' ? json.html_url : '';
 
-    const info: UpdateInfo = {
+    const info = normalizeUpdateInfo({
       available: isNewer(tag, APP_VERSION),
       latestVersion: tag,
       downloadUrl: typeof apkAsset?.browser_download_url === 'string' ? apkAsset.browser_download_url : null,
@@ -78,7 +85,7 @@ export async function checkForUpdate(force = false): Promise<UpdateInfo | null> 
       releaseNotes: typeof json.body === 'string' ? json.body : '',
       assetName: typeof apkAsset?.name === 'string' ? apkAsset.name : null,
       checkedAt: now,
-    };
+    });
 
     await AsyncStorage.setItem(CHECK_KEY, JSON.stringify(info));
     return info;
@@ -90,7 +97,7 @@ export async function checkForUpdate(force = false): Promise<UpdateInfo | null> 
 export async function getCachedUpdateInfo(): Promise<UpdateInfo | null> {
   try {
     const raw = await AsyncStorage.getItem(CHECK_KEY);
-    return raw ? JSON.parse(raw) : null;
+    return raw ? normalizeUpdateInfo(JSON.parse(raw) as UpdateInfo) : null;
   } catch {
     return null;
   }
