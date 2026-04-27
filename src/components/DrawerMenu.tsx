@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState, useMemo } from 'react';
 import {
   Animated, Modal, StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
+import { Easing } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -44,13 +45,34 @@ export default function DrawerMenu({ visible, onClose, onSelect }: Props) {
     if (visible) {
       setMounted(true);
       Animated.parallel([
-        Animated.spring(slideAnim, { toValue: 0, damping: 22, stiffness: 200, useNativeDriver: false }),
-        Animated.timing(fadeAnim,  { toValue: 1, duration: 250, useNativeDriver: true }),
+        Animated.spring(slideAnim, {
+          toValue: 0,
+          damping: 24,
+          stiffness: 185,
+          mass: 0.95,
+          useNativeDriver: false,
+        }),
+        Animated.timing(fadeAnim,  {
+          toValue: 1,
+          duration: 280,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
       ]).start();
     } else {
       Animated.parallel([
-        Animated.timing(slideAnim, { toValue: -DRAWER_WIDTH, duration: 220, useNativeDriver: false }),
-        Animated.timing(fadeAnim,  { toValue: 0, duration: 220, useNativeDriver: true }),
+        Animated.timing(slideAnim, {
+          toValue: -DRAWER_WIDTH,
+          duration: 260,
+          easing: Easing.inOut(Easing.cubic),
+          useNativeDriver: false,
+        }),
+        Animated.timing(fadeAnim,  {
+          toValue: 0,
+          duration: 220,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
       ]).start(({ finished }) => { if (finished) setMounted(false); });
     }
   }, [visible]);

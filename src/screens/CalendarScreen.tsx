@@ -4,6 +4,7 @@ import {
   PanResponder, Platform, UIManager, Animated, Dimensions, Modal, Alert, FlatList, TextInput,
   Linking,
 } from 'react-native';
+import { Easing } from 'react-native';
 import * as SystemCalendar from 'expo-calendar';
 import * as Location from 'expo-location';
 import * as DocumentPicker from 'expo-document-picker';
@@ -31,6 +32,11 @@ import {
 import { useLanguage } from '../context/LanguageContext';
 
 const STORAGE_KEY = '@shift_import_name';
+const WEEK_SWIPE_ACTIVATION_PX = 12;
+const WEEK_SWIPE_COMMIT_RATIO = 0.16;
+const WEEK_SWIPE_COMMIT_VELOCITY = 0.45;
+const WEEK_SWIPE_DRAG_RESISTANCE = 0.9;
+const WEEK_SWIPE_ENTRY_OFFSET = 0.55;
 
 type ShiftEvent = {
   id: string;
@@ -216,12 +222,19 @@ export default function CalendarScreen() {
 
   const changeWeek = (dir: 1 | -1) => {
     Animated.timing(weekSlideX, {
-      toValue: dir * SCREEN_W, duration: 120, useNativeDriver: true,
+      toValue: dir * SCREEN_W,
+      duration: 210,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
     }).start(() => {
       setCurrentWeekStart(d => { const n = new Date(d); n.setDate(n.getDate() + dir * -7); return n; });
-      weekSlideX.setValue(-dir * SCREEN_W);
-      Animated.timing(weekSlideX, {
-        toValue: 0, duration: 120, useNativeDriver: true,
+      weekSlideX.setValue(-dir * SCREEN_W * WEEK_SWIPE_ENTRY_OFFSET);
+      Animated.spring(weekSlideX, {
+        toValue: 0,
+        damping: 24,
+        stiffness: 190,
+        mass: 0.9,
+        useNativeDriver: true,
       }).start();
     });
   };
@@ -229,16 +242,22 @@ export default function CalendarScreen() {
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 15,
-      onMoveShouldSetPanResponderCapture: (_, g) => Math.abs(g.dx) > 15 && Math.abs(g.dx) > Math.abs(g.dy) * 1.5,
+      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > WEEK_SWIPE_ACTIVATION_PX,
+      onMoveShouldSetPanResponderCapture: (_, g) => Math.abs(g.dx) > WEEK_SWIPE_ACTIVATION_PX && Math.abs(g.dx) > Math.abs(g.dy) * 1.5,
       onPanResponderTerminationRequest: () => false,
-      onPanResponderMove: (_, g) => { weekSlideX.setValue(g.dx); },
+      onPanResponderMove: (_, g) => { weekSlideX.setValue(g.dx * WEEK_SWIPE_DRAG_RESISTANCE); },
       onPanResponderRelease: (_, g) => {
-        if (Math.abs(g.dx) > SCREEN_W * 0.2) {
-          changeWeek(g.dx > 0 ? 1 : -1);
+        if (Math.abs(g.dx) > SCREEN_W * WEEK_SWIPE_COMMIT_RATIO || Math.abs(g.vx) > WEEK_SWIPE_COMMIT_VELOCITY) {
+          const swipeDir: 1 | -1 = (g.dx !== 0 ? g.dx : g.vx) > 0 ? 1 : -1;
+          changeWeek(swipeDir);
         } else {
           Animated.spring(weekSlideX, {
-            toValue: 0, useNativeDriver: true, tension: 120, friction: 10,
+            toValue: 0,
+            velocity: g.vx,
+            damping: 22,
+            stiffness: 220,
+            mass: 0.9,
+            useNativeDriver: true,
           }).start();
         }
       },

@@ -4,6 +4,7 @@ import {
   FlatList, TouchableOpacity, RefreshControl, Image, Alert,
   Animated, PanResponder, NativeModules, Platform,
 } from 'react-native';
+import { Easing } from 'react-native';
 import * as Calendar from 'expo-calendar';
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -77,6 +78,9 @@ function LogoPill({ iataCode, airlineName, color }: { iataCode: string; airlineN
 }
 
 const SWIPE_THRESHOLD = 80;
+const SWIPE_TRIGGER_VELOCITY = 0.5;
+const SWIPE_MAX_TRANSLATE = 96;
+const SWIPE_DRAG_RESISTANCE = 0.82;
 
 function SwipeableFlightCardComponent({
   children, isPinned, onToggle,
@@ -88,31 +92,55 @@ function SwipeableFlightCardComponent({
   const translateX = useRef(new Animated.Value(0)).current;
   const onToggleRef = useRef(onToggle);
   onToggleRef.current = onToggle;
+  const dragScale = useMemo(() => translateX.interpolate({
+    inputRange: [-SWIPE_MAX_TRANSLATE, 0],
+    outputRange: [0.985, 1],
+    extrapolate: 'clamp',
+  }), [translateX]);
+
+  const animateBack = useCallback((velocity = 0) => {
+    Animated.spring(translateX, {
+      toValue: 0,
+      velocity,
+      damping: 20,
+      stiffness: 185,
+      mass: 0.9,
+      useNativeDriver: true,
+    }).start();
+  }, [translateX]);
 
   const panResponder = useMemo(() => PanResponder.create({
     onMoveShouldSetPanResponder: (_, g) =>
       Math.abs(g.dx) > 15 && Math.abs(g.dx) > Math.abs(g.dy) * 1.5,
     onPanResponderMove: (_, g) => {
-      if (g.dx < 0) translateX.setValue(g.dx);
+      const nextTranslate = g.dx < 0
+        ? Math.max(g.dx * SWIPE_DRAG_RESISTANCE, -SWIPE_MAX_TRANSLATE)
+        : g.dx * 0.08;
+      translateX.setValue(nextTranslate);
     },
     onPanResponderRelease: (_, g) => {
-      if (g.dx < -SWIPE_THRESHOLD) {
-        Animated.timing(translateX, { toValue: -SWIPE_THRESHOLD, duration: 100, useNativeDriver: true }).start(() => {
+      if (g.dx < -SWIPE_THRESHOLD || g.vx < -SWIPE_TRIGGER_VELOCITY) {
+        Animated.timing(translateX, {
+          toValue: -SWIPE_MAX_TRANSLATE,
+          duration: 170,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }).start(() => {
           onToggleRef.current();
-          Animated.spring(translateX, { toValue: 0, useNativeDriver: true, tension: 120, friction: 10 }).start();
+          animateBack();
         });
       } else {
-        Animated.spring(translateX, { toValue: 0, useNativeDriver: true, tension: 120, friction: 10 }).start();
+        animateBack(g.vx);
       }
     },
     onPanResponderTerminate: () => {
-      Animated.spring(translateX, { toValue: 0, useNativeDriver: true }).start();
+      animateBack();
     },
-  }), []);
+  }), [animateBack, translateX]);
 
   return (
     <View style={{ marginBottom: 10 }}>
-      <Animated.View style={{ transform: [{ translateX }] }} {...panResponder.panHandlers}>
+      <Animated.View style={{ transform: [{ translateX }, { scale: dragScale }] }} {...panResponder.panHandlers}>
         {children}
       </Animated.View>
     </View>

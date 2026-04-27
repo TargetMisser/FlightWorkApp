@@ -41,13 +41,20 @@ const WheelColumn: React.FC<WheelColumnProps> = ({
     scrollRef.current?.scrollTo({ y: index * ITEM_H, animated });
   }, []);
 
-  const commitIndex = useCallback((nextIndex: number, animated: boolean) => {
+  const settleIndex = useCallback((nextIndex: number, animated: boolean) => {
     const idx = clampIndex(nextIndex);
+    const changed = idx !== lastIndex.current;
     lastIndex.current = idx;
     setSelectedIndex(idx);
     scrollToIndex(idx, animated);
-    onChange(idx);
+    if (changed) {
+      onChange(idx);
+    }
   }, [clampIndex, onChange, scrollToIndex]);
+
+  const commitIndex = useCallback((nextIndex: number, animated: boolean) => {
+    settleIndex(nextIndex, animated);
+  }, [settleIndex]);
 
   useEffect(() => {
     const nextIndex = clampIndex(defaultIndex);
@@ -59,19 +66,15 @@ const WheelColumn: React.FC<WheelColumnProps> = ({
     return () => clearTimeout(timer);
   }, [clampIndex, defaultIndex, scrollToIndex]);
 
-  const syncFromScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const rawIdx = e.nativeEvent.contentOffset.y / ITEM_H;
-    const idx = clampIndex(Math.round(rawIdx));
-
+  const previewFromScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const idx = clampIndex(Math.round(e.nativeEvent.contentOffset.y / ITEM_H));
     setSelectedIndex(idx);
+  }, [clampIndex]);
 
-    if (idx !== lastIndex.current) {
-      lastIndex.current = idx;
-      onChange(idx);
-    } else {
-      scrollToIndex(idx, false);
-    }
-  }, [clampIndex, onChange, scrollToIndex]);
+  const syncFromScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const idx = clampIndex(Math.round(e.nativeEvent.contentOffset.y / ITEM_H));
+    settleIndex(idx, true);
+  }, [clampIndex, settleIndex]);
 
   return (
     <View style={{ width: 60, height: ITEM_H * VISIBLE, position: 'relative' }}>
@@ -88,11 +91,14 @@ const WheelColumn: React.FC<WheelColumnProps> = ({
         showsVerticalScrollIndicator={false}
         snapToInterval={ITEM_H}
         disableIntervalMomentum
-        decelerationRate="fast"
+        decelerationRate={0.992}
         scrollEventThrottle={16}
         nestedScrollEnabled
         directionalLockEnabled
         overScrollMode="never"
+        bounces={false}
+        alwaysBounceVertical={false}
+        onScroll={previewFromScroll}
         onMomentumScrollEnd={syncFromScroll}
         onScrollEndDrag={syncFromScroll}
         contentContainerStyle={{ paddingVertical: PAD }}
