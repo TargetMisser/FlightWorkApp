@@ -179,6 +179,9 @@ const it = {
   flightFilterAllSub: 'Mostra tutti gli operatori presenti',
   flightFilterSelAll: 'Seleziona tutto',
   flightFilterDeselAll: 'Deseleziona tutto',
+  updateCheckOkTitle: 'Sei aggiornato!',
+  updateCheckOkMessage: "AeroStaff Pro v{version} è l'ultima versione.",
+  updateCheckErrorMessage: 'Impossibile contattare GitHub. Riprova più tardi.',
 };
 
 const en: typeof it = {
@@ -359,6 +362,9 @@ const en: typeof it = {
   flightFilterAllSub: 'Show all operators at this airport',
   flightFilterSelAll: 'Select all',
   flightFilterDeselAll: 'Deselect all',
+  updateCheckOkTitle: 'You are up to date!',
+  updateCheckOkMessage: 'AeroStaff Pro v{version} is the latest version.',
+  updateCheckErrorMessage: 'Could not contact GitHub. Please try again later.',
 };
 
 export const translations: Record<Lang, typeof it> = { it, en };

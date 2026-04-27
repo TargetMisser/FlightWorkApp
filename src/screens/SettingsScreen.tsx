@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, ActivityIndicator,
-  Alert, Modal, KeyboardAvoidingView, Platform, TextInput,
+  Modal, KeyboardAvoidingView, Platform, TextInput,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -169,12 +169,27 @@ function SettingRow({
   );
 }
 
+type DialogTone = 'success' | 'error' | 'warning' | 'info';
+type DialogAction = {
+  label: string;
+  style?: 'primary' | 'secondary' | 'danger';
+  onPress?: () => void | Promise<void>;
+};
+type DialogState = {
+  title: string;
+  message: string;
+  tone: DialogTone;
+  actions?: DialogAction[];
+  scrollable?: boolean;
+};
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export default function SettingsScreen() {
   const { colors, mode, setMode, isLoading } = useAppTheme();
   const { airport, airportCode, setAirportCode, isLoading: airportLoading } = useAirport();
   const { t, lang, setLang, languages } = useLanguage();
   const [airportModalOpen, setAirportModalOpen] = useState(false);
+  const [dialogState, setDialogState] = useState<DialogState | null>(null);
 
   const translatedOptions = THEME_OPTIONS.map(opt => ({
     ...opt,
@@ -192,19 +207,42 @@ export default function SettingsScreen() {
     getCachedUpdateInfo().then(setUpdateInfo);
   }, []);
 
+  const showDialog = useCallback((dialog: DialogState) => {
+    setDialogState(dialog);
+  }, []);
+
+  const closeDialog = useCallback(() => {
+    setDialogState(null);
+  }, []);
+
+  const handleDialogAction = useCallback((action?: DialogAction) => {
+    setDialogState(null);
+    Promise.resolve()
+      .then(() => action?.onPress?.())
+      .catch(() => {});
+  }, []);
+
   const handleCheckUpdate = useCallback(async () => {
     setCheckingUpdate(true);
     const info = await checkForUpdate(true);
     setUpdateInfo(info);
     setCheckingUpdate(false);
     if (!info) {
-      Alert.alert('Errore', 'Impossibile contattare GitHub. Riprova più tardi.');
+      showDialog({
+        title: t('error'),
+        message: t('updateCheckErrorMessage'),
+        tone: 'error',
+      });
     } else if (info.available) {
       setShowUpdateModal(true);
     } else {
-      Alert.alert('Sei aggiornato!', `AeroStaff Pro v${APP_VERSION} è l'ultima versione.`);
+      showDialog({
+        title: t('updateCheckOkTitle'),
+        message: t('updateCheckOkMessage').replace('{version}', APP_VERSION),
+        tone: 'success',
+      });
     }
-  }, []);
+  }, [showDialog, t]);
 
   const handleDownload = useCallback(() => {
     if (updateInfo?.available) {
@@ -217,35 +255,52 @@ export default function SettingsScreen() {
     const result = await exportBackup();
     setExportingBackup(false);
     if (result.ok) {
-      Alert.alert('Backup esportato', 'File salvato nella cartella selezionata. Password e PIN non vengono inclusi per sicurezza.');
+      showDialog({
+        title: 'Backup esportato',
+        message: 'File salvato nella cartella selezionata. Password e PIN non vengono inclusi per sicurezza.',
+        tone: 'success',
+      });
     } else if (result.error !== 'Permesso negato' && result.error !== 'Annullato') {
-      Alert.alert('Errore', result.error);
+      showDialog({
+        title: t('error'),
+        message: result.error,
+        tone: 'error',
+      });
     }
-  }, []);
+  }, [showDialog, t]);
 
   const handleImport = useCallback(async () => {
-    Alert.alert(
-      'Importa backup',
-      'I dati compatibili del backup (note, rubrica, manuali e impostazioni) sovrascriveranno quelli attuali. I backup recenti non includono password e PIN. Continuare?',
-      [
-        { text: 'Annulla', style: 'cancel' },
+    showDialog({
+      title: 'Importa backup',
+      message: 'I dati compatibili del backup (note, rubrica, manuali e impostazioni) sovrascriveranno quelli attuali. I backup recenti non includono password e PIN. Continuare?',
+      tone: 'warning',
+      actions: [
+        { label: t('cancel'), style: 'secondary' },
         {
-          text: 'Importa',
-          style: 'destructive',
+          label: 'Importa',
+          style: 'danger',
           onPress: async () => {
             setImportingBackup(true);
             const result = await importBackup();
             setImportingBackup(false);
             if (result.ok) {
-              Alert.alert('Backup importato', 'Riavvia l\'app per applicare tutte le modifiche.');
+              showDialog({
+                title: 'Backup importato',
+                message: 'Riavvia l\'app per applicare tutte le modifiche.',
+                tone: 'success',
+              });
             } else if (result.error !== 'Annullato') {
-              Alert.alert('Errore', result.error);
+              showDialog({
+                title: t('error'),
+                message: result.error,
+                tone: 'error',
+              });
             }
           },
         },
       ],
-    );
-  }, []);
+    });
+  }, [showDialog, t]);
 
   const openAirportModal = () => {
     setAirportInput(airportCode);
@@ -260,16 +315,28 @@ export default function SettingsScreen() {
   const saveAirport = async () => {
     const normalized = normalizeAirportCode(airportInput);
     if (!isValidAirportCode(normalized)) {
-      Alert.alert(t('airportAlertInvalidTitle'), t('airportAlertInvalidMsg'));
+      showDialog({
+        title: t('airportAlertInvalidTitle'),
+        message: t('airportAlertInvalidMsg'),
+        tone: 'error',
+      });
       return;
     }
 
     try {
       await setAirportCode(normalized);
       setAirportModalOpen(false);
-      Alert.alert(t('airportAlertUpdatedTitle'), t('airportAlertUpdatedMsg'));
+      showDialog({
+        title: t('airportAlertUpdatedTitle'),
+        message: t('airportAlertUpdatedMsg'),
+        tone: 'success',
+      });
     } catch {
-      Alert.alert(t('airportAlertErrorTitle'), t('airportAlertErrorMsg'));
+      showDialog({
+        title: t('airportAlertErrorTitle'),
+        message: t('airportAlertErrorMsg'),
+        tone: 'error',
+      });
     }
   };
 
@@ -351,7 +418,16 @@ export default function SettingsScreen() {
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }, colors.isDark && { elevation: 0, shadowOpacity: 0, borderWidth: 1 }]}>
         <SettingRow icon="info-outline" label={t('appVersion')} sublabel={`v${APP_VERSION}`} type="info" />
         <View style={[styles.divider, { backgroundColor: colors.border }]} />
-        <TouchableOpacity style={styles.row} onPress={() => Alert.alert('StaffMonitor debug', `Stato: ${getStaffMonitorDebugStatus()}\n\nColonne:\n${getStaffMonitorDebugColumns()}\n\nVoli (D, primi 5):\n${getStaffMonitorDebugFlights()}`)} activeOpacity={0.8}>
+        <TouchableOpacity
+          style={styles.row}
+          onPress={() => showDialog({
+            title: 'StaffMonitor debug',
+            message: `Stato: ${getStaffMonitorDebugStatus()}\n\nColonne:\n${getStaffMonitorDebugColumns()}\n\nVoli (D, primi 5):\n${getStaffMonitorDebugFlights()}`,
+            tone: 'info',
+            scrollable: true,
+          })}
+          activeOpacity={0.8}
+        >
           <View style={[styles.iconWrap, { backgroundColor: colors.primaryLight }]}>
             <MaterialIcons name="bug-report" size={20} color={colors.primary} />
           </View>
@@ -487,6 +563,99 @@ export default function SettingsScreen() {
             setShowUpdateModal(false);
           }}
         />
+      )}
+
+      {dialogState && (
+        <Modal
+          visible
+          transparent
+          animationType="fade"
+          onRequestClose={closeDialog}
+        >
+          <View style={styles.modalOverlay}>
+            <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={closeDialog} />
+            <View style={[styles.statusModalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={[
+                styles.statusModalIconWrap,
+                {
+                  backgroundColor:
+                    dialogState.tone === 'success'
+                      ? colors.primaryLight
+                      : dialogState.tone === 'warning'
+                        ? '#F59E0B22'
+                        : dialogState.tone === 'info'
+                          ? '#2563EB22'
+                          : '#DC262622',
+                },
+              ]}>
+                <MaterialIcons
+                  name={
+                    dialogState.tone === 'success'
+                      ? 'verified'
+                      : dialogState.tone === 'warning'
+                        ? 'warning-amber'
+                        : dialogState.tone === 'info'
+                          ? 'info-outline'
+                          : 'error-outline'
+                  }
+                  size={24}
+                  color={
+                    dialogState.tone === 'success'
+                      ? colors.primary
+                      : dialogState.tone === 'warning'
+                        ? '#D97706'
+                        : dialogState.tone === 'info'
+                          ? '#2563EB'
+                          : '#DC2626'
+                  }
+                />
+              </View>
+              <Text style={[styles.statusModalTitle, { color: colors.text }]}>{dialogState.title}</Text>
+              {dialogState.scrollable ? (
+                <ScrollView
+                  style={styles.statusModalScroll}
+                  contentContainerStyle={styles.statusModalScrollContent}
+                  showsVerticalScrollIndicator={false}
+                >
+                  <Text style={[styles.statusModalMessage, { color: colors.textSub }]}>{dialogState.message}</Text>
+                </ScrollView>
+              ) : (
+                <Text style={[styles.statusModalMessage, { color: colors.textSub }]}>{dialogState.message}</Text>
+              )}
+              <View style={styles.statusModalActions}>
+                {(dialogState.actions ?? [{ label: t('ok'), style: 'primary' }]).map((action, index) => {
+                  const actionStyle = action.style ?? 'primary';
+                  return (
+                    <TouchableOpacity
+                      key={`${action.label}_${index}`}
+                      style={[
+                        styles.statusModalBtn,
+                        actionStyle === 'primary' && { backgroundColor: colors.primary },
+                        actionStyle === 'secondary' && {
+                          backgroundColor: colors.cardSecondary,
+                          borderColor: colors.border,
+                          borderWidth: 1,
+                        },
+                        actionStyle === 'danger' && { backgroundColor: '#DC2626' },
+                      ]}
+                      onPress={() => { handleDialogAction(action); }}
+                      activeOpacity={0.85}
+                    >
+                      <Text
+                        style={[
+                          styles.statusModalBtnText,
+                          actionStyle === 'secondary' && { color: colors.text },
+                        ]}
+                      >
+                        {action.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          </View>
+        </Modal>
       )}
 
       <Modal
@@ -654,6 +823,62 @@ const styles = StyleSheet.create({
   modalActions: { flexDirection: 'row', gap: 10 },
   modalBtn: { flex: 1, borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
   modalBtnTxt: { fontSize: 14, fontWeight: '700' },
+  statusModalCard: {
+    borderRadius: 22,
+    padding: 22,
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 18,
+    elevation: 14,
+    alignItems: 'center',
+  },
+  statusModalIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  statusModalTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  statusModalScroll: {
+    width: '100%',
+    maxHeight: 240,
+    marginTop: 10,
+    marginBottom: 18,
+  },
+  statusModalScrollContent: {
+    paddingHorizontal: 2,
+  },
+  statusModalMessage: {
+    fontSize: 15,
+    lineHeight: 22,
+    textAlign: 'center',
+    marginTop: 10,
+    marginBottom: 18,
+  },
+  statusModalActions: {
+    width: '100%',
+    flexDirection: 'row',
+    gap: 10,
+  },
+  statusModalBtn: {
+    flex: 1,
+    borderRadius: 14,
+    paddingHorizontal: 18,
+    paddingVertical: 13,
+    alignItems: 'center',
+  },
+  statusModalBtnText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#fff',
+  },
 
   // Update card
   updateCard: {

@@ -5,6 +5,7 @@ import {
   DEFAULT_AIRPORT_CODE,
   getAirportAirlines,
   getAirportInfo,
+  getStoredAirportAirlineMap,
   getStoredAirportCode,
   normalizeAirportCode,
   type AirportInfo,
@@ -187,6 +188,7 @@ export function AirportProvider({ children }: { children: React.ReactNode }) {
 
     const hydrate = async () => {
       try {
+        await getStoredAirportAirlineMap();
         const [storedAirportCode, filterRaw, profilesRaw, activeProfileRaw] = await Promise.all([
           getStoredAirportCode(),
           AsyncStorage.getItem(FLIGHT_FILTER_STORAGE_KEY),

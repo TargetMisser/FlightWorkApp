@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { ALLOWED_AIRLINES } from './airlineOps';
+import { ALLOWED_AIRLINES, AIRLINE_DISPLAY_NAMES } from './airlineOps';
 
 export type AirportPreset = {
   code: string;
@@ -13,6 +13,7 @@ export type AirportInfo = AirportPreset & {
 };
 
 export const AIRPORT_STORAGE_KEY = 'aerostaff_airport_code_v1';
+export const AIRPORT_AIRLINES_STORAGE_KEY = 'aerostaff_airport_airlines_v1';
 export const DEFAULT_AIRPORT_CODE = 'PSA';
 
 export const AIRPORT_PRESETS: AirportPreset[] = [
@@ -45,9 +46,119 @@ export const AIRPORT_AIRLINES: Record<string, string[]> = {
   PMO: ['ryanair', 'easyjet', 'wizz', 'volotea', 'vueling'],
 };
 
+const airportAirlinesCache: Record<string, string[]> = Object.fromEntries(
+  Object.entries(AIRPORT_AIRLINES).map(([code, airlines]) => [code, [...airlines]]),
+);
+
+function normalizeAirlineKey(value: string | null | undefined): string {
+  return (value ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function sortAirlineKeys(values: string[]): string[] {
+  return [...values].sort((left, right) => {
+    const leftLabel = AIRLINE_DISPLAY_NAMES[left] ?? left;
+    const rightLabel = AIRLINE_DISPLAY_NAMES[right] ?? right;
+    return leftLabel.localeCompare(rightLabel, 'en', { sensitivity: 'base' });
+  });
+}
+
+function sanitizeAirlineList(values: string[], fallback: string[] = ALLOWED_AIRLINES): string[] {
+  const unique = Array.from(new Set(values.map(normalizeAirlineKey).filter(Boolean)));
+  if (unique.length === 0) {
+    return [...fallback];
+  }
+
+  return sortAirlineKeys(unique);
+}
+
+function normalizeAirportAirlineMap(raw: unknown): Record<string, string[]> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return {};
+  }
+
+  const entries = Object.entries(raw as Record<string, unknown>)
+    .map(([airportCode, airlines]) => {
+      const normalizedCode = normalizeAirportCode(airportCode);
+      if (!normalizedCode || !Array.isArray(airlines)) {
+        return null;
+      }
+
+      return [normalizedCode, sanitizeAirlineList(airlines as string[], [])] as const;
+    })
+    .filter((entry): entry is readonly [string, string[]] => entry !== null);
+
+  return Object.fromEntries(entries);
+}
+
+export function primeAirportAirlinesCache(map: Record<string, string[]>): void {
+  Object.entries(normalizeAirportAirlineMap(map)).forEach(([airportCode, airlines]) => {
+    airportAirlinesCache[airportCode] = airlines;
+  });
+}
+
+export async function getStoredAirportAirlineMap(): Promise<Record<string, string[]>> {
+  try {
+    const raw = await AsyncStorage.getItem(AIRPORT_AIRLINES_STORAGE_KEY);
+    const parsed = raw ? normalizeAirportAirlineMap(JSON.parse(raw)) : {};
+    primeAirportAirlinesCache(parsed);
+    return parsed;
+  } catch {
+    return {};
+  }
+}
+
+export async function getStoredAirportAirlines(code: string | null | undefined): Promise<string[]> {
+  const normalized = isValidAirportCode(code) ? normalizeAirportCode(code) : DEFAULT_AIRPORT_CODE;
+  const stored = await getStoredAirportAirlineMap();
+  return stored[normalized] ?? getAirportAirlines(normalized);
+}
+
+export function extractAirportAirlinesFromSchedule(...sources: unknown[]): string[] {
+  const detected = sources.flatMap(source => {
+    if (!Array.isArray(source)) {
+      return [];
+    }
+
+    return source
+      .map(item => typeof item === 'string' ? item : item?.flight?.airline?.name)
+      .filter((name): name is string => typeof name === 'string' && name.trim().length > 0);
+  });
+
+  return sanitizeAirlineList(detected, []);
+}
+
+function arraysEqual(left: string[], right: string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+export async function storeDetectedAirportAirlines(code: string | null | undefined, ...sources: unknown[]): Promise<string[]> {
+  const normalizedCode = isValidAirportCode(code) ? normalizeAirportCode(code) : DEFAULT_AIRPORT_CODE;
+  const detected = extractAirportAirlinesFromSchedule(...sources);
+  const fallback = AIRPORT_AIRLINES[normalizedCode] ?? ALLOWED_AIRLINES;
+  const currentStoredMap = await getStoredAirportAirlineMap();
+  const current = currentStoredMap[normalizedCode] ?? getAirportAirlines(normalizedCode);
+  const next = sanitizeAirlineList([...fallback, ...current, ...detected], fallback);
+
+  airportAirlinesCache[normalizedCode] = next;
+
+  if (arraysEqual(next, currentStoredMap[normalizedCode] ?? [])) {
+    return next;
+  }
+
+  await AsyncStorage.setItem(
+    AIRPORT_AIRLINES_STORAGE_KEY,
+    JSON.stringify({
+      ...currentStoredMap,
+      [normalizedCode]: next,
+    }),
+  );
+
+  return next;
+}
+
 export function getAirportAirlines(code: string | null | undefined): string[] {
-  const normalized = normalizeAirportCode(code);
-  return AIRPORT_AIRLINES[normalized] ?? ALLOWED_AIRLINES;
+  const normalized = isValidAirportCode(code) ? normalizeAirportCode(code) : DEFAULT_AIRPORT_CODE;
+  return airportAirlinesCache[normalized] ?? AIRPORT_AIRLINES[normalized] ?? ALLOWED_AIRLINES;
 }
 
 const AIRPORT_MAP = Object.fromEntries(

@@ -5,6 +5,7 @@ import {
   getStoredAirportCode,
   isValidAirportCode,
   normalizeAirportCode,
+  storeDetectedAirportAirlines,
   type AirportInfo,
 } from './airportSettings';
 
@@ -27,6 +28,10 @@ export type FR24ScheduleRaw = {
 };
 
 function filterAirlines(data: any[], allowedList: string[]) {
+  if (allowedList.length === 0) {
+    return data;
+  }
+
   return data.filter(item =>
     allowedList.some(key => (item.flight?.airline?.name || '').toLowerCase().includes(key)),
   );
@@ -56,6 +61,7 @@ export async function fetchAirportSchedule(code?: string): Promise<FR24Schedule>
     const allArrivals = json.result?.response?.airport?.pluginData?.schedule?.arrivals?.data || [];
     const allDepartures = json.result?.response?.airport?.pluginData?.schedule?.departures?.data || [];
 
+    await storeDetectedAirportAirlines(airportCode, allArrivals, allDepartures);
     const airlines = getAirportAirlines(airportCode);
     return {
       arrivals: filterAirlines(allArrivals, airlines),
@@ -87,6 +93,7 @@ export async function fetchAirportScheduleRaw(code?: string): Promise<FR24Schedu
     const allArrivals = json.result?.response?.airport?.pluginData?.schedule?.arrivals?.data || [];
     const allDepartures = json.result?.response?.airport?.pluginData?.schedule?.departures?.data || [];
 
+    await storeDetectedAirportAirlines(airportCode, allArrivals, allDepartures);
     const airlines = getAirportAirlines(airportCode);
     return {
       allArrivals,

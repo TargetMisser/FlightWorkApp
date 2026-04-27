@@ -14,7 +14,7 @@ import { useAirport } from '../context/AirportContext';
 import { getAirlineOps, getAirlineColor, AIRLINE_COLORS, AIRLINE_DISPLAY_NAMES } from '../utils/airlineOps';
 import { fetchAirportScheduleRaw } from '../utils/fr24api';
 import { fetchStaffMonitorData, normalizeFlightNumber, type StaffMonitorFlight } from '../utils/staffMonitor';
-import { formatAirportHeader, getAirportAirlines } from '../utils/airportSettings';
+import { formatAirportHeader, getAirportAirlines, getStoredAirportAirlines } from '../utils/airportSettings';
 import { requestWidgetUpdate } from 'react-native-android-widget';
 import { WIDGET_CACHE_KEY, WIDGET_SHIFT_KEY } from '../widgets/widgetTaskHandler';
 import type { WidgetData, WidgetFlight, WidgetShiftData } from '../widgets/widgetTaskHandler';
@@ -45,6 +45,10 @@ function mergeFlights(cached: any[], fresh: any[], tsField: string): any[] {
   for (const item of cached) map.set(flightKey(item, tsField), item);
   for (const item of fresh) map.set(flightKey(item, tsField), item);
   return Array.from(map.values());
+}
+
+function sameAirlineKeys(left: string[], right: string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
 // Handler: mostra notifiche anche con app aperta (wrapped for Expo Go compat)
@@ -508,6 +512,16 @@ export default function FlightScreen() {
     setSelectedAirlines(next);
     persistSelectedAirlines(next).catch(() => {});
   }, [persistSelectedAirlines]);
+  const airportAirlinesRef = useRef<string[]>([]);
+  const selectedAirlinesRef = useRef<string[]>([]);
+
+  useEffect(() => {
+    airportAirlinesRef.current = airportAirlines;
+  }, [airportAirlines]);
+
+  useEffect(() => {
+    selectedAirlinesRef.current = selectedAirlines;
+  }, [selectedAirlines]);
 
   useEffect(() => {
     AsyncStorage.getItem(NOTIF_ENABLED_KEY).then(v => setNotifsEnabled(v === 'true'));
@@ -527,11 +541,43 @@ export default function FlightScreen() {
 
   // Carica lista compagnie per aeroporto + selezione salvata
   useEffect(() => {
-    const airlines = getAirportAirlines(airportCode);
-    setAirportAirlines(airlines);
-    const saved = activeProfile?.airportCode === airportCode ? activeProfile.airlines : [];
-    const valid = saved.filter(key => airlines.includes(key));
-    setSelectedAirlines(valid.length > 0 ? valid : [...airlines]);
+    let active = true;
+
+    getStoredAirportAirlines(airportCode).then(airlines => {
+      if (!active) {
+        return;
+      }
+
+      setAirportAirlines(airlines);
+      const saved = activeProfile?.airportCode === airportCode ? activeProfile.airlines : [];
+      const valid = saved.filter(key => airlines.includes(key));
+
+      if (saved.length === 0 && activeProfile?.airportCode === airportCode) {
+        setSelectedAirlines([]);
+        return;
+      }
+
+      setSelectedAirlines(valid.length > 0 ? valid : [...airlines]);
+    }).catch(() => {
+      if (!active) {
+        return;
+      }
+
+      const airlines = getAirportAirlines(airportCode);
+      setAirportAirlines(airlines);
+      const saved = activeProfile?.airportCode === airportCode ? activeProfile.airlines : [];
+      if (saved.length === 0 && activeProfile?.airportCode === airportCode) {
+        setSelectedAirlines([]);
+        return;
+      }
+
+      const valid = saved.filter(key => airlines.includes(key));
+      setSelectedAirlines(valid.length > 0 ? valid : [...airlines]);
+    });
+
+    return () => {
+      active = false;
+    };
   }, [activeProfile, activeProfileId, airportCode]);
 
   const fetchAll = useCallback(async () => {
@@ -544,6 +590,23 @@ export default function FlightScreen() {
         departures: fetchedDepartures,
         arrivals: fetchedArrivals,
       } = await fetchAirportScheduleRaw(airportCode);
+      const nextAirportAirlines = getAirportAirlines(airportCode);
+      setAirportAirlines(nextAirportAirlines);
+
+      const savedProfileAirlines = activeProfile?.airportCode === airportCode ? activeProfile.airlines : [];
+      const previousAirportAirlines = airportAirlinesRef.current;
+      const previousSelectedAirlines = selectedAirlinesRef.current;
+      const hadAllPreviouslySelected =
+        previousAirportAirlines.length > 0 &&
+        previousAirportAirlines.every(key => previousSelectedAirlines.includes(key));
+
+      if (savedProfileAirlines.length === 0) {
+        if (previousSelectedAirlines.length > 0) {
+          applySelectedAirlines([]);
+        }
+      } else if (hadAllPreviouslySelected && !sameAirlineKeys(savedProfileAirlines, nextAirportAirlines)) {
+        applySelectedAirlines(nextAirportAirlines);
+      }
       // Accumula voli: fonde i dati freschi con quelli già visti oggi
       // così i voli rimossi da FR24 dopo la partenza restano visibili fino a mezzanotte
       const today = new Date().toISOString().split('T')[0];
@@ -718,7 +781,7 @@ export default function FlightScreen() {
         setScheduledCount(0);
       }
     } catch (e) { if (__DEV__) console.error('[fetchAll]', e); } finally { setLoading(false); setRefreshing(false); }
-  }, [airportCode, airportLoading]);
+  }, [activeProfile, airportCode, airportLoading, applySelectedAirlines]);
 
   useEffect(() => {
     if (airportLoading) return;
