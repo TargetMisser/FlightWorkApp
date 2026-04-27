@@ -677,6 +677,11 @@ export default function CalendarScreen() {
                       <MaterialIcons name="chevron-right" size={20} color={colors.textSub} />
                     </TouchableOpacity>
                   )}
+                  // Performance optimization: Virtualization props to reduce memory and render time for large lists
+                  initialNumToRender={15}
+                  maxToRenderPerBatch={10}
+                  windowSize={5}
+                  removeClippedSubviews={true}
                 />
               </>
             )}

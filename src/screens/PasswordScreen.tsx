@@ -323,6 +323,11 @@ export default function PasswordScreen() {
           </View>
         }
         showsVerticalScrollIndicator={false}
+        // Performance optimization: Virtualization props to reduce memory and render time for large lists
+        initialNumToRender={15}
+        maxToRenderPerBatch={10}
+        windowSize={5}
+        removeClippedSubviews={true}
       />
 
       {/* Add / Edit modal */}
