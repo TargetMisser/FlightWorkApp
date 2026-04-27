@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, ScrollView, Alert, TouchableOpacity, Image, Linking } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { WebView } from 'react-native-webview';
 import * as Calendar from 'expo-calendar';
@@ -162,7 +163,7 @@ export default function ShiftScreen() {
           const alldayStart = new Date(d.year, d.month, d.day, 12, 0, 0);
           const alldayEnd = new Date(d.year, d.month, d.day, 14, 0, 0);
           await Calendar.createEventAsync(targetCalendar.id, {
-            title: "🌴 Riposo",
+            title: 'Riposo',
             startDate: alldayStart,
             endDate: alldayEnd,
             allDay: true,
@@ -182,7 +183,7 @@ export default function ShiftScreen() {
           }
 
           await Calendar.createEventAsync(targetCalendar.id, {
-            title: "Turno Lavoro ✈️",
+            title: 'Turno Lavoro',
             startDate: startDate,
             endDate: endDate,
             notes: "Dati estratti: " + d.raw + " -> " + s.raw,
@@ -194,7 +195,7 @@ export default function ShiftScreen() {
 
       if (savedCount > 0) {
         Alert.alert(
-          "✅ Turni Sincronizzati!", 
+          t('shiftSyncOkTitle'),
           `${savedCount} turni salvati nel calendario.`
         );
       } else {
@@ -252,7 +253,10 @@ export default function ShiftScreen() {
       </View>
 
       <View style={styles.infoCard}>
-        <Text style={styles.infoTitle}>📅 Sincronizzazione Calendario</Text>
+        <View style={styles.infoTitleRow}>
+          <MaterialIcons name="calendar-today" size={18} color={PRIMARY} />
+          <Text style={styles.infoTitle}>{t('shiftSyncTitle')}</Text>
+        </View>
         <Text style={styles.infoDesc}>
           Seleziona gli screenshot del tuo tabellone orari. Il sistema li leggerà per cercare e salvare automaticamente i voli nel calendario del tuo telefono.
         </Text>
@@ -260,7 +264,10 @@ export default function ShiftScreen() {
 
       <View style={styles.buttonsContainer}>
         <TouchableOpacity style={styles.button} onPress={pickImage}>
-          <Text style={styles.buttonText}>📷 Scansiona Screenshot Turni</Text>
+          <View style={styles.buttonInner}>
+            <MaterialIcons name="photo-camera" size={18} color="#fff" />
+            <Text style={styles.buttonText}>{t('shiftScanBtn')}</Text>
+          </View>
         </TouchableOpacity>
       </View>
       
@@ -285,7 +292,10 @@ export default function ShiftScreen() {
           <Text style={styles.resultText}>{ocrText}</Text>
           
           <TouchableOpacity style={styles.saveButton} onPress={parseAndSaveShifts}>
-            <Text style={styles.saveButtonText}>✅ Sincronizza nel Calendario!</Text>
+            <View style={styles.buttonInner}>
+              <MaterialIcons name="check-circle" size={18} color="#fff" />
+              <Text style={styles.saveButtonText}>{t('shiftSyncBtn')}</Text>
+            </View>
           </TouchableOpacity>
         </View>
       ) : null}
@@ -314,7 +324,8 @@ const styles = StyleSheet.create({
     borderLeftWidth: 4, borderLeftColor: PRIMARY,
     shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 6, elevation: 2,
   },
-  infoTitle: { fontWeight: 'bold', fontSize: 15, marginBottom: 8, color: PRIMARY },
+  infoTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  infoTitle: { fontWeight: 'bold', fontSize: 15, color: PRIMARY },
   infoDesc: { fontSize: 13, color: '#6B7280', lineHeight: 20 },
   buttonsContainer: { margin: 16, marginBottom: 0 },
   button: {
@@ -323,6 +334,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     shadowColor: DARK_ORANGE, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5,
   },
+  buttonInner: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   buttonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
   imagesPreview: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', margin: 16, gap: 10 },
   image: { width: '45%', height: 140, resizeMode: 'cover', borderRadius: 10, borderWidth: 1, borderColor: '#E5E7EB' },

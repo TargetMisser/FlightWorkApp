@@ -152,9 +152,8 @@ function Header({ label }: { label?: string }) {
           alignItems: 'center',
         }}
       >
-        <TextWidget
-          text="✈"
-          style={{ fontSize: 14, color: ORANGE, marginRight: 6 }}
+        <FlexWidget
+          style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: ORANGE, marginRight: 8 }}
         />
         <TextWidget
           text={label ? `Turno  ${label}` : 'AeroStaff Pro'}
@@ -180,9 +179,8 @@ function Footer({ updatedAt }: { updatedAt: string }) {
       }}
       clickAction="OPEN_APP"
     >
-      <TextWidget
-        text="🔶"
-        style={{ fontSize: 8, marginRight: 5 }}
+      <FlexWidget
+        style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: ORANGE, marginRight: 6 }}
       />
       <TextWidget
         text={`Aggiornato: ${updatedAt}`}
@@ -210,7 +208,24 @@ export function ShiftWidget({ data }: { data: WidgetData }) {
         <FlexWidget
           style={{ flex: 1, justifyContent: 'center', alignItems: 'center', flexDirection: 'column' }}
         >
-          <TextWidget text="🌴" style={{ fontSize: 40 }} />
+          <FlexWidget
+            style={{
+              backgroundColor: '#10341F',
+              borderRadius: 16,
+              paddingHorizontal: 14,
+              paddingVertical: 8,
+              flexDirection: 'row',
+              alignItems: 'center',
+            }}
+          >
+            <FlexWidget
+              style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#34D399', marginRight: 6 }}
+            />
+            <TextWidget
+              text="RIPOSO"
+              style={{ fontSize: 13, fontWeight: 'bold', color: '#34D399' }}
+            />
+          </FlexWidget>
           <TextWidget
             text="Giorno di Riposo"
             style={{ fontSize: 18, fontWeight: 'bold', color: TEXT, marginTop: 8 }}

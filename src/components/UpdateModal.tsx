@@ -23,7 +23,7 @@ function renderNotes(raw: string): string {
     .replace(/^#{1,3} ?/gm, '')          // strip markdown headers
     .replace(/\*\*(.+?)\*\*/g, '$1')     // strip bold
     .replace(/`(.+?)`/g, '$1')           // strip inline code
-    .replace(/📦 AeroStaff Pro [^\n]+\n?/, '') // strip redundant title line
+    .replace(/^AeroStaff Pro [^\n]+\n?/m, '') // strip redundant title line
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
@@ -116,8 +116,8 @@ export default function UpdateModal({ info, onDismiss }: Props) {
         await installDownloadedUpdate(localUri);
       } catch {
         Alert.alert(
-          'Installazione bloccata',
-          'Android potrebbe richiedere il permesso per installare app da questa sorgente.',
+          'Installazione non avviata',
+          'Android non ha avviato o completato l’installazione dell’APK. Verifica che AeroStaff Pro possa installare app da questa sorgente.',
           [
             { text: 'Annulla', style: 'cancel' },
             { text: 'Apri impostazioni', onPress: () => { openUnknownSourcesSettings().catch(() => {}); } },

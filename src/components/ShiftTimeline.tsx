@@ -186,7 +186,7 @@ export default function ShiftTimeline({ visible, onClose, shiftStart, shiftEnd, 
         </View>
       ) : flights.length === 0 ? (
         <View style={[s.center, inline && { minHeight: 80 }]}>
-          <Text style={{ fontSize: 36, marginBottom: 8 }}>✈️</Text>
+          <MaterialIcons name="flight-takeoff" size={30} color={colors.textMuted} style={{ marginBottom: 8 }} />
           <Text style={{ color: colors.textSub, fontSize: 14 }}>Nessuna partenza nel turno</Text>
         </View>
       ) : (

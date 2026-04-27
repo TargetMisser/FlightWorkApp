@@ -94,7 +94,7 @@ export async function autoScheduleNotifications(): Promise<number> {
         const fn    = next.flight?.identification?.number?.default ?? '';
         const dest  = next.flight?.airport?.destination?.code?.iata ?? '';
         const time  = new Date(depTs * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
-        flightInfo  = `Prossima: ${fn} ✈ ${dest} alle ${time} · ${shiftDepartures.length} voli oggi`;
+        flightInfo  = `Prossima: ${fn} per ${dest} alle ${time} · ${shiftDepartures.length} voli oggi`;
       } else {
         flightInfo = `${shiftDepartures.length} voli · Nessuna partenza imminente`;
       }
@@ -125,7 +125,7 @@ export async function autoScheduleNotifications(): Promise<number> {
 
         const id = await Notifications.scheduleNotificationAsync({
           content: {
-            title: `✈️ Arrivo tra 15 min — ${flightNumber}`,
+            title: `Arrivo tra 15 min - ${flightNumber}`,
             body: `${airline} da ${origin} · arrivo alle ${arrivalTime}`,
             sound: true,
             data: { flightNumber, arrTs, type: 'arrival_15min' },
@@ -160,7 +160,7 @@ export async function autoScheduleNotifications(): Promise<number> {
           const ciTime = new Date(ciOpenTs * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
           const id = await Notifications.scheduleNotificationAsync({
             content: {
-              title: `📌 Check-in aperto — ${flightNumber}`,
+              title: `Check-in aperto - ${flightNumber}`,
               body: `${airline} per ${destination} · partenza ${depTime} · CI dalle ${ciTime}`,
               sound: true,
               data: { flightNumber, depTs, type: 'checkin_open' },
@@ -177,7 +177,7 @@ export async function autoScheduleNotifications(): Promise<number> {
           const gateTime = new Date(gateOpenTs * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
           const id = await Notifications.scheduleNotificationAsync({
             content: {
-              title: `🚪 Gate aperto — ${flightNumber}`,
+              title: `Gate aperto - ${flightNumber}`,
               body: `${airline} per ${destination} · gate dalle ${gateTime} · partenza ${depTime}`,
               sound: true,
               data: { flightNumber, depTs, type: 'gate_open' },

@@ -1,4 +1,5 @@
 export type Lang = 'it' | 'en';
+export type WeatherDescriptor = { text: string; iconName: string };
 
 const it = {
   // Navigation
@@ -47,17 +48,17 @@ const it = {
   // ShiftScreen
   shiftTitle: 'Gestione Turni',
   shiftSub: 'Scansiona i turni dal tabellone e sincronizzali nel calendario.',
-  shiftSyncTitle: '\ud83d\udcc5 Sincronizzazione Calendario',
+  shiftSyncTitle: 'Sincronizzazione Calendario',
   shiftSyncDesc: 'Seleziona gli screenshot del tuo tabellone orari...',
-  shiftScanBtn: '\ud83d\udcf7 Scansiona Screenshot Turni',
+  shiftScanBtn: 'Scansiona Screenshot Turni',
   shiftExtracting: 'Estrazione del testo in corso...',
   shiftExtractedTitle: 'Testo Estratto:',
-  shiftSyncBtn: '\u2705 Sincronizza nel Calendario!',
+  shiftSyncBtn: 'Sincronizza nel Calendario!',
   shiftErrOcrTitle: 'Errore OCR', shiftErrOcrMsg: "Impossibile elaborare l'immagine.",
   shiftPermTitle: 'Permesso negato',
   shiftPermMsg: "Devi autorizzare l'accesso al calendario del telefono.",
   shiftNoCalendar: 'Nessun calendario scrivibile trovato sul dispositivo.',
-  shiftSyncOkTitle: '\u2705 Turni Sincronizzati!',
+  shiftSyncOkTitle: 'Turni Sincronizzati!',
   shiftNoShifts: 'Nessun orario trovato', shiftCalErrTitle: 'Errore Calendario',
   // Calendar
   calTitle: 'Gestione Turni', calEditBtn: 'Modifica Turni',
@@ -68,7 +69,7 @@ const it = {
   calAddManual: 'Aggiungi manualmente', calAddManualSub: 'Seleziona giorno e orario',
   calAddShiftTitle: 'Aggiungi Turno', calDataLabel: 'DATA',
   calDataHint: 'Seleziona un giorno dal calendario per cambiare la data',
-  calTypeLabel: 'TIPO', calTypeWork: '\u2708\ufe0f Lavoro', calTypeRest: '\ud83c\udf34 Riposo',
+  calTypeLabel: 'TIPO', calTypeWork: 'Lavoro', calTypeRest: 'Riposo',
   calStartTime: 'ORARIO INIZIO', calEndTime: 'ORARIO FINE',
   calSaveShift: 'Salva Turno', calImportTitle: 'Importa Turni',
   calExtracting: 'Estrazione testo dal PDF...',
@@ -84,11 +85,11 @@ const it = {
   calNoEmployees: 'Nessun dipendente trovato nel PDF',
   // Home
   homeToday: 'OGGI', homeCurrentShift: 'Turno Attuale',
-  homeShiftWork: 'Turno Lavoro \u2708\ufe0f', homeInProgress: 'IN CORSO',
+  homeShiftWork: 'Turno Lavoro', homeInProgress: 'IN CORSO',
   homeRestDay: 'Giorno di Riposo', homeNoShift: 'Nessun turno per oggi',
   homeArrival: 'Arrivo', homeDeparture: 'Partenza', homePinned: 'Pinnato', homeWeatherLocal: 'Locale',
   homePermDenied: 'Permesso negato', homeNoWritableCalendar: 'Nessun calendario scrivibile.',
-  homeShiftSynced: '\u2705 Turni Sincronizzati!', homeShiftsSaved: 'turni salvati.',
+  homeShiftSynced: 'Turni Sincronizzati!', homeShiftsSaved: 'turni salvati.',
   homeNoSchedule: 'Nessun orario trovato', homeCalErr: 'Errore Calendario',
   homeCalendarAuth: 'Autorizza il calendario.',
   // Flight
@@ -207,17 +208,17 @@ const en: typeof it = {
   // ShiftScreen
   shiftTitle: 'Shift Manager',
   shiftSub: 'Scan shifts from the schedule board and sync them to the calendar.',
-  shiftSyncTitle: '\ud83d\udcc5 Calendar Sync',
+  shiftSyncTitle: 'Calendar Sync',
   shiftSyncDesc: 'Select screenshots of your schedule board...',
-  shiftScanBtn: '\ud83d\udcf7 Scan Shift Screenshots',
+  shiftScanBtn: 'Scan Shift Screenshots',
   shiftExtracting: 'Extracting text...',
   shiftExtractedTitle: 'Extracted Text:',
-  shiftSyncBtn: '\u2705 Sync to Calendar!',
+  shiftSyncBtn: 'Sync to Calendar!',
   shiftErrOcrTitle: 'OCR Error', shiftErrOcrMsg: 'Could not process the image.',
   shiftPermTitle: 'Permission denied',
   shiftPermMsg: 'You need to grant access to the phone calendar.',
   shiftNoCalendar: 'No writable calendar found on the device.',
-  shiftSyncOkTitle: '\u2705 Shifts Synced!',
+  shiftSyncOkTitle: 'Shifts Synced!',
   shiftNoShifts: 'No schedules found', shiftCalErrTitle: 'Calendar Error',
   // Calendar
   calTitle: 'Shift Manager', calEditBtn: 'Edit Shifts',
@@ -228,7 +229,7 @@ const en: typeof it = {
   calAddManual: 'Add manually', calAddManualSub: 'Select day and time',
   calAddShiftTitle: 'Add Shift', calDataLabel: 'DATE',
   calDataHint: 'Select a day from the calendar to change the date',
-  calTypeLabel: 'TYPE', calTypeWork: '\u2708\ufe0f Work', calTypeRest: '\ud83c\udf34 Rest',
+  calTypeLabel: 'TYPE', calTypeWork: 'Work', calTypeRest: 'Rest',
   calStartTime: 'START TIME', calEndTime: 'END TIME',
   calSaveShift: 'Save Shift', calImportTitle: 'Import Shifts',
   calExtracting: 'Extracting text from PDF...',
@@ -244,11 +245,11 @@ const en: typeof it = {
   calNoEmployees: 'No employees found in PDF',
   // Home
   homeToday: 'TODAY', homeCurrentShift: 'Current Shift',
-  homeShiftWork: 'Work Shift \u2708\ufe0f', homeInProgress: 'IN PROGRESS',
+  homeShiftWork: 'Work Shift', homeInProgress: 'IN PROGRESS',
   homeRestDay: 'Rest Day', homeNoShift: 'No shift today',
   homeArrival: 'Arrival', homeDeparture: 'Departure', homePinned: 'Pinned', homeWeatherLocal: 'Local',
   homePermDenied: 'Permission denied', homeNoWritableCalendar: 'No writable calendar.',
-  homeShiftSynced: '\u2705 Shifts Synced!', homeShiftsSaved: 'shifts saved.',
+  homeShiftSynced: 'Shifts Synced!', homeShiftsSaved: 'shifts saved.',
   homeNoSchedule: 'No schedule found', homeCalErr: 'Calendar Error',
   homeCalendarAuth: 'Authorize the calendar.',
   // Flight
@@ -340,30 +341,30 @@ export const WEEKDAYS_LONG: Record<Lang, string[]> = {
 
 export const LOCALE_MAP: Record<Lang, string> = { it: 'it-IT', en: 'en-GB' };
 
-export const LANGUAGES: Array<{ code: Lang; label: string; flag: string }> = [
-  { code: 'it', label: 'Italiano', flag: '\ud83c\uddee\ud83c\uddf9' },
-  { code: 'en', label: 'English', flag: '\ud83c\uddec\ud83c\udde7' },
+export const LANGUAGES: Array<{ code: Lang; label: string }> = [
+  { code: 'it', label: 'Italiano' },
+  { code: 'en', label: 'English' },
 ];
 
-export const WEATHER_MAP: Record<Lang, Record<number, { text: string; icon: string }>> = {
+export const WEATHER_MAP: Record<Lang, Record<number, WeatherDescriptor>> = {
   it: {
-    0: { text: 'Sereno', icon: '\u2600\ufe0f' },
-    1: { text: 'Poco Nuvoloso', icon: '\ud83c\udf24\ufe0f' },
-    2: { text: 'Nuvoloso', icon: '\u26c5' },
-    3: { text: 'Coperto', icon: '\u2601\ufe0f' },
-    45: { text: 'Nebbia', icon: '\ud83c\udf2b\ufe0f' },
-    61: { text: 'Pioggia Leggera', icon: '\ud83c\udf26\ufe0f' },
-    63: { text: 'Pioggia', icon: '\ud83c\udf27\ufe0f' },
-    80: { text: 'Rovesci', icon: '\ud83c\udf27\ufe0f' },
+    0: { text: 'Sereno', iconName: 'weather-sunny' },
+    1: { text: 'Poco Nuvoloso', iconName: 'weather-partly-cloudy' },
+    2: { text: 'Nuvoloso', iconName: 'weather-partly-cloudy' },
+    3: { text: 'Coperto', iconName: 'weather-cloudy' },
+    45: { text: 'Nebbia', iconName: 'weather-fog' },
+    61: { text: 'Pioggia Leggera', iconName: 'weather-rainy' },
+    63: { text: 'Pioggia', iconName: 'weather-pouring' },
+    80: { text: 'Rovesci', iconName: 'weather-rainy' },
   },
   en: {
-    0: { text: 'Clear', icon: '\u2600\ufe0f' },
-    1: { text: 'Mostly Clear', icon: '\ud83c\udf24\ufe0f' },
-    2: { text: 'Partly Cloudy', icon: '\u26c5' },
-    3: { text: 'Overcast', icon: '\u2601\ufe0f' },
-    45: { text: 'Foggy', icon: '\ud83c\udf2b\ufe0f' },
-    61: { text: 'Light Rain', icon: '\ud83c\udf26\ufe0f' },
-    63: { text: 'Rain', icon: '\ud83c\udf27\ufe0f' },
-    80: { text: 'Showers', icon: '\ud83c\udf27\ufe0f' },
+    0: { text: 'Clear', iconName: 'weather-sunny' },
+    1: { text: 'Mostly Clear', iconName: 'weather-partly-cloudy' },
+    2: { text: 'Partly Cloudy', iconName: 'weather-partly-cloudy' },
+    3: { text: 'Overcast', iconName: 'weather-cloudy' },
+    45: { text: 'Foggy', iconName: 'weather-fog' },
+    61: { text: 'Light Rain', iconName: 'weather-rainy' },
+    63: { text: 'Rain', iconName: 'weather-pouring' },
+    80: { text: 'Showers', iconName: 'weather-rainy' },
   },
 };

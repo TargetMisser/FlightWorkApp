@@ -346,7 +346,7 @@ async function scheduleShiftNotifications(
 
     const id = await Notifications.scheduleNotificationAsync({
       content: {
-        title: `✈️ Arrivo tra 15 min — ${flightNumber}`,
+        title: `Arrivo tra 15 min - ${flightNumber}`,
         body: `${airline} da ${origin} · atterraggio alle ${arrivalTime}`,
         sound: true,
         data: { flightNumber, ts },
@@ -362,7 +362,7 @@ async function scheduleShiftNotifications(
     const endTime = new Date(shiftEnd * 1000).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
     const endId = await Notifications.scheduleNotificationAsync({
       content: {
-        title: '🏁 Turno terminato',
+        title: 'Turno terminato',
         body: `Buon lavoro! Il tuo turno delle ${endTime} è concluso.`,
         sound: true,
         data: { type: 'shift_end' },
@@ -401,7 +401,7 @@ async function schedulePinnedNotifications(item: any, tab: 'arrivals' | 'departu
     if (secsUntil > 0) {
       const id = await Notifications.scheduleNotificationAsync({
         content: {
-          title: `📌 Arrivo tra 15 min — ${flightNumber}`,
+          title: `Arrivo tra 15 min - ${flightNumber}`,
           body: `${airline} da ${origin} · atterraggio alle ${arrTime}`,
           sound: true,
           data: { flightNumber, ts, pinned: true },
@@ -418,10 +418,10 @@ async function schedulePinnedNotifications(item: any, tab: 'arrivals' | 'departu
     const ops = getAirlineOps(airline);
 
     const phases: Array<{ offset: number; title: string; body: string }> = [
-      { offset: ops.checkInOpen, title: `📌 Check-in aperto — ${flightNumber}`, body: `Check-in aperto per il volo delle ${depTime} → ${dest}` },
-      { offset: ops.gateOpen, title: `📌 Gate aperto — ${flightNumber}`, body: `Gate aperto per il volo delle ${depTime} → ${dest}` },
-      { offset: ops.gateClose, title: `📌 Chiusura gate — ${flightNumber}`, body: `Gate in chiusura per il volo delle ${depTime} → ${dest}` },
-      { offset: 10, title: `📌 Partenza tra 10 min — ${flightNumber}`, body: `${airline} → ${dest} · partenza alle ${depTime}` },
+      { offset: ops.checkInOpen, title: `Check-in aperto - ${flightNumber}`, body: `Check-in aperto per il volo delle ${depTime} → ${dest}` },
+      { offset: ops.gateOpen, title: `Gate aperto - ${flightNumber}`, body: `Gate aperto per il volo delle ${depTime} → ${dest}` },
+      { offset: ops.gateClose, title: `Chiusura gate - ${flightNumber}`, body: `Gate in chiusura per il volo delle ${depTime} → ${dest}` },
+      { offset: 10, title: `Partenza tra 10 min - ${flightNumber}`, body: `${airline} → ${dest} · partenza alle ${depTime}` },
     ];
 
     for (const phase of phases) {

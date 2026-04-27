@@ -463,7 +463,7 @@ export default function SettingsScreen() {
               activeOpacity={0.8}
             >
               <View style={[styles.iconWrap, { backgroundColor: colors.primaryLight }]}>
-                <Text style={{ fontSize: 18 }}>{langOpt.flag}</Text>
+                <MaterialIcons name="language" size={18} color={colors.primary} />
               </View>
               <View style={styles.rowText}>
                 <Text style={[styles.rowLabel, { color: colors.text }]}>{langOpt.label}</Text>

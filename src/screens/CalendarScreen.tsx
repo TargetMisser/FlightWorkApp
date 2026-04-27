@@ -9,7 +9,7 @@ import * as Location from 'expo-location';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { WebView } from 'react-native-webview';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { requestWidgetUpdate } from 'react-native-android-widget';
 import { useAppTheme, type ThemeColors } from '../context/ThemeContext';
@@ -39,6 +39,12 @@ type ShiftEvent = {
   endDate: string | Date;
 };
 
+type DayStats = {
+  weatherText: string;
+  weatherIconName: string;
+  flightCount: number;
+};
+
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
@@ -62,7 +68,7 @@ export default function CalendarScreen() {
   const [selectedDay, setSelectedDay] = useState<string>(new Date().toISOString().split('T')[0]);
   const [markedDates, setMarkedDates] = useState<Record<string, string>>({});
   const [eventsData, setEventsData] = useState<Record<string, ShiftEvent[]>>({});
-  const [dailyStats, setDailyStats] = useState<Record<string, { weatherText: string; weatherIcon: string; flightCount: number }>>({});
+  const [dailyStats, setDailyStats] = useState<Record<string, DayStats>>({});
   const [loading, setLoading] = useState(true);
   const [calId, setCalId] = useState<string | null>(null);
 
@@ -85,12 +91,55 @@ export default function CalendarScreen() {
   const [manualEndH, setManualEndH] = useState(16);
   const [manualEndM, setManualEndM] = useState(0);
 
+  const getManualPrefillForSelectedDay = () => {
+    const dayEvents = eventsData[selectedDay] || [];
+    const existingWork = dayEvents.find(event => event.title.includes('Lavoro'));
+    const existingRest = dayEvents.find(event => event.title.includes('Riposo'));
+
+    if (existingWork) {
+      const startDate = new Date(existingWork.startDate);
+      const endDate = new Date(existingWork.endDate);
+
+      return {
+        date: selectedDay,
+        type: 'Lavoro' as const,
+        startH: startDate.getHours(),
+        startM: startDate.getMinutes(),
+        endH: endDate.getHours(),
+        endM: endDate.getMinutes(),
+      };
+    }
+
+    if (existingRest) {
+      return {
+        date: selectedDay,
+        type: 'Riposo' as const,
+        startH: 8,
+        startM: 0,
+        endH: 16,
+        endM: 0,
+      };
+    }
+
+    return {
+      date: selectedDay,
+      type: 'Lavoro' as const,
+      startH: 8,
+      startM: 0,
+      endH: 16,
+      endM: 0,
+    };
+  };
+
   const openManualEntry = () => {
+    const prefill = getManualPrefillForSelectedDay();
     setEditMenuOpen(false);
-    setManualDate(selectedDay);
-    setManualType('Lavoro');
-    setManualStartH(8); setManualStartM(0);
-    setManualEndH(16); setManualEndM(0);
+    setManualDate(prefill.date);
+    setManualType(prefill.type);
+    setManualStartH(prefill.startH);
+    setManualStartM(prefill.startM);
+    setManualEndH(prefill.endH);
+    setManualEndM(prefill.endM);
     setPickerKey(k => k + 1);
     setManualModalOpen(true);
   };
@@ -245,7 +294,7 @@ export default function CalendarScreen() {
   };
 
   const fetchWeatherAndFlights = async (start: Date, end: Date, localData: Record<string, ShiftEvent[]>) => {
-    const dict: Record<string, { weatherText: string; weatherIcon: string; flightCount: number }> = {};
+    const dict: Record<string, DayStats> = {};
     try {
       await Location.requestForegroundPermissionsAsync();
       const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
@@ -255,8 +304,8 @@ export default function CalendarScreen() {
       const wj = await wr.json();
       if (wj.daily?.time) {
         wj.daily.time.forEach((date: string, i: number) => {
-          const m = weatherMap[wj.daily.weather_code[i] || 0] || { text: 'Sereno', icon: '☀️' };
-          dict[date] = { weatherText: m.text, weatherIcon: m.icon, flightCount: 0 };
+          const m = weatherMap[wj.daily.weather_code[i] || 0] || { text: 'Sereno', iconName: 'weather-sunny' };
+          dict[date] = { weatherText: m.text, weatherIconName: m.iconName, flightCount: 0 };
         });
       }
     } catch (e) { if (__DEV__) console.warn('[calWeather]', e); }
@@ -272,7 +321,7 @@ export default function CalendarScreen() {
             const ts = f.flight?.time?.scheduled?.arrival || f.flight?.time?.scheduled?.departure;
             return ts && ts >= sTS && ts <= eTS;
           }).length;
-          if (dict[iso]) dict[iso].flightCount = cnt; else dict[iso] = { weatherText: 'N/A', weatherIcon: '❓', flightCount: cnt };
+          if (dict[iso]) dict[iso].flightCount = cnt; else dict[iso] = { weatherText: 'N/A', weatherIconName: 'cloud-question', flightCount: cnt };
         }
       });
     } catch (e) { if (__DEV__) console.warn('[calFlights]', e); }
@@ -443,7 +492,7 @@ export default function CalendarScreen() {
         <Animated.View style={{ transform: [{ translateX: weekSlideX }] }}>
         <View style={s.weekRow} {...panResponder.panHandlers}>
           <TouchableOpacity onPress={() => setCurrentWeekStart(d => { const n = new Date(d); n.setDate(n.getDate() - 7); return n; })} style={s.navBtn}>
-            <Text style={s.navArrow}>◀</Text>
+            <MaterialIcons name="chevron-left" size={18} color={colors.textSub} />
           </TouchableOpacity>
           {weekDays.map(day => {
             const isSelected = day.iso === selectedDay;
@@ -459,7 +508,7 @@ export default function CalendarScreen() {
             );
           })}
           <TouchableOpacity onPress={() => setCurrentWeekStart(d => { const n = new Date(d); n.setDate(n.getDate() + 7); return n; })} style={s.navBtn}>
-            <Text style={s.navArrow}>▶</Text>
+            <MaterialIcons name="chevron-right" size={18} color={colors.textSub} />
           </TouchableOpacity>
         </View>
 
@@ -470,7 +519,12 @@ export default function CalendarScreen() {
           <View style={s.mainCard}>
             {stats && (
               <View style={s.weatherBadge}>
-                <Text style={s.weatherIcon}>{stats.weatherIcon}</Text>
+                <MaterialCommunityIcons
+                  name={stats.weatherIconName as keyof typeof MaterialCommunityIcons.glyphMap}
+                  size={18}
+                  color={colors.primaryDark}
+                  style={s.weatherIcon}
+                />
                 <View>
                   <Text style={s.weatherPlace}>{t('calWeatherLocal')}</Text>
                   <Text style={s.weatherText}>{stats.weatherText}</Text>
@@ -481,24 +535,31 @@ export default function CalendarScreen() {
             {workEvent ? (
               <>
                 <View style={s.shiftTypeRow}>
-                  <View style={s.shiftIconBox}><Text style={{ fontSize: 22 }}>✈️</Text></View>
+                  <View style={s.shiftIconBox}>
+                    <MaterialIcons name="flight" size={20} color={colors.primary} />
+                  </View>
                   <Text style={s.shiftTypeName}>{t('calShiftWork')}</Text>
                 </View>
                 <View style={s.timeRow}>
-                  <Text style={{ fontSize: 18, marginRight: 6 }}>🕒</Text>
+                  <MaterialIcons name="schedule" size={18} color={colors.textSub} style={{ marginRight: 6 }} />
                   <Text style={s.timeText}>
                     {new Date(workEvent.startDate).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })} — {new Date(workEvent.endDate).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}
                   </Text>
                 </View>
                 {stats?.flightCount > 0 && (
                   <View style={s.flightBadge}>
-                    <Text style={s.flightBadgeText}>✈️ {stats.flightCount} voli nel turno</Text>
+                    <View style={s.flightBadgeRow}>
+                      <MaterialIcons name="flight-takeoff" size={14} color={colors.primary} />
+                      <Text style={s.flightBadgeText}>{stats.flightCount} voli nel turno</Text>
+                    </View>
                   </View>
                 )}
               </>
             ) : restEvent ? (
               <View style={s.restRow}>
-                <Text style={{ fontSize: 32, marginRight: 12 }}>🌴</Text>
+                <View style={s.restIconBox}>
+                  <MaterialIcons name="hotel" size={22} color="#10b981" />
+                </View>
                 <Text style={s.restText}>{t('calRestDay')}</Text>
               </View>
             ) : (
@@ -550,11 +611,12 @@ export default function CalendarScreen() {
             </View>
 
             {/* Contenuto scrollabile */}
-            <ScrollView
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40 }}
-            >
+              <ScrollView
+                keyboardShouldPersistTaps="handled"
+                nestedScrollEnabled
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40 }}
+              >
               {/* Data */}
               <Text style={[s.manualLabel, { color: colors.textSub }]}>{t('calDataLabel')}</Text>
               <TextInput
@@ -575,7 +637,16 @@ export default function CalendarScreen() {
                     style={[s.manualTypeBtn, { borderColor: colors.border }, manualType === shiftType && { backgroundColor: colors.primary, borderColor: colors.primary }]}
                     onPress={() => setManualType(shiftType)}
                   >
-                    <Text style={{ color: manualType === shiftType ? '#fff' : colors.text, fontWeight: '700' }}>{shiftType === 'Lavoro' ? t('calTypeWork') : t('calTypeRest')}</Text>
+                    <View style={s.manualTypeInner}>
+                      <MaterialIcons
+                        name={shiftType === 'Lavoro' ? 'flight' : 'hotel'}
+                        size={16}
+                        color={manualType === shiftType ? '#fff' : colors.textSub}
+                      />
+                      <Text style={{ color: manualType === shiftType ? '#fff' : colors.text, fontWeight: '700' }}>
+                        {shiftType === 'Lavoro' ? t('calTypeWork') : t('calTypeRest')}
+                      </Text>
+                    </View>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -753,7 +824,6 @@ function makeStyles(c: ThemeColors) {
     importBtnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
     weekRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: c.card, paddingVertical: 12, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: c.border },
     navBtn: { paddingHorizontal: 8, paddingVertical: 6 },
-    navArrow: { color: c.textSub, fontSize: 13, fontWeight: 'bold' },
     dayChipWrap: { flex: 1, alignItems: 'center' },
     dayChip: { alignItems: 'center', paddingVertical: 6, paddingHorizontal: 2, borderRadius: 20, width: 36 },
     dayChipSelected: { backgroundColor: c.primary },
@@ -775,7 +845,7 @@ function makeStyles(c: ThemeColors) {
       backgroundColor: c.bg, borderRadius: 10,
       paddingHorizontal: 10, paddingVertical: 6, gap: 6,
     },
-    weatherIcon: { fontSize: 18 },
+    weatherIcon: { marginRight: 2 },
     weatherPlace: { fontSize: 10, color: c.textSub, fontWeight: '600' },
     weatherText: { fontSize: 12, color: c.text, fontWeight: '600' },
     shiftTypeRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14, marginTop: 6 },
@@ -784,8 +854,10 @@ function makeStyles(c: ThemeColors) {
     timeRow: { flexDirection: 'row', alignItems: 'center' },
     timeText: { fontSize: 22, fontWeight: 'bold', color: c.primary },
     flightBadge: { marginTop: 14, backgroundColor: c.primaryLight, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8, alignSelf: 'flex-start' },
+    flightBadgeRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     flightBadgeText: { color: c.primary, fontWeight: '700', fontSize: 13 },
     restRow: { flexDirection: 'row', alignItems: 'center', marginTop: 10 },
+    restIconBox: { width: 48, height: 48, borderRadius: 14, backgroundColor: '#10b98122', alignItems: 'center', justifyContent: 'center', marginRight: 12 },
     restText: { fontSize: 20, fontWeight: 'bold', color: '#10b981' },
     emptyText: { textAlign: 'center', color: c.textSub, fontSize: 15, marginTop: 20, lineHeight: 24 },
     // Modal
@@ -820,6 +892,7 @@ function makeStyles(c: ThemeColors) {
     manualTimeRow: { flexDirection: 'row', gap: 10, marginBottom: 14 },
     manualTimeInput: { flex: 1, textAlign: 'center' },
     manualTypeBtn: { flex: 1, paddingVertical: 12, borderRadius: 10, borderWidth: 1.5, alignItems: 'center' },
+    manualTypeInner: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   });
 }
 

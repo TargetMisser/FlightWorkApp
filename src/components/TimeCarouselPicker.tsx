@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useCallback } from 'react';
+import React, { useRef, useEffect, useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -6,11 +6,11 @@ import {
   StyleSheet,
   NativeSyntheticEvent,
   NativeScrollEvent,
-  Platform,
+  TouchableOpacity,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
-const ITEM_H = 52;
+const ITEM_H = 42;
 const VISIBLE = 5;
 const PAD = ITEM_H * 2; // 2 invisible items top & bottom
 
@@ -31,25 +31,50 @@ const WheelColumn: React.FC<WheelColumnProps> = ({
 }) => {
   const scrollRef = useRef<ScrollView>(null);
   const lastIndex = useRef(defaultIndex);
+  const [selectedIndex, setSelectedIndex] = useState(defaultIndex);
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      scrollRef.current?.scrollTo({ y: defaultIndex * ITEM_H, animated: false });
-    }, 80);
-    return () => clearTimeout(timer);
+  const clampIndex = useCallback((index: number) => (
+    Math.min(Math.max(index, 0), items.length - 1)
+  ), [items.length]);
+
+  const scrollToIndex = useCallback((index: number, animated: boolean) => {
+    scrollRef.current?.scrollTo({ y: index * ITEM_H, animated });
   }, []);
 
-  const onMomentumEnd = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+  const commitIndex = useCallback((nextIndex: number, animated: boolean) => {
+    const idx = clampIndex(nextIndex);
+    lastIndex.current = idx;
+    setSelectedIndex(idx);
+    scrollToIndex(idx, animated);
+    onChange(idx);
+  }, [clampIndex, onChange, scrollToIndex]);
+
+  useEffect(() => {
+    const nextIndex = clampIndex(defaultIndex);
+    lastIndex.current = nextIndex;
+    setSelectedIndex(nextIndex);
+    const timer = setTimeout(() => {
+      scrollToIndex(nextIndex, false);
+    }, 30);
+    return () => clearTimeout(timer);
+  }, [clampIndex, defaultIndex, scrollToIndex]);
+
+  const syncFromScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const rawIdx = e.nativeEvent.contentOffset.y / ITEM_H;
-    const idx = Math.min(Math.max(Math.round(rawIdx), 0), items.length - 1);
+    const idx = clampIndex(Math.round(rawIdx));
+
+    setSelectedIndex(idx);
+
     if (idx !== lastIndex.current) {
       lastIndex.current = idx;
       onChange(idx);
+    } else {
+      scrollToIndex(idx, false);
     }
-  }, [items.length, onChange]);
+  }, [clampIndex, onChange, scrollToIndex]);
 
   return (
-    <View style={{ width: 72, height: ITEM_H * VISIBLE, position: 'relative' }}>
+    <View style={{ width: 60, height: ITEM_H * VISIBLE, position: 'relative' }}>
       {/* Selection highlight */}
       <View
         pointerEvents="none"
@@ -62,23 +87,35 @@ const WheelColumn: React.FC<WheelColumnProps> = ({
         ref={scrollRef}
         showsVerticalScrollIndicator={false}
         snapToInterval={ITEM_H}
+        disableIntervalMomentum
         decelerationRate="fast"
         scrollEventThrottle={16}
-        onMomentumScrollEnd={onMomentumEnd}
+        nestedScrollEnabled
+        directionalLockEnabled
+        overScrollMode="never"
+        onMomentumScrollEnd={syncFromScroll}
+        onScrollEndDrag={syncFromScroll}
         contentContainerStyle={{ paddingVertical: PAD }}
         style={{ flex: 1 }}
       >
         {items.map((label, i) => (
-          <View key={i} style={styles.itemContainer}>
+          <TouchableOpacity
+            key={i}
+            activeOpacity={0.85}
+            style={styles.itemContainer}
+            onPress={() => { commitIndex(i, true); }}
+          >
             <Text
               style={[
                 styles.itemText,
-                { color: mutedColor },
+                i === selectedIndex
+                  ? { color: textColor, fontWeight: '800' }
+                  : { color: mutedColor },
               ]}
             >
               {label}
             </Text>
-          </View>
+          </TouchableOpacity>
         ))}
       </ScrollView>
       {/* Top fade */}
@@ -147,18 +184,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1,
     overflow: 'hidden',
-    paddingHorizontal: 12,
-    marginVertical: 4,
+    paddingHorizontal: 8,
+    marginVertical: 2,
   },
   selectionRect: {
     position: 'absolute',
-    left: 4,
-    right: 4,
+    left: 3,
+    right: 3,
     height: ITEM_H,
-    borderRadius: 10,
+    borderRadius: 8,
     borderWidth: 1.5,
     zIndex: 1,
   },
@@ -168,15 +205,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   itemText: {
-    fontSize: 26,
+    fontSize: 22,
     fontWeight: '600',
     fontVariant: ['tabular-nums'],
   },
   colon: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '700',
-    marginHorizontal: 6,
-    marginBottom: 2,
+    marginHorizontal: 4,
+    marginBottom: 1,
   },
   fade: {
     position: 'absolute',

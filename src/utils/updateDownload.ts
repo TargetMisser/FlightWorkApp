@@ -1,12 +1,14 @@
 import { Linking, Platform } from 'react-native';
+import * as Application from 'expo-application';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as IntentLauncher from 'expo-intent-launcher';
 
 import type { UpdateInfo } from './updateChecker';
 
 const APK_MIME_TYPE = 'application/vnd.android.package-archive';
-const VIEW_ACTION = 'android.intent.action.VIEW';
+const INSTALL_PACKAGE_ACTION = 'android.intent.action.INSTALL_PACKAGE';
 const FLAG_GRANT_READ_URI_PERMISSION = 1;
+const EXTRA_RETURN_RESULT = 'android.intent.extra.RETURN_RESULT';
 const DOWNLOAD_DIR = FileSystem.documentDirectory ? `${FileSystem.documentDirectory}updates/` : null;
 
 export type UpdateDownloadProgress = {
@@ -105,11 +107,18 @@ export async function installDownloadedUpdate(fileUri: string): Promise<void> {
   }
 
   const contentUri = await FileSystem.getContentUriAsync(fileUri);
-  await IntentLauncher.startActivityAsync(VIEW_ACTION, {
+  const result = await IntentLauncher.startActivityAsync(INSTALL_PACKAGE_ACTION, {
     data: contentUri,
     flags: FLAG_GRANT_READ_URI_PERMISSION,
     type: APK_MIME_TYPE,
+    extra: {
+      [EXTRA_RETURN_RESULT]: true,
+    },
   });
+
+  if (result.resultCode !== IntentLauncher.ResultCode.Success) {
+    throw new Error(`Installazione APK non completata (resultCode=${result.resultCode}).`);
+  }
 }
 
 export async function openUpdateReleasePage(info: UpdateInfo): Promise<void> {
@@ -121,5 +130,7 @@ export async function openUnknownSourcesSettings(): Promise<void> {
     return;
   }
 
-  await IntentLauncher.startActivityAsync(IntentLauncher.ActivityAction.MANAGE_UNKNOWN_APP_SOURCES);
+  await IntentLauncher.startActivityAsync(IntentLauncher.ActivityAction.MANAGE_UNKNOWN_APP_SOURCES, {
+    data: Application.applicationId ? `package:${Application.applicationId}` : undefined,
+  });
 }
