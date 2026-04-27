@@ -77,6 +77,7 @@ export default function CalendarScreen() {
   const [dailyStats, setDailyStats] = useState<Record<string, DayStats>>({});
   const [loading, setLoading] = useState(true);
   const [calId, setCalId] = useState<string | null>(null);
+  const [calendarMode, setCalendarMode] = useState<'week' | 'monthHours'>('week');
 
   // Import flow state
   const [importModalVisible, setImportModalVisible] = useState(false);
@@ -289,9 +290,11 @@ export default function CalendarScreen() {
       const cal = calendars.find(c => c.allowsModifications && c.isPrimary) || calendars.find(c => c.allowsModifications);
       if (!cal) { setLoading(false); return; }
       setCalId(cal.id);
-      const start = new Date(currentWeekStart); start.setHours(0, 0, 0, 0);
-      const end = new Date(currentWeekStart); end.setDate(end.getDate() + 7);
-      const events = await SystemCalendar.getEventsAsync([cal.id], start, end);
+      const weekStart = new Date(currentWeekStart); weekStart.setHours(0, 0, 0, 0);
+      const weekEnd = new Date(currentWeekStart); weekEnd.setDate(weekEnd.getDate() + 7);
+      const monthStart = new Date(currentWeekStart.getFullYear(), currentWeekStart.getMonth(), 1, 0, 0, 0, 0);
+      const monthEnd = new Date(currentWeekStart.getFullYear(), currentWeekStart.getMonth() + 1, 1, 0, 0, 0, 0);
+      const events = await SystemCalendar.getEventsAsync([cal.id], monthStart, monthEnd);
       const dots: Record<string, string> = {};
       const localData: Record<string, ShiftEvent[]> = {};
       events.forEach(e => {
@@ -308,7 +311,7 @@ export default function CalendarScreen() {
       setMarkedDates(dots);
       setEventsData(localData);
       setLoading(false);
-      fetchWeatherAndFlights(start, end, localData);
+      fetchWeatherAndFlights(weekStart, weekEnd, localData);
     } catch (e) { if (__DEV__) console.error(e); setLoading(false); }
   };
 
@@ -482,6 +485,29 @@ export default function CalendarScreen() {
   const restEvent = selectedEvents.find(e => e.title.includes('Riposo'));
   const stats = dailyStats[selectedDay];
   const s = useMemo(() => makeStyles(colors), [colors]);
+  const monthHoursSummary = useMemo(() => {
+    const year = currentWeekStart.getFullYear();
+    const month = currentWeekStart.getMonth();
+    const dayEntries = Object.entries(eventsData)
+      .filter(([iso]) => {
+        const d = new Date(`${iso}T00:00:00`);
+        return d.getFullYear() === year && d.getMonth() === month;
+      })
+      .sort((a, b) => a[0].localeCompare(b[0]));
+
+    let totalMinutes = 0;
+    const workDays: Array<{ iso: string; hours: number }> = [];
+    for (const [iso, events] of dayEntries) {
+      const work = events.find(e => e.title.includes('Lavoro'));
+      if (!work) continue;
+      const start = new Date(work.startDate).getTime();
+      const end = new Date(work.endDate).getTime();
+      const minutes = Math.max(0, Math.round((end - start) / 60000));
+      totalMinutes += minutes;
+      workDays.push({ iso, hours: minutes / 60 });
+    }
+    return { totalHours: totalMinutes / 60, shiftsCount: workDays.length, workDays };
+  }, [eventsData, currentWeekStart]);
 
   const fmtDate = (iso: string) => {
     const [y, m, d] = iso.split('-');
@@ -503,6 +529,20 @@ export default function CalendarScreen() {
             <TouchableOpacity style={[s.importBtn, { backgroundColor: colors.primary }]} onPress={() => setEditMenuOpen(true)}>
               <MaterialIcons name="edit-calendar" size={20} color="#fff" />
               <Text style={s.importBtnText}>{t('calEditBtn')}</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={s.modeSeg}>
+            <TouchableOpacity
+              style={[s.modeSegBtn, calendarMode === 'week' && s.modeSegBtnActive]}
+              onPress={() => setCalendarMode('week')}
+            >
+              <Text style={[s.modeSegText, calendarMode === 'week' && s.modeSegTextActive]}>{t('calModeWeek')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[s.modeSegBtn, calendarMode === 'monthHours' && s.modeSegBtnActive]}
+              onPress={() => setCalendarMode('monthHours')}
+            >
+              <Text style={[s.modeSegText, calendarMode === 'monthHours' && s.modeSegTextActive]}>{t('calModeMonthHours')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -534,6 +574,23 @@ export default function CalendarScreen() {
         {/* Main Shift Card */}
         {loading ? (
           <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 40 }} />
+        ) : calendarMode === 'monthHours' ? (
+          <View style={s.mainCard}>
+            <Text style={s.shiftTypeName}>{t('calMonthTotalHours')}</Text>
+            <Text style={[s.timeText, { marginTop: 6 }]}>{monthHoursSummary.totalHours.toFixed(1)} h</Text>
+            <Text style={[s.pageSub, { marginTop: 8 }]}>{t('calMonthShiftsCount').replace('{count}', String(monthHoursSummary.shiftsCount))}</Text>
+            <View style={{ marginTop: 14, gap: 8 }}>
+              {monthHoursSummary.workDays.slice(0, 8).map(d => (
+                <View key={d.iso} style={s.monthHoursRow}>
+                  <Text style={s.monthHoursDate}>{fmtDate(d.iso)}</Text>
+                  <Text style={s.monthHoursValue}>{d.hours.toFixed(1)} h</Text>
+                </View>
+              ))}
+              {monthHoursSummary.workDays.length === 0 && (
+                <Text style={s.emptyText}>{t('calNoShift')}{'\n'}{monthLabel}</Text>
+              )}
+            </View>
+          </View>
         ) : (
           <View style={s.mainCard}>
             {stats && (
@@ -841,6 +898,11 @@ function makeStyles(c: ThemeColors) {
     pageSub: { fontSize: 11, color: c.textSub, letterSpacing: 1.5, marginTop: 3 },
     importBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 },
     importBtnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+    modeSeg: { flexDirection: 'row', gap: 8, marginTop: 12 },
+    modeSegBtn: { flex: 1, borderRadius: 10, borderWidth: 1, borderColor: c.border, paddingVertical: 8, alignItems: 'center', backgroundColor: c.bg },
+    modeSegBtnActive: { backgroundColor: c.primary, borderColor: c.primary },
+    modeSegText: { color: c.textSub, fontSize: 12, fontWeight: '700' },
+    modeSegTextActive: { color: '#fff' },
     weekRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: c.card, paddingVertical: 12, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: c.border },
     navBtn: { paddingHorizontal: 8, paddingVertical: 6 },
     dayChipWrap: { flex: 1, alignItems: 'center' },
@@ -879,6 +941,9 @@ function makeStyles(c: ThemeColors) {
     restIconBox: { width: 48, height: 48, borderRadius: 14, backgroundColor: '#10b98122', alignItems: 'center', justifyContent: 'center', marginRight: 12 },
     restText: { fontSize: 20, fontWeight: 'bold', color: '#10b981' },
     emptyText: { textAlign: 'center', color: c.textSub, fontSize: 15, marginTop: 20, lineHeight: 24 },
+    monthHoursRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: c.border },
+    monthHoursDate: { color: c.text, fontSize: 14, fontWeight: '600' },
+    monthHoursValue: { color: c.primary, fontSize: 14, fontWeight: '800' },
     // Modal
     modalOverlay: { flex: 1, justifyContent: 'flex-end' },
     modalBg: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)' },
