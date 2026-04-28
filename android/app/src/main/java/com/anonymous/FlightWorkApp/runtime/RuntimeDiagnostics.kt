@@ -27,12 +27,14 @@ object RuntimeDiagnostics {
     @Volatile
     private var installed = false
 
-    @Synchronized
-    fun install(application: Application) {
-        if (installed) {
-            return
-        }
+    data class StartupState(
+        val liquidGlassSupported: Boolean,
+        val liquidGlassEnabled: Boolean,
+        val liquidGlassAutoDisabled: Boolean,
+    )
 
+    @Synchronized
+    fun prepareStartup(application: Application): StartupState {
         val prefs = prefs(application)
         val supported = isLiquidGlassSupported()
         val currentVersion = BuildConfig.VERSION_NAME
@@ -46,7 +48,7 @@ object RuntimeDiagnostics {
                 .apply()
         } else if (previousVersion != currentVersion) {
             prefs.edit()
-                .putBoolean(KEY_LIQUID_GLASS_ENABLED, supported)
+                .putBoolean(KEY_LIQUID_GLASS_ENABLED, false)
                 .putBoolean(KEY_LIQUID_GLASS_AUTO_DISABLED, false)
                 .putString(KEY_RUNTIME_VERSION, currentVersion)
                 .apply()
@@ -77,17 +79,25 @@ object RuntimeDiagnostics {
             .putLong(KEY_STARTUP_STARTED_AT, System.currentTimeMillis())
             .apply()
 
-        val previousHandler = Thread.getDefaultUncaughtExceptionHandler()
-        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
-            recordNativeCrash(application, thread, throwable)
-            if (previousHandler != null) {
-                previousHandler.uncaughtException(thread, throwable)
-            } else {
-                exitProcess(10)
+        if (!installed) {
+            val previousHandler = Thread.getDefaultUncaughtExceptionHandler()
+            Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+                recordNativeCrash(application, thread, throwable)
+                if (previousHandler != null) {
+                    previousHandler.uncaughtException(thread, throwable)
+                } else {
+                    exitProcess(10)
+                }
             }
+
+            installed = true
         }
 
-        installed = true
+        return StartupState(
+            liquidGlassSupported = supported,
+            liquidGlassEnabled = isLiquidGlassEnabled(application),
+            liquidGlassAutoDisabled = wasLiquidGlassAutoDisabled(application),
+        )
     }
 
     fun isLiquidGlassSupported(): Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU

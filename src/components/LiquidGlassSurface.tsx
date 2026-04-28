@@ -28,17 +28,20 @@ type LiquidGlassSurfaceProps = NativeLiquidGlassProps & {
   fallbackGradientColors?: [string, string, ...string[]];
 };
 
-const NativeLiquidGlassSurface = Platform.OS === 'android'
-  ? requireNativeComponent<NativeLiquidGlassProps>('AeroLiquidGlassSurface')
-  : null;
+const nativeLiquidGlassEnabledAtLaunch = isNativeLiquidGlassEnabledAtLaunch();
 const hasNativeLiquidGlassManager = Platform.OS === 'android'
   && !!UIManager.getViewManagerConfig?.('AeroLiquidGlassSurface');
+const NativeLiquidGlassSurface = Platform.OS === 'android'
+  && nativeLiquidGlassEnabledAtLaunch
+  && hasNativeLiquidGlassManager
+  ? requireNativeComponent<NativeLiquidGlassProps>('AeroLiquidGlassSurface')
+  : null;
 
 const supportsNativeLiquidGlass = Platform.OS === 'android'
   && typeof Platform.Version === 'number'
   && Platform.Version >= 33
   && hasNativeLiquidGlassManager
-  && isNativeLiquidGlassEnabledAtLaunch();
+  && nativeLiquidGlassEnabledAtLaunch;
 
 export default function LiquidGlassSurface({
   children,

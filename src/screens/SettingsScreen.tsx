@@ -277,7 +277,7 @@ export default function SettingsScreen() {
     if (diag.liquidGlassEnabled) {
       return 'Nativo attivo su Android 13+';
     }
-    return 'Fallback attivo';
+    return 'Fallback attivo: nativo disattivato';
   }, []);
 
   const runtimeDialogMessage = useCallback((diag: RuntimeDiagnosticsState) => {
@@ -341,16 +341,31 @@ export default function SettingsScreen() {
             await refreshRuntimeDiagnostics();
           },
         }] : []),
-        ...(diag.liquidGlassSupported && diag.liquidGlassAutoDisabled ? [{
-          label: 'Riattiva',
+        ...(diag.liquidGlassSupported && !diag.liquidGlassEnabled ? [{
+          label: diag.liquidGlassAutoDisabled ? 'Riattiva' : 'Attiva',
           style: 'primary' as const,
           onPress: async () => {
             await setNativeLiquidGlassEnabled(true);
-            await refreshRuntimeDiagnostics();
+            const next = await refreshRuntimeDiagnostics();
             showDialog({
               title: 'Liquid glass riattivato',
-              message: 'Riavvia l\'app e riprova: se si rompe di nuovo, il log verra salvato qui.',
+              message: next.liquidGlassAutoDisabled
+                ? 'C\'e` ancora un blocco di sicurezza attivo. Chiudi e riapri l\'app, poi ritesta.'
+                : 'Chiudi e riapri l\'app per attivare il renderer nativo. Se si rompe di nuovo, al riavvio tornera` al fallback e il log restera` qui.',
               tone: 'success',
+            });
+          },
+        }] : []),
+        ...(diag.liquidGlassSupported && diag.liquidGlassEnabled ? [{
+          label: 'Disattiva',
+          style: 'secondary' as const,
+          onPress: async () => {
+            await setNativeLiquidGlassEnabled(false);
+            await refreshRuntimeDiagnostics();
+            showDialog({
+              title: 'Fallback attivato',
+              message: 'Chiudi e riapri l\'app per usare solo blur/gradient senza renderer nativo.',
+              tone: 'info',
             });
           },
         }] : []),
