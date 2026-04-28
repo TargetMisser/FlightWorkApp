@@ -206,7 +206,7 @@ export function ShiftWidget({ data }: { data: WidgetData }) {
       >
         <FlexWidget style={{ width: 'match_parent', height: 3, backgroundColor: ORANGE }} />
         <FlexWidget
-          style={{ flex: 1, justifyContent: 'center', alignItems: 'center', flexDirection: 'column' }}
+          style={{ flex: 1, width: 'match_parent', justifyContent: 'center', alignItems: 'center', flexDirection: 'column' }}
         >
           <FlexWidget
             style={{
@@ -226,10 +226,12 @@ export function ShiftWidget({ data }: { data: WidgetData }) {
               style={{ fontSize: 13, fontWeight: 'bold', color: '#34D399' }}
             />
           </FlexWidget>
-          <TextWidget
-            text="Giorno di Riposo"
-            style={{ fontSize: 18, fontWeight: 'bold', color: TEXT, marginTop: 8 }}
-          />
+          <FlexWidget style={{ width: 'match_parent', alignItems: 'center', marginTop: 8 }}>
+            <TextWidget
+              text="Giorno di Riposo"
+              style={{ fontSize: 18, fontWeight: 'bold', color: TEXT, textAlign: 'center' }}
+            />
+          </FlexWidget>
         </FlexWidget>
       </FlexWidget>
     );

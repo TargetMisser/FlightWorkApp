@@ -16,6 +16,7 @@ import com.facebook.react.defaults.DefaultReactNativeHost
 import expo.modules.ApplicationLifecycleDispatcher
 import expo.modules.ReactNativeHostWrapper
 import com.anonymous.FlightWorkApp.wear.WearDataSenderPackage
+import com.anonymous.FlightWorkApp.liquidglass.LiquidGlassPackage
 
 class MainApplication : Application(), ReactApplication {
 
@@ -25,6 +26,7 @@ class MainApplication : Application(), ReactApplication {
         override fun getPackages(): List<ReactPackage> =
             PackageList(this).packages.apply {
             add(WearDataSenderPackage())
+            add(LiquidGlassPackage())
               // Packages that cannot be autolinked yet can be added manually here, for example:
               // add(MyReactNativePackage())
             }

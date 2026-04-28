@@ -5,10 +5,10 @@ import {
 } from 'react-native';
 import { Easing } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme, type ThemeColors } from '../context/ThemeContext';
 import AeroStaffLogo from './AeroStaffLogo';
+import LiquidGlassSurface from './LiquidGlassSurface';
 import { useLanguage } from '../context/LanguageContext';
 
 type DrawerItem = {
@@ -89,15 +89,21 @@ export default function DrawerMenu({ visible, onClose, onSelect }: Props) {
 
         {/* Drawer */}
         <Animated.View style={[styles.drawerWrapper, { transform: [{ translateX: slideAnim }] }]}>
-          <BlurView
-            intensity={colors.isDark ? 50 : 40}
-            tint={colors.isDark ? 'dark' : 'light'}
+          <LiquidGlassSurface
             style={styles.blurFill}
+            tintColor={colors.isDark ? '#140E0A' : '#FFFCF8'}
+            glassOpacity={colors.isDark ? 0.24 : 0.14}
+            blurRadius={10}
+            dispersion={0.46}
+            cornerRadius={0}
+            refractionHeight={24}
+            refractionOffset={-60}
+            fallbackBlurIntensity={colors.isDark ? 56 : 44}
+            fallbackBlurTint={colors.isDark ? 'dark' : 'light'}
+            fallbackGradientColors={colors.isDark
+              ? ['rgba(255,255,255,0.06)', 'rgba(20,14,10,0.52)']
+              : ['rgba(255,255,255,0.40)', 'rgba(255,244,236,0.22)']}
           >
-            {/* Glass overlay tint */}
-            <View style={[styles.glassTint, { backgroundColor: colors.isDark
-              ? 'rgba(20, 14, 10, 0.82)' : 'rgba(255, 252, 248, 0.82)' }]} />
-
             {/* Orange gradient header */}
             <LinearGradient
               colors={['#C2410C', '#F97316', '#FB923C']}
@@ -139,7 +145,7 @@ export default function DrawerMenu({ visible, onClose, onSelect }: Props) {
             <View style={styles.divider} />
 
             <Text style={styles.version}>AeroStaff Pro · v{version}</Text>
-          </BlurView>
+          </LiquidGlassSurface>
         </Animated.View>
       </View>
     </Modal>
@@ -162,9 +168,6 @@ function makeStyles(c: ThemeColors) {
       elevation: 20,
     },
     blurFill: {
-      ...StyleSheet.absoluteFillObject,
-    },
-    glassTint: {
       ...StyleSheet.absoluteFillObject,
     },
     headerGradient: {

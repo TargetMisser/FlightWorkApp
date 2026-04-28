@@ -18,6 +18,7 @@ import SettingsScreen from './src/screens/SettingsScreen';
 import PasswordScreen from './src/screens/PasswordScreen';
 import DrawerMenu from './src/components/DrawerMenu';
 import ProfileSwitcherModal from './src/components/ProfileSwitcherModal';
+import LiquidGlassSurface from './src/components/LiquidGlassSurface';
 import { autoScheduleNotifications } from './src/utils/autoNotifications';
 import { checkForUpdate, wasUpdateSeen, markUpdateSeen, type UpdateInfo } from './src/utils/updateChecker';
 import UpdateModal from './src/components/UpdateModal';
@@ -263,12 +264,21 @@ function AppInner() {
       {/* Bottom Nav — Glassmorphic Floating Pill (hidden on overlay screens) */}
       {!overlay && (
         <View style={styles.tabBarWrapper} {...swipePan.panHandlers}>
-          <View style={[styles.tabBarBlur, { backgroundColor: colors.isDark ? 'rgba(28,28,30,0.82)' : 'rgba(242,242,247,0.82)' }]}>
-            <ExpoBlurView
-              intensity={80}
-              tint={colors.isDark ? 'dark' : 'light'}
-              style={StyleSheet.absoluteFill}
-            />
+          <LiquidGlassSurface
+            style={styles.tabBarBlur}
+            tintColor={colors.isDark ? '#1C1C1E' : '#F2F2F7'}
+            glassOpacity={colors.isDark ? 0.18 : 0.12}
+            blurRadius={8}
+            dispersion={0.38}
+            cornerRadius={33}
+            refractionHeight={18}
+            refractionOffset={-52}
+            fallbackBlurIntensity={80}
+            fallbackBlurTint={colors.isDark ? 'dark' : 'light'}
+            fallbackGradientColors={colors.isDark
+              ? ['rgba(255,255,255,0.08)', 'rgba(10,10,12,0.34)']
+              : ['rgba(255,255,255,0.34)', 'rgba(255,244,230,0.14)']}
+          >
             <View style={styles.tabBarRow}>
               {TABS.map(tab => {
                 const active = activeTab === tab.id;
@@ -288,7 +298,7 @@ function AppInner() {
                 );
               })}
             </View>
-          </View>
+          </LiquidGlassSurface>
         </View>
       )}
 
