@@ -82,7 +82,7 @@ const it = {
   shiftNoShifts: 'Nessun orario trovato', shiftCalErrTitle: 'Errore Calendario',
   // Calendar
   calTitle: 'Gestione Turni', calEditBtn: 'Modifica Turni',
-  calModeWeek: 'Settimana', calModeMonthHours: 'Ore mese',
+  calModeCalendar: 'Calendario', calModeMonthHours: 'Ore mese',
   calMonthTotalHours: 'Totale ore del mese', calMonthShiftsCount: 'Turni lavoro: {count}',
   calWeatherLocal: 'Meteo locale', calShiftWork: 'Turno Lavoro',
   calRestDay: 'Giorno di Riposo', calNoShift: 'Nessun turno per',
@@ -267,7 +267,7 @@ const en: typeof it = {
   shiftNoShifts: 'No schedules found', shiftCalErrTitle: 'Calendar Error',
   // Calendar
   calTitle: 'Shift Manager', calEditBtn: 'Edit Shifts',
-  calModeWeek: 'Week', calModeMonthHours: 'Month hours',
+  calModeCalendar: 'Calendar', calModeMonthHours: 'Month hours',
   calMonthTotalHours: 'Total month hours', calMonthShiftsCount: 'Work shifts: {count}',
   calWeatherLocal: 'Local weather', calShiftWork: 'Work Shift',
   calRestDay: 'Rest Day', calNoShift: 'No shift for',
