@@ -19,13 +19,19 @@ import PasswordScreen from './src/screens/PasswordScreen';
 import DrawerMenu from './src/components/DrawerMenu';
 import ProfileSwitcherModal from './src/components/ProfileSwitcherModal';
 import LiquidGlassSurface from './src/components/LiquidGlassSurface';
-import { installGlobalCrashHandler, markRuntimeStartupCompleted } from './src/utils/runtimeDiagnostics';
+import {
+  installGlobalCrashHandler,
+  isNativeLiquidGlassEnabledAtLaunch,
+  markRuntimeStartupCompleted,
+} from './src/utils/runtimeDiagnostics';
 import { autoScheduleNotifications } from './src/utils/autoNotifications';
 import { checkForUpdate, wasUpdateSeen, markUpdateSeen, type UpdateInfo } from './src/utils/updateChecker';
 import UpdateModal from './src/components/UpdateModal';
 import { useAirport } from './src/context/AirportContext';
 
 installGlobalCrashHandler();
+
+const NATIVE_GLASS_STARTUP_GRACE_MS = 2500;
 
 type Tab = 'Shifts' | 'Calendar' | 'Flights' | 'TravelDoc';
 type OverlayScreen = 'Notepad' | 'Phonebook' | 'Passwords' | 'Manuals' | 'Settings' | null;
@@ -107,7 +113,10 @@ function AppInner() {
 
   // ─── Auto-schedule flight notifications on startup ─────────────────────────
   useEffect(() => {
-    markRuntimeStartupCompleted().catch(() => {});
+    const startupTimer = setTimeout(() => {
+      markRuntimeStartupCompleted().catch(() => {});
+    }, isNativeLiquidGlassEnabledAtLaunch() ? NATIVE_GLASS_STARTUP_GRACE_MS : 0);
+
     autoScheduleNotifications().then(count => {
       if (count > 0 && __DEV__) console.log(`Auto-scheduled ${count} notifications`);
     }).catch(() => {});
@@ -117,6 +126,8 @@ function AppInner() {
       const seen = await wasUpdateSeen(info.latestVersion);
       if (!seen) setPendingUpdate(info);
     }).catch(() => {});
+
+    return () => clearTimeout(startupTimer);
   }, []);
 
   // ─── Android back button: overlay → home, drawer → close ───────────────────
