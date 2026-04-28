@@ -272,10 +272,10 @@ export default function SettingsScreen() {
       return 'Fallback attivo: dispositivo non supportato';
     }
     if (diag.liquidGlassAutoDisabled) {
-      return 'Fallback attivo dopo un crash all\'avvio';
+      return 'Fallback attivo dopo errore runtime del nativo';
     }
     if (diag.liquidGlassEnabled) {
-      return 'Nativo attivo su Android 13+';
+      return 'Nativo attivo su Android 14+';
     }
     return 'Fallback attivo: nativo disattivato';
   }, []);

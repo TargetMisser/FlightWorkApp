@@ -39,7 +39,7 @@ const NativeLiquidGlassSurface = Platform.OS === 'android'
 
 const supportsNativeLiquidGlass = Platform.OS === 'android'
   && typeof Platform.Version === 'number'
-  && Platform.Version >= 33
+  && Platform.Version >= 34
   && hasNativeLiquidGlassManager
   && nativeLiquidGlassEnabledAtLaunch;
 

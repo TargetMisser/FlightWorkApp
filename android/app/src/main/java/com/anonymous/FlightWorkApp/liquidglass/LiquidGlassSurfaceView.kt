@@ -14,7 +14,7 @@ import com.qmdeve.liquidglass.widget.LiquidGlassView
 
 class LiquidGlassSurfaceView(context: Context) : FrameLayout(context) {
     private val contentView = ReactViewGroup(context)
-    private val glassView = createGlassView(context)
+    private var glassView = createGlassView(context)
     private var boundSource: ViewGroup? = null
     private var tintColor: Int = Color.WHITE
     private var tintAlpha: Float = 0f
@@ -112,6 +112,11 @@ class LiquidGlassSurfaceView(context: Context) : FrameLayout(context) {
                 throwable = error,
                 metadata = mapOf("sdkInt" to Build.VERSION.SDK_INT.toString()),
             )
+            RuntimeDiagnostics.autoDisableLiquidGlass(
+                context = context.applicationContext,
+                reason = "init_failed",
+                metadata = mapOf("sdkInt" to Build.VERSION.SDK_INT.toString()),
+            )
             null
         }
 
@@ -147,6 +152,7 @@ class LiquidGlassSurfaceView(context: Context) : FrameLayout(context) {
                     ),
                 )
             }
+            disableNativeGlass("bind_failed", mapOf("sourceClass" to source.javaClass.name))
         }
     }
 
@@ -187,6 +193,19 @@ class LiquidGlassSurfaceView(context: Context) : FrameLayout(context) {
                     throwable = error,
                     metadata = mapOf("property" to propertyName),
                 )
+                disableNativeGlass("property_failed", mapOf("property" to propertyName))
             }
+    }
+
+    private fun disableNativeGlass(reason: String, metadata: Map<String, String> = emptyMap()) {
+        val nativeView = glassView ?: return
+        RuntimeDiagnostics.autoDisableLiquidGlass(
+            context = context.applicationContext,
+            reason = reason,
+            metadata = metadata,
+        )
+        removeView(nativeView)
+        glassView = null
+        boundSource = null
     }
 }

@@ -100,7 +100,7 @@ object RuntimeDiagnostics {
         )
     }
 
-    fun isLiquidGlassSupported(): Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+    fun isLiquidGlassSupported(): Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE
 
     fun isLiquidGlassEnabled(context: Context): Boolean =
         isLiquidGlassSupported() && prefs(context).getBoolean(KEY_LIQUID_GLASS_ENABLED, isLiquidGlassSupported())
@@ -113,6 +113,28 @@ object RuntimeDiagnostics {
             .putBoolean(KEY_LIQUID_GLASS_ENABLED, enabled && isLiquidGlassSupported())
             .putBoolean(KEY_LIQUID_GLASS_AUTO_DISABLED, false)
             .apply()
+    }
+
+    fun autoDisableLiquidGlass(context: Context, reason: String, metadata: Map<String, String> = emptyMap()) {
+        val wasEnabled = isLiquidGlassEnabled(context)
+        prefs(context).edit()
+            .putBoolean(KEY_LIQUID_GLASS_ENABLED, false)
+            .putBoolean(KEY_LIQUID_GLASS_AUTO_DISABLED, true)
+            .apply()
+
+        if (wasEnabled) {
+            recordEvent(
+                context = context,
+                type = "liquid_glass_auto_disabled",
+                message = "Native liquid glass was auto-disabled after a runtime failure.",
+                stack = null,
+                threadName = Thread.currentThread().name,
+                metadata = buildMap {
+                    put("reason", reason)
+                    metadata.forEach { (key, value) -> put(key, value) }
+                },
+            )
+        }
     }
 
     fun clearLastReport(context: Context) {
