@@ -1,8 +1,12 @@
 package com.anonymous.FlightWorkApp.runtime
 
 import android.app.Application
+import android.content.ContentUris
 import android.content.Context
+import android.content.ContentValues
 import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
 import com.anonymous.FlightWorkApp.BuildConfig
 import org.json.JSONObject
 import java.io.File
@@ -23,6 +27,8 @@ object RuntimeDiagnostics {
     private const val KEY_LIQUID_GLASS_AUTO_DISABLED = "liquid_glass_auto_disabled"
     private const val KEY_RUNTIME_VERSION = "runtime_version"
     private const val LOG_FILE_NAME = "runtime-events.log"
+    private const val PUBLIC_LOG_FILE_NAME = "AeroStaffPro-runtime-events.log"
+    private const val LOG_MIME_TYPE = "text/plain"
 
     @Volatile
     private var installed = false
@@ -139,7 +145,8 @@ object RuntimeDiagnostics {
 
     fun clearLastReport(context: Context) {
         prefs(context).edit().remove(KEY_LAST_REPORT).apply()
-        File(context.filesDir, LOG_FILE_NAME).delete()
+        privateLogFile(context).delete()
+        deletePublicLogFile(context)
     }
 
     fun markStartupCompleted(context: Context) {
@@ -200,6 +207,8 @@ object RuntimeDiagnostics {
     }
 
     fun getDiagnosticsJson(context: Context): String {
+        val prefersPublicLog = supportsPublicLogMirror()
+        val publicLogReady = if (prefersPublicLog) syncPublicLogFile(context) else false
         val prefs = prefs(context)
         val payload = JSONObject()
         payload.put("appVersion", BuildConfig.VERSION_NAME)
@@ -211,7 +220,13 @@ object RuntimeDiagnostics {
         payload.put("startupPending", prefs.getBoolean(KEY_STARTUP_PENDING, false))
         payload.put("startupStartedAt", prefs.getLong(KEY_STARTUP_STARTED_AT, 0L))
         payload.put("startupCompletedAt", prefs.getLong(KEY_STARTUP_COMPLETED_AT, 0L))
-        payload.put("logFilePath", File(context.filesDir, LOG_FILE_NAME).absolutePath)
+        payload.put(
+            "logFilePath",
+            when {
+                publicLogReady || prefersPublicLog -> publicLogDisplayPath()
+                else -> privateLogFile(context).absolutePath
+            },
+        )
 
         val lastReport = prefs.getString(KEY_LAST_REPORT, null)
         if (!lastReport.isNullOrBlank()) {
@@ -262,8 +277,91 @@ object RuntimeDiagnostics {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     private fun appendToLogFile(context: Context, payload: String) {
-        File(context.filesDir, LOG_FILE_NAME).appendText(payload + "\n\n")
+        privateLogFile(context).appendText(payload + "\n\n")
+        syncPublicLogFile(context)
     }
+
+    private fun privateLogFile(context: Context): File =
+        File(context.filesDir, LOG_FILE_NAME)
+
+    private fun supportsPublicLogMirror(): Boolean =
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q || legacyPublicLogFile() != null
+
+    private fun syncPublicLogFile(context: Context): Boolean {
+        return try {
+            val source = privateLogFile(context)
+            if (!source.exists()) {
+                deletePublicLogFile(context)
+                true
+            } else {
+                val content = source.readText()
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    val uri = findOrCreatePublicLogUri(context) ?: return false
+                    val stream = context.contentResolver.openOutputStream(uri, "wt") ?: return false
+                    stream.bufferedWriter().use { writer ->
+                        writer.write(content)
+                    }
+                    true
+                } else {
+                    val target = legacyPublicLogFile() ?: return false
+                    target.parentFile?.mkdirs()
+                    target.writeText(content)
+                    true
+                }
+            }
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
+    private fun deletePublicLogFile(context: Context) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                findPublicLogUri(context)?.let { uri ->
+                    context.contentResolver.delete(uri, null, null)
+                }
+            } else {
+                legacyPublicLogFile()?.delete()
+            }
+        } catch (_: Throwable) {
+        }
+    }
+
+    private fun publicLogDisplayPath(): String =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            "Download/$PUBLIC_LOG_FILE_NAME"
+        } else {
+            legacyPublicLogFile()?.absolutePath ?: "Download/$PUBLIC_LOG_FILE_NAME"
+        }
+
+    private fun legacyPublicLogFile(): File? =
+        Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            ?.let { directory -> File(directory, PUBLIC_LOG_FILE_NAME) }
+
+    private fun findOrCreatePublicLogUri(context: Context) =
+        findPublicLogUri(context) ?: context.contentResolver.insert(
+            MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+            ContentValues().apply {
+                put(MediaStore.MediaColumns.DISPLAY_NAME, PUBLIC_LOG_FILE_NAME)
+                put(MediaStore.MediaColumns.MIME_TYPE, LOG_MIME_TYPE)
+                put(MediaStore.MediaColumns.RELATIVE_PATH, "${Environment.DIRECTORY_DOWNLOADS}/")
+            },
+        )
+
+    private fun findPublicLogUri(context: Context) =
+        context.contentResolver.query(
+            MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+            arrayOf(MediaStore.MediaColumns._ID),
+            "${MediaStore.MediaColumns.DISPLAY_NAME}=? AND ${MediaStore.MediaColumns.RELATIVE_PATH}=?",
+            arrayOf(PUBLIC_LOG_FILE_NAME, "${Environment.DIRECTORY_DOWNLOADS}/"),
+            null,
+        )?.use { cursor ->
+            if (!cursor.moveToFirst()) {
+                return@use null
+            }
+            val id = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID))
+            ContentUris.withAppendedId(MediaStore.Downloads.EXTERNAL_CONTENT_URI, id)
+        }
 
     private fun isoNow(): String =
         SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ", Locale.US).format(Date())
