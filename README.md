@@ -87,7 +87,7 @@ npm run typecheck
 
 APK files are published in [GitHub Releases](https://github.com/TargetMisser/FlightWorkApp/releases).
 
-Latest stable: **v2.6.22**
+Latest stable: **v2.6.23**
 
 To install:
 

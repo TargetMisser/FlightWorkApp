@@ -33,6 +33,8 @@ object RuntimeDiagnostics {
     private const val LOG_FILE_NAME = "runtime-events.log"
     private const val PUBLIC_LOG_FILE_NAME = "AeroStaffPro-runtime-events.log"
     private const val LOG_MIME_TYPE = "text/plain"
+    private const val MAX_EXIT_TRACE_LINES = 120
+    private const val MAX_EXIT_TRACE_CHARS = 12000
 
     @Volatile
     private var installed = false
@@ -54,6 +56,7 @@ object RuntimeDiagnostics {
         val pssKb: Long,
         val rssKb: Long,
         val traceAvailable: Boolean,
+        val traceExcerpt: String?,
     ) {
         fun toJson(): JSONObject =
             JSONObject().apply {
@@ -67,6 +70,7 @@ object RuntimeDiagnostics {
                 put("pssKb", pssKb)
                 put("rssKb", rssKb)
                 put("traceAvailable", traceAvailable)
+                put("traceExcerpt", traceExcerpt ?: JSONObject.NULL)
             }
     }
 
@@ -121,7 +125,7 @@ object RuntimeDiagnostics {
                 context = application,
                 type = "startup_recovery",
                 message = "Previous startup did not complete. Native liquid glass was disabled for recovery.",
-                stack = null,
+                stack = lastExitInfo?.traceExcerpt,
                 threadName = "main",
                 metadata = buildMap {
                     put("reason", "startup_not_completed")
@@ -462,7 +466,8 @@ object RuntimeDiagnostics {
     }
 
     private fun ApplicationExitInfo.toSnapshot(): ExitInfoSnapshot =
-        ExitInfoSnapshot(
+        readTraceSnapshot().let { trace ->
+            ExitInfoSnapshot(
             timestamp = timestamp,
             reasonCode = reason,
             reasonLabel = exitReasonLabel(reason),
@@ -472,16 +477,28 @@ object RuntimeDiagnostics {
             description = description?.singleLineSummary(),
             pssKb = pss,
             rssKb = rss,
-            traceAvailable = hasTraceInput(),
+            traceAvailable = trace.available,
+            traceExcerpt = trace.excerpt,
         )
+        }
 
-    private fun ApplicationExitInfo.hasTraceInput(): Boolean =
+    private data class ExitTraceSnapshot(
+        val available: Boolean,
+        val excerpt: String?,
+    )
+
+    private fun ApplicationExitInfo.readTraceSnapshot(): ExitTraceSnapshot =
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
-            false
+            ExitTraceSnapshot(available = false, excerpt = null)
         } else {
             runCatching {
-                traceInputStream?.use { true } ?: false
-            }.getOrDefault(false)
+                traceInputStream?.use { stream ->
+                    ExitTraceSnapshot(
+                        available = true,
+                        excerpt = stream.readTraceExcerpt(),
+                    )
+                } ?: ExitTraceSnapshot(available = false, excerpt = null)
+            }.getOrElse { ExitTraceSnapshot(available = false, excerpt = null) }
         }
 
     private fun exitReasonLabel(reason: Int): String =
@@ -533,4 +550,27 @@ object RuntimeDiagnostics {
             .let { summary ->
                 if (summary.length <= 240) summary else "${summary.take(237)}..."
             }
+
+    private fun java.io.InputStream.readTraceExcerpt(): String? {
+        val lines = mutableListOf<String>()
+        var totalChars = 0
+
+        bufferedReader(Charsets.UTF_8).use { reader ->
+            while (true) {
+                val line = reader.readLine() ?: break
+                val normalized = line.trimEnd()
+                val extraChars = normalized.length + 1
+                if (lines.size >= MAX_EXIT_TRACE_LINES || totalChars + extraChars > MAX_EXIT_TRACE_CHARS) {
+                    lines += "... (trace truncated)"
+                    break
+                }
+                lines += normalized
+                totalChars += extraChars
+            }
+        }
+
+        return lines.joinToString("\n")
+            .trim()
+            .takeIf { it.isNotBlank() }
+    }
 }
