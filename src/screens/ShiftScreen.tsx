@@ -16,6 +16,7 @@ export default function ShiftScreen() {
   const [ocrText, setOcrText] = useState<string>('');
   const [processing, setProcessing] = useState(false);
   const webViewRef = useRef<WebView>(null);
+  const [isWebViewReady, setIsWebViewReady] = useState(false);
 
   const pickImage = async () => {
     try {
@@ -31,18 +32,14 @@ export default function ShiftScreen() {
         setProcessing(true);
         setOcrText('');
         
+        if (!isWebViewReady) {
+          Alert.alert('Errore', 'Motore OCR non pronto.');
+          setProcessing(false);
+          return;
+        }
         const base64List = result.assets.map(a => `data:image/jpeg;base64,${a.base64}`);
-        const base64Json = JSON.stringify(base64List).replace(/'/g, "\\'");
-        
-        const jsCode = `
-          if (window.runTesseract) {
-            window.runTesseract('${base64Json}');
-          } else {
-            window.ReactNativeWebView.postMessage(JSON.stringify({ success: false, error: "Motore OCR non pronto." }));
-          }
-          true;
-        `;
-        webViewRef.current?.injectJavaScript(jsCode);
+        const base64Json = JSON.stringify(base64List);
+        webViewRef.current?.postMessage(base64Json);
       }
     } catch (e) {
       Alert.alert("Errore OCR", "Impossibile elaborare l'immagine.");
@@ -54,6 +51,7 @@ export default function ShiftScreen() {
     const rawData = event.nativeEvent.data;
     try {
       const result = JSON.parse(rawData);
+      if (result.ready) { setIsWebViewReady(true); return; }
       if (result.success) {
         setOcrText(result.text);
       } else {
@@ -217,19 +215,26 @@ export default function ShiftScreen() {
     </head>
     <body style="background-color: transparent;">
       <script>
-        window.runTesseract = async function(base64JsonStr) {
+        const handleMsg = async function(e) {
           try {
-            const images = JSON.parse(base64JsonStr);
+            if (!window.Tesseract) {
+              window.ReactNativeWebView.postMessage(JSON.stringify({ success: false, error: "Motore OCR non pronto." }));
+              return;
+            }
+            const images = JSON.parse(e.data);
             let combinedText = '';
             for (let i = 0; i < images.length; i++) {
               const ret = await Tesseract.recognize(images[i], 'ita+eng');
               combinedText += ret.data.text + '\\n\\n';
             }
             window.ReactNativeWebView.postMessage(JSON.stringify({ success: true, text: combinedText }));
-          } catch (e) {
-            window.ReactNativeWebView.postMessage(JSON.stringify({ success: false, error: e.message || e.toString() }));
+          } catch (err) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({ success: false, error: err.message || err.toString() }));
           }
         };
+        document.addEventListener('message', handleMsg);
+        window.addEventListener('message', handleMsg);
+        window.ReactNativeWebView.postMessage(JSON.stringify({ ready: true }));
       </script>
     </body>
     </html>
