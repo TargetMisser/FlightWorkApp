@@ -105,8 +105,8 @@ android {
         applicationId 'com.aerostaffpro.app'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 22
-        versionName "2.6.13"
+        versionCode 23
+        versionName "2.6.14"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
     }
@@ -175,7 +175,6 @@ android {
 
 dependencies {
     implementation 'com.google.android.gms:play-services-wearable:19.0.0'
-    implementation 'com.qmdeve.liquidglass:core:1.0.3'
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
 
