@@ -95,7 +95,6 @@ export default function CalendarScreen() {
   const [dailyStats, setDailyStats] = useState<Record<string, DayStats>>({});
   const [loading, setLoading] = useState(true);
   const [calId, setCalId] = useState<string | null>(null);
-  const [calendarMode, setCalendarMode] = useState<'calendar' | 'monthHours'>('calendar');
 
   // Import flow state
   const [importModalVisible, setImportModalVisible] = useState(false);
@@ -461,6 +460,7 @@ export default function CalendarScreen() {
   };
 
   const monthLabel = visibleMonth.toLocaleDateString(locale, { month: 'long', year: 'numeric' });
+  const todayIso = toLocalIso(new Date());
   const selectedEvents = eventsData[selectedDay] || [];
   const workEvent = selectedEvents.find(e => e.title.includes('Lavoro'));
   const restEvent = selectedEvents.find(e => e.title.includes('Riposo'));
@@ -533,6 +533,57 @@ export default function CalendarScreen() {
     }
   };
 
+  const renderCalendarDay = (props: any) => {
+    const { date, state, marking, onPress } = props as {
+      date?: DateData;
+      state?: string;
+      marking?: CalendarMarkedDates[string] & { dots?: Array<{ key?: string; color: string; selectedDotColor?: string }> };
+      onPress?: (value?: DateData) => void;
+    };
+
+    if (!date) return <View style={s.dayCellWrap} />;
+
+    const isSelected = !!marking?.selected;
+    const isToday = date.dateString === todayIso;
+    const isInactive = state === 'disabled' || state === 'inactive';
+    const dots = marking?.dots ?? [];
+
+    return (
+      <TouchableOpacity style={s.dayCellWrap} activeOpacity={0.85} onPress={() => onPress?.(date)}>
+        <View
+          style={[
+            s.dayCellInner,
+            isSelected && s.dayCellInnerSelected,
+            isToday && s.dayCellInnerToday,
+            isToday && isSelected && s.dayCellInnerTodaySelected,
+          ]}
+        >
+          <Text
+            style={[
+              s.dayCellText,
+              isInactive && s.dayCellTextInactive,
+              isToday && s.dayCellTextToday,
+              isSelected && s.dayCellTextSelected,
+            ]}
+          >
+            {date.day}
+          </Text>
+        </View>
+        <View style={s.dayDotsRow}>
+          {dots.slice(0, 2).map(dot => (
+            <View
+              key={dot.key ?? dot.color}
+              style={[
+                s.dayDot,
+                { backgroundColor: isSelected ? (dot.selectedDotColor ?? '#fff') : dot.color },
+              ]}
+            />
+          ))}
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <ScrollView contentContainerStyle={{ paddingBottom: 96 }}>
@@ -548,89 +599,12 @@ export default function CalendarScreen() {
               <Text style={s.importBtnText}>{t('calEditBtn')}</Text>
             </TouchableOpacity>
           </View>
-          <View style={s.modeSeg}>
-            <TouchableOpacity
-              style={[s.modeSegBtn, calendarMode === 'calendar' && s.modeSegBtnActive]}
-              onPress={() => setCalendarMode('calendar')}
-            >
-              <Text style={[s.modeSegText, calendarMode === 'calendar' && s.modeSegTextActive]}>{t('calModeCalendar')}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[s.modeSegBtn, calendarMode === 'monthHours' && s.modeSegBtnActive]}
-              onPress={() => setCalendarMode('monthHours')}
-            >
-              <Text style={[s.modeSegText, calendarMode === 'monthHours' && s.modeSegTextActive]}>{t('calModeMonthHours')}</Text>
-            </TouchableOpacity>
-          </View>
         </View>
 
         {loading ? (
           <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 40 }} />
-        ) : calendarMode === 'monthHours' ? (
-          <View style={s.mainCard}>
-            <Text style={s.shiftTypeName}>{t('calMonthTotalHours')}</Text>
-            <Text style={[s.timeText, { marginTop: 6 }]}>{monthHoursSummary.totalHours.toFixed(1)} h</Text>
-            <Text style={[s.pageSub, { marginTop: 8 }]}>{t('calMonthShiftsCount').replace('{count}', String(monthHoursSummary.shiftsCount))}</Text>
-            <View style={{ marginTop: 14, gap: 8 }}>
-              {monthHoursSummary.workDays.slice(0, 8).map(d => (
-                <View key={d.iso} style={s.monthHoursRow}>
-                  <Text style={s.monthHoursDate}>{fmtDate(d.iso)}</Text>
-                  <Text style={s.monthHoursValue}>{d.hours.toFixed(1)} h</Text>
-                </View>
-              ))}
-              {monthHoursSummary.workDays.length === 0 && (
-                <Text style={s.emptyText}>{t('calNoShift')}{'\n'}{monthLabel}</Text>
-              )}
-            </View>
-          </View>
         ) : (
           <>
-            <View style={s.calendarCard}>
-              <RNCalendar
-                current={toLocalIso(visibleMonth)}
-                markedDates={markedDates}
-                markingType="multi-dot"
-                onDayPress={handleDayPress}
-                onMonthChange={handleMonthChange}
-                enableSwipeMonths
-                firstDay={1}
-                renderArrow={direction => (
-                  <MaterialIcons
-                    name={direction === 'left' ? 'chevron-left' : 'chevron-right'}
-                    size={22}
-                    color={colors.primary}
-                  />
-                )}
-                theme={{
-                  calendarBackground: 'transparent',
-                  monthTextColor: colors.primaryDark,
-                  dayTextColor: colors.text,
-                  textDisabledColor: colors.textMuted,
-                  todayTextColor: colors.primary,
-                  selectedDayTextColor: '#fff',
-                  arrowColor: colors.primary,
-                  textSectionTitleColor: colors.textSub,
-                  textMonthFontSize: 18,
-                  textMonthFontWeight: '800',
-                  textDayHeaderFontSize: 12,
-                  textDayHeaderFontWeight: '700',
-                  textDayFontSize: 15,
-                }}
-                style={s.monthCalendar}
-                headerStyle={s.monthCalendarHeader}
-              />
-              <View style={s.calendarLegend}>
-                <View style={s.legendItem}>
-                  <View style={[s.legendDot, { backgroundColor: colors.primary }]} />
-                  <Text style={s.legendText}>{t('calTypeWork')}</Text>
-                </View>
-                <View style={s.legendItem}>
-                  <View style={[s.legendDot, { backgroundColor: '#10b981' }]} />
-                  <Text style={s.legendText}>{t('calTypeRest')}</Text>
-                </View>
-              </View>
-            </View>
-
             <View style={s.mainCard}>
               <View style={s.selectedDayHeader}>
                 <Text style={s.selectedDayLabel}>{fmtDate(selectedDay)}</Text>
@@ -683,6 +657,66 @@ export default function CalendarScreen() {
               ) : (
                 <Text style={s.emptyText}>{t('calNoShift')}{'\n'}{selectedDay.split('-').reverse().join('/')}</Text>
               )}
+            </View>
+
+            <View style={s.calendarCard}>
+              <RNCalendar
+                current={toLocalIso(visibleMonth)}
+                markedDates={markedDates}
+                markingType="multi-dot"
+                dayComponent={renderCalendarDay}
+                onDayPress={handleDayPress}
+                onMonthChange={handleMonthChange}
+                enableSwipeMonths
+                firstDay={1}
+                renderArrow={direction => (
+                  <MaterialIcons
+                    name={direction === 'left' ? 'chevron-left' : 'chevron-right'}
+                    size={22}
+                    color={colors.primary}
+                  />
+                )}
+                theme={{
+                  calendarBackground: 'transparent',
+                  monthTextColor: colors.primaryDark,
+                  dayTextColor: colors.text,
+                  textDisabledColor: colors.textMuted,
+                  todayTextColor: colors.primary,
+                  selectedDayTextColor: '#fff',
+                  arrowColor: colors.primary,
+                  textSectionTitleColor: colors.textSub,
+                  textMonthFontSize: 18,
+                  textMonthFontWeight: '800',
+                  textDayHeaderFontSize: 12,
+                  textDayHeaderFontWeight: '700',
+                  textDayFontSize: 15,
+                }}
+                style={s.monthCalendar}
+                headerStyle={s.monthCalendarHeader}
+              />
+              <View style={s.calendarLegend}>
+                <View style={s.legendItem}>
+                  <View style={[s.legendDot, { backgroundColor: colors.primary }]} />
+                  <Text style={s.legendText}>{t('calTypeWork')}</Text>
+                </View>
+                <View style={s.legendItem}>
+                  <View style={[s.legendDot, { backgroundColor: '#10b981' }]} />
+                  <Text style={s.legendText}>{t('calTypeRest')}</Text>
+                </View>
+                <View style={s.legendItem}>
+                  <View style={s.legendTodayRing}>
+                    <View style={s.legendTodayCenter} />
+                  </View>
+                  <Text style={s.legendText}>{t('calToday')}</Text>
+                </View>
+              </View>
+              <View style={s.calendarSummary}>
+                <Text style={s.calendarSummaryLabel}>{t('calMonthTotalHours')}</Text>
+                <Text style={s.calendarSummaryValue}>{monthHoursSummary.totalHours.toFixed(1)} h</Text>
+                <Text style={s.calendarSummaryMeta}>
+                  {t('calMonthShiftsCount').replace('{count}', String(monthHoursSummary.shiftsCount))}
+                </Text>
+              </View>
             </View>
           </>
         )}
@@ -940,11 +974,6 @@ function makeStyles(c: ThemeColors) {
     pageSub: { fontSize: 11, color: c.textSub, letterSpacing: 1.5, marginTop: 3 },
     importBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 },
     importBtnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
-    modeSeg: { flexDirection: 'row', gap: 8, marginTop: 12 },
-    modeSegBtn: { flex: 1, borderRadius: 10, borderWidth: 1, borderColor: c.border, paddingVertical: 8, alignItems: 'center', backgroundColor: c.bg },
-    modeSegBtnActive: { backgroundColor: c.primary, borderColor: c.primary },
-    modeSegText: { color: c.textSub, fontSize: 12, fontWeight: '700' },
-    modeSegTextActive: { color: '#fff' },
     calendarCard: {
       backgroundColor: c.card,
       borderRadius: 20,
@@ -962,10 +991,27 @@ function makeStyles(c: ThemeColors) {
     },
     monthCalendar: { borderRadius: 16 },
     monthCalendarHeader: { paddingBottom: 8, marginBottom: 6 },
-    calendarLegend: { flexDirection: 'row', gap: 16, paddingHorizontal: 6, paddingTop: 8 },
+    dayCellWrap: { alignItems: 'center', justifyContent: 'center', paddingVertical: 2 },
+    dayCellInner: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: 'transparent' },
+    dayCellInnerSelected: { backgroundColor: c.primary },
+    dayCellInnerToday: { borderColor: c.primary, backgroundColor: c.primaryLight },
+    dayCellInnerTodaySelected: { borderColor: c.primaryDark },
+    dayCellText: { color: c.text, fontSize: 15, fontWeight: '600' },
+    dayCellTextInactive: { color: c.textMuted },
+    dayCellTextToday: { color: c.primaryDark, fontWeight: '800' },
+    dayCellTextSelected: { color: '#fff' },
+    dayDotsRow: { minHeight: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 3 },
+    dayDot: { width: 5, height: 5, borderRadius: 2.5, marginHorizontal: 1.5 },
+    calendarLegend: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, paddingHorizontal: 6, paddingTop: 8 },
     legendItem: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     legendDot: { width: 8, height: 8, borderRadius: 4 },
+    legendTodayRing: { width: 12, height: 12, borderRadius: 6, borderWidth: 1.5, borderColor: c.primary, alignItems: 'center', justifyContent: 'center' },
+    legendTodayCenter: { width: 4, height: 4, borderRadius: 2, backgroundColor: c.primary },
     legendText: { color: c.textSub, fontSize: 12, fontWeight: '600' },
+    calendarSummary: { marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: c.border },
+    calendarSummaryLabel: { color: c.textSub, fontSize: 12, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase' },
+    calendarSummaryValue: { color: c.primary, fontSize: 28, fontWeight: '800', marginTop: 6 },
+    calendarSummaryMeta: { color: c.textSub, fontSize: 13, fontWeight: '600', marginTop: 4 },
     mainCard: {
       backgroundColor: c.card, borderRadius: 14,
       marginHorizontal: 16, marginTop: 16,
@@ -996,9 +1042,6 @@ function makeStyles(c: ThemeColors) {
     restIconBox: { width: 48, height: 48, borderRadius: 14, backgroundColor: '#10b98122', alignItems: 'center', justifyContent: 'center', marginRight: 12 },
     restText: { fontSize: 20, fontWeight: 'bold', color: '#10b981' },
     emptyText: { textAlign: 'center', color: c.textSub, fontSize: 15, marginTop: 20, lineHeight: 24 },
-    monthHoursRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: c.border },
-    monthHoursDate: { color: c.text, fontSize: 14, fontWeight: '600' },
-    monthHoursValue: { color: c.primary, fontSize: 14, fontWeight: '800' },
     // Modal
     modalOverlay: { flex: 1, justifyContent: 'flex-end' },
     modalBg: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)' },

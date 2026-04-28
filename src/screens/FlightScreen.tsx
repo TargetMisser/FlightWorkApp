@@ -30,6 +30,7 @@ const PINNED_FLIGHT_KEY = 'pinned_flight_v1';
 const PINNED_NOTIF_IDS_KEY = 'pinned_notif_ids_v1';
 const FLIGHT_FILTER_KEY = 'aerostaff_flight_filter_v1';
 const FLIGHTS_CACHE_KEY = 'aerostaff_flights_cache_v2';
+const FLIGHTS_RETENTION_SECONDS = 60 * 60;
 
 function flightKey(item: any, tsField: string): string {
   // Use flight number + scheduled time as a stable key.
@@ -47,8 +48,21 @@ function mergeFlights(cached: any[], fresh: any[], tsField: string): any[] {
   return Array.from(map.values());
 }
 
+function pruneExpiredFlights(items: any[], tsField: string, nowSeconds = Date.now() / 1000): any[] {
+  const cutoff = nowSeconds - FLIGHTS_RETENTION_SECONDS;
+  return items.filter(item => {
+    const ts = item.flight?.time?.scheduled?.[tsField];
+    if (!ts) return true;
+    return ts >= cutoff;
+  });
+}
+
 function sameAirlineKeys(left: string[], right: string[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
 }
 
 // Handler: mostra notifiche anche con app aperta (wrapped for Expo Go compat)
@@ -214,6 +228,32 @@ function FlightRowComponent({ item, activeTab, userShift, pinnedFlightId, onPin,
     smPool.find(sm => sm.flightNumber === normFn) ??
     smPool.find(sm => normalizeForMatching(sm.flightNumber) === normFnStripped);
 
+  const arrivalProgress = activeTab === 'arrivals' && ts ? (() => {
+    const scheduledDep = item.flight?.time?.scheduled?.departure;
+    const estimatedDep = item.flight?.time?.estimated?.departure;
+    const realDep = item.flight?.time?.real?.departure;
+    const estimatedArr = item.flight?.time?.estimated?.arrival;
+    const realArr = item.flight?.time?.real?.arrival;
+    const startTs = realDep || estimatedDep || scheduledDep;
+    const endTs = realArr || estimatedArr || ts;
+    if (!startTs || !endTs || endTs <= startTs) return null;
+
+    const delayMin = Math.round((endTs - ts) / 60);
+    const progressColor = realArr ? '#10B981'
+      : delayMin > 20 ? '#EF4444'
+      : delayMin > 5 ? '#F59E0B'
+      : colors.primary;
+
+    return {
+      startTs,
+      endTs,
+      progress: realArr ? 1 : clamp((Date.now() / 1000 - startTs) / (endTs - startTs), 0, 1),
+      departureColor: realDep ? colors.primary : '#6B7280',
+      arrivalColor: progressColor,
+      planeColor: progressColor,
+    };
+  })() : null;
+
   return (
     <SwipeableFlightCard
       isPinned={isPinned}
@@ -293,6 +333,48 @@ function FlightRowComponent({ item, activeTab, userShift, pinnedFlightId, onPin,
             );
           })() : (
             <Text style={s.bodyInfo}>{`Da: ${originDest}`}</Text>
+          )}
+          {arrivalProgress && (
+            <View style={s.arrivalProgressSection}>
+              <View style={s.arrivalProgressMetaRow}>
+                <View style={s.arrivalProgressEndpoint}>
+                  <MaterialIcons name="flight-takeoff" size={14} color={arrivalProgress.departureColor} />
+                  <Text style={s.arrivalProgressTime}>{fmtTs(arrivalProgress.startTs)}</Text>
+                </View>
+                <View style={s.arrivalProgressEndpoint}>
+                  <MaterialIcons name="flight-land" size={14} color={arrivalProgress.arrivalColor} />
+                  <Text style={s.arrivalProgressTime}>{fmtTs(arrivalProgress.endTs)}</Text>
+                </View>
+              </View>
+              <View style={s.arrivalProgressTrackWrap}>
+                <View style={s.arrivalProgressTrack}>
+                  <View
+                    style={[
+                      s.arrivalProgressFill,
+                      {
+                        width: `${Math.max(0, Math.min(100, arrivalProgress.progress * 100))}%`,
+                        backgroundColor: arrivalProgress.arrivalColor,
+                      },
+                    ]}
+                  />
+                </View>
+                <View
+                  style={[
+                    s.arrivalProgressPlaneWrap,
+                    { left: `${clamp(arrivalProgress.progress, 0.04, 0.96) * 100}%` },
+                  ]}
+                >
+                  <View style={s.arrivalProgressPlaneBadge}>
+                    <MaterialIcons
+                      name="flight"
+                      size={14}
+                      color={arrivalProgress.planeColor}
+                      style={s.arrivalProgressPlaneIcon}
+                    />
+                  </View>
+                </View>
+              </View>
+            </View>
           )}
           {/* Status pill — own row, right-aligned */}
           {activeTab === 'arrivals' && ts ? (() => {
@@ -607,22 +689,22 @@ export default function FlightScreen() {
       } else if (hadAllPreviouslySelected && !sameAirlineKeys(savedProfileAirlines, nextAirportAirlines)) {
         applySelectedAirlines(nextAirportAirlines);
       }
-      // Accumula voli: fonde i dati freschi con quelli già visti oggi
-      // così i voli rimossi da FR24 dopo la partenza restano visibili fino a mezzanotte
-      const today = new Date().toISOString().split('T')[0];
+      // Accumula voli: fonde i dati freschi con quelli in cache e conserva solo
+      // i voli non più vecchi di 1 ora dall'orario schedulato.
       let cachedArrs: any[] = [], cachedDeps: any[] = [];
       try {
         const raw = await AsyncStorage.getItem(FLIGHTS_CACHE_KEY);
         if (raw) {
           const cache = JSON.parse(raw);
-          if (cache.date === today) { cachedArrs = cache.arrivals ?? []; cachedDeps = cache.departures ?? []; }
+          cachedArrs = Array.isArray(cache.arrivals) ? cache.arrivals : [];
+          cachedDeps = Array.isArray(cache.departures) ? cache.departures : [];
         }
       } catch {}
-      const mergedArrs = mergeFlights(cachedArrs, allArrivals, 'arrival');
-      const mergedDeps = mergeFlights(cachedDeps, allDepartures, 'departure');
+      const mergedArrs = pruneExpiredFlights(mergeFlights(cachedArrs, allArrivals, 'arrival'), 'arrival');
+      const mergedDeps = pruneExpiredFlights(mergeFlights(cachedDeps, allDepartures, 'departure'), 'departure');
       setAllArrivalsFull(mergedArrs);
       setAllDeparturesFull(mergedDeps);
-      AsyncStorage.setItem(FLIGHTS_CACHE_KEY, JSON.stringify({ date: today, arrivals: mergedArrs, departures: mergedDeps })).catch(() => {});
+      AsyncStorage.setItem(FLIGHTS_CACHE_KEY, JSON.stringify({ arrivals: mergedArrs, departures: mergedDeps })).catch(() => {});
 
       // Build inbound arrival map: registration → best known arrival timestamp
       const inboundMap: Record<string, number> = {};
@@ -1122,6 +1204,30 @@ function makeStyles(c: ThemeColors) {
     opsIcon: { fontSize: 16 },
     opsLabel: { fontSize: 10, fontWeight: '600', color: c.textSub, letterSpacing: 0.5 },
     opsTime: { fontSize: 13, fontWeight: '800', color: c.primaryDark },
+    arrivalProgressSection: { marginTop: 12 },
+    arrivalProgressMetaRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+    arrivalProgressEndpoint: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+    arrivalProgressTime: { fontSize: 11, fontWeight: '800', color: c.text },
+    arrivalProgressTrackWrap: { position: 'relative', justifyContent: 'center', height: 28 },
+    arrivalProgressTrack: { height: 4, borderRadius: 999, backgroundColor: c.border, overflow: 'hidden' },
+    arrivalProgressFill: { height: '100%', borderRadius: 999 },
+    arrivalProgressPlaneWrap: { position: 'absolute', top: 0, marginLeft: -11 },
+    arrivalProgressPlaneBadge: {
+      width: 22,
+      height: 22,
+      borderRadius: 11,
+      backgroundColor: c.card,
+      borderWidth: 1.5,
+      borderColor: c.primaryLight,
+      justifyContent: 'center',
+      alignItems: 'center',
+      shadowColor: c.isDark ? '#000' : c.primary,
+      shadowOpacity: c.isDark ? 0.2 : 0.16,
+      shadowRadius: 4,
+      shadowOffset: { width: 0, height: 2 },
+      elevation: 3,
+    },
+    arrivalProgressPlaneIcon: { transform: [{ rotate: '90deg' }] },
     pinBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', alignItems: 'center' },
     pinBtnActive: { backgroundColor: 'rgba(245,158,11,0.25)' },
     filterBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: c.cardSecondary, justifyContent: 'center', alignItems: 'center', marginRight: 8 },

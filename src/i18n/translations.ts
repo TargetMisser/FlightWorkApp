@@ -83,7 +83,7 @@ const it = {
   // Calendar
   calTitle: 'Gestione Turni', calEditBtn: 'Modifica Turni',
   calModeCalendar: 'Calendario', calModeMonthHours: 'Ore mese',
-  calMonthTotalHours: 'Totale ore del mese', calMonthShiftsCount: 'Turni lavoro: {count}',
+  calMonthTotalHours: 'Totale ore del mese', calMonthShiftsCount: 'Turni lavoro: {count}', calToday: 'Oggi',
   calWeatherLocal: 'Meteo locale', calShiftWork: 'Turno Lavoro',
   calRestDay: 'Giorno di Riposo', calNoShift: 'Nessun turno per',
   calEditMenuTitle: 'Modifica Turni',
@@ -268,7 +268,7 @@ const en: typeof it = {
   // Calendar
   calTitle: 'Shift Manager', calEditBtn: 'Edit Shifts',
   calModeCalendar: 'Calendar', calModeMonthHours: 'Month hours',
-  calMonthTotalHours: 'Total month hours', calMonthShiftsCount: 'Work shifts: {count}',
+  calMonthTotalHours: 'Total month hours', calMonthShiftsCount: 'Work shifts: {count}', calToday: 'Today',
   calWeatherLocal: 'Local weather', calShiftWork: 'Work Shift',
   calRestDay: 'Rest Day', calNoShift: 'No shift for',
   calEditMenuTitle: 'Edit Shifts',
