@@ -19,10 +19,13 @@ import PasswordScreen from './src/screens/PasswordScreen';
 import DrawerMenu from './src/components/DrawerMenu';
 import ProfileSwitcherModal from './src/components/ProfileSwitcherModal';
 import LiquidGlassSurface from './src/components/LiquidGlassSurface';
+import { installGlobalCrashHandler, markRuntimeStartupCompleted } from './src/utils/runtimeDiagnostics';
 import { autoScheduleNotifications } from './src/utils/autoNotifications';
 import { checkForUpdate, wasUpdateSeen, markUpdateSeen, type UpdateInfo } from './src/utils/updateChecker';
 import UpdateModal from './src/components/UpdateModal';
 import { useAirport } from './src/context/AirportContext';
+
+installGlobalCrashHandler();
 
 type Tab = 'Shifts' | 'Calendar' | 'Flights' | 'TravelDoc';
 type OverlayScreen = 'Notepad' | 'Phonebook' | 'Passwords' | 'Manuals' | 'Settings' | null;
@@ -104,6 +107,7 @@ function AppInner() {
 
   // ─── Auto-schedule flight notifications on startup ─────────────────────────
   useEffect(() => {
+    markRuntimeStartupCompleted().catch(() => {});
     autoScheduleNotifications().then(count => {
       if (count > 0 && __DEV__) console.log(`Auto-scheduled ${count} notifications`);
     }).catch(() => {});

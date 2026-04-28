@@ -15,6 +15,9 @@ import com.facebook.react.defaults.DefaultReactNativeHost
 
 import expo.modules.ApplicationLifecycleDispatcher
 import expo.modules.ReactNativeHostWrapper
+import com.anonymous.FlightWorkApp.liquidglass.LiquidGlassPackage
+import com.anonymous.FlightWorkApp.runtime.RuntimeDiagnostics
+import com.anonymous.FlightWorkApp.runtime.RuntimeDiagnosticsPackage
 import com.anonymous.FlightWorkApp.wear.WearDataSenderPackage
 
 class MainApplication : Application(), ReactApplication {
@@ -25,6 +28,10 @@ class MainApplication : Application(), ReactApplication {
         override fun getPackages(): List<ReactPackage> =
             PackageList(this).packages.apply {
             add(WearDataSenderPackage())
+            add(RuntimeDiagnosticsPackage())
+            if (RuntimeDiagnostics.isLiquidGlassSupported()) {
+              add(LiquidGlassPackage())
+            }
               // Packages that cannot be autolinked yet can be added manually here, for example:
               // add(MyReactNativePackage())
             }
@@ -47,6 +54,7 @@ class MainApplication : Application(), ReactApplication {
     } catch (e: IllegalArgumentException) {
       ReleaseLevel.STABLE
     }
+    RuntimeDiagnostics.install(this)
     loadReactNative(this)
     ApplicationLifecycleDispatcher.onApplicationCreate(this)
   }

@@ -1,24 +1,44 @@
 import React from 'react';
 import {
+  Platform,
   StyleSheet,
+  UIManager,
   View,
+  type ColorValue,
   type ViewProps,
 } from 'react-native';
+import { requireNativeComponent } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
+import { isNativeLiquidGlassEnabledAtLaunch } from '../utils/runtimeDiagnostics';
 
-type LiquidGlassSurfaceProps = ViewProps & {
+type NativeLiquidGlassProps = ViewProps & {
   cornerRadius?: number;
   refractionHeight?: number;
   refractionOffset?: number;
-  tintColor?: string;
+  tintColor?: ColorValue;
   glassOpacity?: number;
   dispersion?: number;
   blurRadius?: number;
+};
+
+type LiquidGlassSurfaceProps = NativeLiquidGlassProps & {
   fallbackBlurIntensity?: number;
   fallbackBlurTint?: 'light' | 'dark';
   fallbackGradientColors?: [string, string, ...string[]];
 };
+
+const NativeLiquidGlassSurface = Platform.OS === 'android'
+  ? requireNativeComponent<NativeLiquidGlassProps>('AeroLiquidGlassSurface')
+  : null;
+const hasNativeLiquidGlassManager = Platform.OS === 'android'
+  && !!UIManager.getViewManagerConfig?.('AeroLiquidGlassSurface');
+
+const supportsNativeLiquidGlass = Platform.OS === 'android'
+  && typeof Platform.Version === 'number'
+  && Platform.Version >= 33
+  && hasNativeLiquidGlassManager
+  && isNativeLiquidGlassEnabledAtLaunch();
 
 export default function LiquidGlassSurface({
   children,
@@ -35,13 +55,23 @@ export default function LiquidGlassSurface({
   style,
   ...viewProps
 }: LiquidGlassSurfaceProps) {
-  void cornerRadius;
-  void refractionHeight;
-  void refractionOffset;
-  void tintColor;
-  void glassOpacity;
-  void dispersion;
-  void blurRadius;
+  if (supportsNativeLiquidGlass && NativeLiquidGlassSurface) {
+    return (
+      <NativeLiquidGlassSurface
+        {...viewProps}
+        style={style}
+        cornerRadius={cornerRadius}
+        refractionHeight={refractionHeight}
+        refractionOffset={refractionOffset}
+        tintColor={tintColor}
+        glassOpacity={glassOpacity}
+        dispersion={dispersion}
+        blurRadius={blurRadius}
+      >
+        {children}
+      </NativeLiquidGlassSurface>
+    );
+  }
 
   return (
     <View {...viewProps} style={[styles.fallbackShell, style]}>

@@ -175,6 +175,7 @@ android {
 
 dependencies {
     implementation 'com.google.android.gms:play-services-wearable:19.0.0'
+    implementation 'com.qmdeve.liquidglass:core:1.0.3'
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
 
