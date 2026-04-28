@@ -63,21 +63,25 @@ object RuntimeDiagnostics {
         val startupWasPending = prefs.getBoolean(KEY_STARTUP_PENDING, false)
         val liquidGlassWasEnabled = prefs.getBoolean(KEY_LIQUID_GLASS_ENABLED, supported)
         if (startupWasPending && liquidGlassWasEnabled) {
+            val previousStartupStartedAt = prefs.getLong(KEY_STARTUP_STARTED_AT, 0L)
             prefs.edit()
                 .putBoolean(KEY_LIQUID_GLASS_ENABLED, false)
                 .putBoolean(KEY_LIQUID_GLASS_AUTO_DISABLED, true)
                 .apply()
 
-            if (prefs.getString(KEY_LAST_REPORT, null).isNullOrBlank()) {
-                recordEvent(
-                    context = application,
-                    type = "startup_recovery",
-                    message = "Previous startup did not complete. Native liquid glass was disabled for recovery.",
-                    stack = null,
-                    threadName = "main",
-                    metadata = mapOf("reason" to "startup_not_completed"),
-                )
-            }
+            recordEvent(
+                context = application,
+                type = "startup_recovery",
+                message = "Previous startup did not complete. Native liquid glass was disabled for recovery.",
+                stack = null,
+                threadName = "main",
+                metadata = buildMap {
+                    put("reason", "startup_not_completed")
+                    if (previousStartupStartedAt > 0L) {
+                        put("previousStartupStartedAt", previousStartupStartedAt.toString())
+                    }
+                },
+            )
         }
 
         prefs.edit()
