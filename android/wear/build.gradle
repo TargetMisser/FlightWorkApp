@@ -18,12 +18,12 @@ if (wantsReleaseBuild && !hasReleaseSigning) {
 
 android {
     namespace 'com.anonymous.flightworkapp.wear'
-    compileSdk 36
+    compileSdk rootProject.ext.compileSdkVersion
 
     defaultConfig {
         applicationId 'com.anonymous.FlightWorkApp'
         minSdkVersion 30
-        targetSdkVersion 36
+        targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0"
     }
