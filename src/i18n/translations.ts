@@ -7,7 +7,7 @@ const it = {
   overlayNotepad: 'Blocco Note', overlayPhonebook: 'Rubrica', overlayPasswords: 'Password',
   overlayManuals: 'Manuali DCS', overlaySettings: 'Impostazioni',
   // Common
-  cancel: 'Annulla', save: 'Salva', delete: 'Elimina', error: 'Errore',
+  cancel: 'Annulla', close: 'Chiudi', save: 'Salva', delete: 'Elimina', error: 'Errore',
   confirm: 'Conferma', ok: 'OK', add: 'Aggiungi',
   profileTitle: 'Profili aeroporto',
   profileSubtitle: 'Salva aeroporto e compagnie diverse, poi cambia profilo con un tap.',
@@ -192,7 +192,7 @@ const en: typeof it = {
   overlayNotepad: 'Notepad', overlayPhonebook: 'Phonebook', overlayPasswords: 'Password',
   overlayManuals: 'DCS Manuals', overlaySettings: 'Settings',
   // Common
-  cancel: 'Cancel', save: 'Save', delete: 'Delete', error: 'Error',
+  cancel: 'Cancel', close: 'Close', save: 'Save', delete: 'Delete', error: 'Error',
   confirm: 'Confirm', ok: 'OK', add: 'Add',
   profileTitle: 'Airport profiles',
   profileSubtitle: 'Save different airports and airline sets, then switch profiles with one tap.',
