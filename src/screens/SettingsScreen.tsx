@@ -291,6 +291,22 @@ export default function SettingsScreen() {
       `Log file: ${diag.logFilePath || 'n/d'}`,
     ];
 
+    if (diag.lastExitInfo) {
+      lines.push(
+        '',
+        'Ultimo exit Android',
+        `Quando: ${new Date(diag.lastExitInfo.timestamp).toLocaleString(lang === 'it' ? 'it-IT' : 'en-GB')}`,
+        `Reason: ${diag.lastExitInfo.reasonLabel} (${diag.lastExitInfo.reasonCode})`,
+        `Status: ${diag.lastExitInfo.status}`,
+        `Importance: ${diag.lastExitInfo.importance}`,
+        `Processo: ${diag.lastExitInfo.processName || 'n/d'}`,
+        `Trace disponibile: ${diag.lastExitInfo.traceAvailable ? 'si' : 'no'}`,
+        `PSS: ${diag.lastExitInfo.pssKb > 0 ? `${diag.lastExitInfo.pssKb} kB` : 'n/d'}`,
+        `RSS: ${diag.lastExitInfo.rssKb > 0 ? `${diag.lastExitInfo.rssKb} kB` : 'n/d'}`,
+        `Descrizione: ${diag.lastExitInfo.description || 'n/d'}`,
+      );
+    }
+
     if (!diag.lastReport) {
       lines.push('', 'Nessun crash log salvato.');
       return lines.join('\n');

@@ -16,6 +16,19 @@ export type RuntimeReport = {
   metadata?: Record<string, string>;
 };
 
+export type RuntimeExitInfo = {
+  timestamp: number;
+  reasonCode: number;
+  reasonLabel: string;
+  status: number;
+  importance: number;
+  processName?: string | null;
+  description?: string | null;
+  pssKb: number;
+  rssKb: number;
+  traceAvailable: boolean;
+};
+
 export type RuntimeDiagnosticsState = {
   appVersion: string;
   device: string;
@@ -27,6 +40,7 @@ export type RuntimeDiagnosticsState = {
   startupStartedAt?: number;
   startupCompletedAt?: number;
   logFilePath?: string;
+  lastExitInfo?: RuntimeExitInfo | null;
   lastReport: RuntimeReport | null;
 };
 
@@ -77,6 +91,7 @@ function parseDiagnostics(payload?: string | null): RuntimeDiagnosticsState {
     return {
       ...fallbackState(),
       ...parsed,
+      lastExitInfo: parsed.lastExitInfo ?? null,
       lastReport: parsed.lastReport ?? null,
     };
   } catch {

@@ -1,6 +1,8 @@
 package com.anonymous.FlightWorkApp.runtime
 
+import android.app.ActivityManager
 import android.app.Application
+import android.app.ApplicationExitInfo
 import android.content.ContentUris
 import android.content.Context
 import android.content.ContentValues
@@ -26,6 +28,8 @@ object RuntimeDiagnostics {
     private const val KEY_LIQUID_GLASS_ENABLED = "liquid_glass_enabled"
     private const val KEY_LIQUID_GLASS_AUTO_DISABLED = "liquid_glass_auto_disabled"
     private const val KEY_RUNTIME_VERSION = "runtime_version"
+    private const val KEY_LAST_EXIT_INFO = "last_exit_info"
+    private const val KEY_LAST_PROCESSED_EXIT_TIMESTAMP = "last_processed_exit_timestamp"
     private const val LOG_FILE_NAME = "runtime-events.log"
     private const val PUBLIC_LOG_FILE_NAME = "AeroStaffPro-runtime-events.log"
     private const val LOG_MIME_TYPE = "text/plain"
@@ -38,6 +42,33 @@ object RuntimeDiagnostics {
         val liquidGlassEnabled: Boolean,
         val liquidGlassAutoDisabled: Boolean,
     )
+
+    data class ExitInfoSnapshot(
+        val timestamp: Long,
+        val reasonCode: Int,
+        val reasonLabel: String,
+        val status: Int,
+        val importance: Int,
+        val processName: String?,
+        val description: String?,
+        val pssKb: Long,
+        val rssKb: Long,
+        val traceAvailable: Boolean,
+    ) {
+        fun toJson(): JSONObject =
+            JSONObject().apply {
+                put("timestamp", timestamp)
+                put("reasonCode", reasonCode)
+                put("reasonLabel", reasonLabel)
+                put("status", status)
+                put("importance", importance)
+                put("processName", processName ?: JSONObject.NULL)
+                put("description", description ?: JSONObject.NULL)
+                put("pssKb", pssKb)
+                put("rssKb", rssKb)
+                put("traceAvailable", traceAvailable)
+            }
+    }
 
     @Synchronized
     fun prepareStartup(application: Application): StartupState {
@@ -62,8 +93,25 @@ object RuntimeDiagnostics {
 
         val startupWasPending = prefs.getBoolean(KEY_STARTUP_PENDING, false)
         val liquidGlassWasEnabled = prefs.getBoolean(KEY_LIQUID_GLASS_ENABLED, supported)
+        val previousStartupStartedAt = prefs.getLong(KEY_STARTUP_STARTED_AT, 0L)
+        val lastProcessedExitTimestamp = prefs.getLong(KEY_LAST_PROCESSED_EXIT_TIMESTAMP, 0L)
+        val lastExitInfo = if (startupWasPending) {
+            loadLatestExitInfo(
+                context = application,
+                startedAt = previousStartupStartedAt,
+                processedAfter = lastProcessedExitTimestamp,
+            )
+        } else {
+            null
+        }
+        if (lastExitInfo != null) {
+            prefs.edit()
+                .putString(KEY_LAST_EXIT_INFO, lastExitInfo.toJson().toString())
+                .putLong(KEY_LAST_PROCESSED_EXIT_TIMESTAMP, lastExitInfo.timestamp)
+                .apply()
+        }
+
         if (startupWasPending && liquidGlassWasEnabled) {
-            val previousStartupStartedAt = prefs.getLong(KEY_STARTUP_STARTED_AT, 0L)
             prefs.edit()
                 .putBoolean(KEY_LIQUID_GLASS_ENABLED, false)
                 .putBoolean(KEY_LIQUID_GLASS_AUTO_DISABLED, true)
@@ -80,6 +128,7 @@ object RuntimeDiagnostics {
                     if (previousStartupStartedAt > 0L) {
                         put("previousStartupStartedAt", previousStartupStartedAt.toString())
                     }
+                    lastExitInfo?.appendToMetadata(this)
                 },
             )
         }
@@ -148,7 +197,10 @@ object RuntimeDiagnostics {
     }
 
     fun clearLastReport(context: Context) {
-        prefs(context).edit().remove(KEY_LAST_REPORT).apply()
+        prefs(context).edit()
+            .remove(KEY_LAST_REPORT)
+            .remove(KEY_LAST_EXIT_INFO)
+            .apply()
         privateLogFile(context).delete()
         deletePublicLogFile(context)
     }
@@ -235,6 +287,10 @@ object RuntimeDiagnostics {
         val lastReport = prefs.getString(KEY_LAST_REPORT, null)
         if (!lastReport.isNullOrBlank()) {
             payload.put("lastReport", JSONObject(lastReport))
+        }
+        val lastExitInfo = prefs.getString(KEY_LAST_EXIT_INFO, null)
+        if (!lastExitInfo.isNullOrBlank()) {
+            payload.put("lastExitInfo", JSONObject(lastExitInfo))
         }
 
         return payload.toString()
@@ -375,4 +431,106 @@ object RuntimeDiagnostics {
         throwable.printStackTrace(PrintWriter(writer))
         return writer.toString()
     }
+
+    private fun loadLatestExitInfo(
+        context: Context,
+        startedAt: Long,
+        processedAfter: Long,
+    ): ExitInfoSnapshot? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            return null
+        }
+
+        val activityManager = context.getSystemService(ActivityManager::class.java) ?: return null
+        val currentProcessName = runCatching { Application.getProcessName() }
+            .getOrNull()
+            ?.takeIf { it.isNotBlank() }
+            ?: context.packageName
+        val notBefore = maxOf(startedAt, processedAfter)
+
+        return runCatching {
+            activityManager.getHistoricalProcessExitReasons(context.packageName, 0, 8)
+                .asSequence()
+                .filter { info ->
+                    val processName = info.processName
+                    processName == currentProcessName || processName == context.packageName
+                }
+                .filter { info -> info.timestamp > notBefore }
+                .maxByOrNull { info -> info.timestamp }
+                ?.toSnapshot()
+        }.getOrNull()
+    }
+
+    private fun ApplicationExitInfo.toSnapshot(): ExitInfoSnapshot =
+        ExitInfoSnapshot(
+            timestamp = timestamp,
+            reasonCode = reason,
+            reasonLabel = exitReasonLabel(reason),
+            status = status,
+            importance = importance,
+            processName = processName?.takeIf { it.isNotBlank() },
+            description = description?.singleLineSummary(),
+            pssKb = pss,
+            rssKb = rss,
+            traceAvailable = hasTraceInput(),
+        )
+
+    private fun ApplicationExitInfo.hasTraceInput(): Boolean =
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            false
+        } else {
+            runCatching {
+                traceInputStream?.use { true } ?: false
+            }.getOrDefault(false)
+        }
+
+    private fun exitReasonLabel(reason: Int): String =
+        when (reason) {
+            ApplicationExitInfo.REASON_UNKNOWN -> "REASON_UNKNOWN"
+            ApplicationExitInfo.REASON_EXIT_SELF -> "REASON_EXIT_SELF"
+            ApplicationExitInfo.REASON_SIGNALED -> "REASON_SIGNALED"
+            ApplicationExitInfo.REASON_LOW_MEMORY -> "REASON_LOW_MEMORY"
+            ApplicationExitInfo.REASON_CRASH -> "REASON_CRASH"
+            ApplicationExitInfo.REASON_CRASH_NATIVE -> "REASON_CRASH_NATIVE"
+            ApplicationExitInfo.REASON_ANR -> "REASON_ANR"
+            ApplicationExitInfo.REASON_INITIALIZATION_FAILURE -> "REASON_INITIALIZATION_FAILURE"
+            ApplicationExitInfo.REASON_PERMISSION_CHANGE -> "REASON_PERMISSION_CHANGE"
+            ApplicationExitInfo.REASON_EXCESSIVE_RESOURCE_USAGE -> "REASON_EXCESSIVE_RESOURCE_USAGE"
+            ApplicationExitInfo.REASON_USER_REQUESTED -> "REASON_USER_REQUESTED"
+            ApplicationExitInfo.REASON_USER_STOPPED -> "REASON_USER_STOPPED"
+            ApplicationExitInfo.REASON_DEPENDENCY_DIED -> "REASON_DEPENDENCY_DIED"
+            ApplicationExitInfo.REASON_OTHER -> "REASON_OTHER"
+            ApplicationExitInfo.REASON_FREEZER -> "REASON_FREEZER"
+            ApplicationExitInfo.REASON_PACKAGE_STATE_CHANGE -> "REASON_PACKAGE_STATE_CHANGE"
+            ApplicationExitInfo.REASON_PACKAGE_UPDATED -> "REASON_PACKAGE_UPDATED"
+            else -> "REASON_$reason"
+        }
+
+    private fun ExitInfoSnapshot.appendToMetadata(target: MutableMap<String, String>) {
+        target["exitReason"] = reasonLabel
+        target["exitReasonCode"] = reasonCode.toString()
+        target["exitStatus"] = status.toString()
+        target["exitImportance"] = importance.toString()
+        target["exitTimestamp"] = timestamp.toString()
+        target["exitTraceAvailable"] = traceAvailable.toString()
+        if (processName != null) {
+            target["exitProcessName"] = processName
+        }
+        if (!description.isNullOrBlank()) {
+            target["exitDescription"] = description
+        }
+        if (pssKb > 0L) {
+            target["exitPssKb"] = pssKb.toString()
+        }
+        if (rssKb > 0L) {
+            target["exitRssKb"] = rssKb.toString()
+        }
+    }
+
+    private fun String.singleLineSummary(): String =
+        replace(Regex("\\s+"), " ")
+            .trim()
+            .let { summary ->
+                if (summary.length <= 240) summary else "${summary.take(237)}..."
+            }
 }
