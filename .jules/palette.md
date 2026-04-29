@@ -1,0 +1,3 @@
+## 2024-04-29 - Improve Accessible Controls for Password and Notepad screens
+**Learning:** Icon-only buttons or those with disabled states must have clear accessibility attributes to remain understandable by screen readers and usable without a pointer. Adding disabled prop to disabled icon button, adding accessibilityState, and adding accessibilityRole improves accessibility significantly.
+**Action:** Always wrap interactive icon elements in a standard TouchableOpacity that specifies accessible, accessibilityRole="button", accessibilityLabel, and hitSlop for a larger tap target. If it's disabled, set the accessibilityState appropriately.
