@@ -25,8 +25,6 @@ object RuntimeDiagnostics {
     private const val KEY_STARTUP_PENDING = "startup_pending"
     private const val KEY_STARTUP_STARTED_AT = "startup_started_at"
     private const val KEY_STARTUP_COMPLETED_AT = "startup_completed_at"
-    private const val KEY_LIQUID_GLASS_ENABLED = "liquid_glass_enabled"
-    private const val KEY_LIQUID_GLASS_AUTO_DISABLED = "liquid_glass_auto_disabled"
     private const val KEY_RUNTIME_VERSION = "runtime_version"
     private const val KEY_LAST_EXIT_INFO = "last_exit_info"
     private const val KEY_LAST_PROCESSED_EXIT_TIMESTAMP = "last_processed_exit_timestamp"
@@ -38,12 +36,6 @@ object RuntimeDiagnostics {
 
     @Volatile
     private var installed = false
-
-    data class StartupState(
-        val liquidGlassSupported: Boolean,
-        val liquidGlassEnabled: Boolean,
-        val liquidGlassAutoDisabled: Boolean,
-    )
 
     data class ExitInfoSnapshot(
         val timestamp: Long,
@@ -75,28 +67,16 @@ object RuntimeDiagnostics {
     }
 
     @Synchronized
-    fun prepareStartup(application: Application): StartupState {
+    fun prepareStartup(application: Application) {
         val prefs = prefs(application)
-        val supported = isLiquidGlassSupported()
         val currentVersion = BuildConfig.VERSION_NAME
-        val previousVersion = prefs.getString(KEY_RUNTIME_VERSION, null)
-
-        if (!prefs.contains(KEY_LIQUID_GLASS_ENABLED)) {
+        if (prefs.getString(KEY_RUNTIME_VERSION, null) != currentVersion) {
             prefs.edit()
-                .putBoolean(KEY_LIQUID_GLASS_ENABLED, supported)
-                .putBoolean(KEY_LIQUID_GLASS_AUTO_DISABLED, false)
-                .putString(KEY_RUNTIME_VERSION, currentVersion)
-                .apply()
-        } else if (previousVersion != currentVersion) {
-            prefs.edit()
-                .putBoolean(KEY_LIQUID_GLASS_ENABLED, false)
-                .putBoolean(KEY_LIQUID_GLASS_AUTO_DISABLED, false)
                 .putString(KEY_RUNTIME_VERSION, currentVersion)
                 .apply()
         }
 
         val startupWasPending = prefs.getBoolean(KEY_STARTUP_PENDING, false)
-        val liquidGlassWasEnabled = prefs.getBoolean(KEY_LIQUID_GLASS_ENABLED, supported)
         val previousStartupStartedAt = prefs.getLong(KEY_STARTUP_STARTED_AT, 0L)
         val lastProcessedExitTimestamp = prefs.getLong(KEY_LAST_PROCESSED_EXIT_TIMESTAMP, 0L)
         val lastExitInfo = if (startupWasPending) {
@@ -115,16 +95,11 @@ object RuntimeDiagnostics {
                 .apply()
         }
 
-        if (startupWasPending && liquidGlassWasEnabled) {
-            prefs.edit()
-                .putBoolean(KEY_LIQUID_GLASS_ENABLED, false)
-                .putBoolean(KEY_LIQUID_GLASS_AUTO_DISABLED, true)
-                .apply()
-
+        if (startupWasPending) {
             recordEvent(
                 context = application,
                 type = "startup_recovery",
-                message = "Previous startup did not complete. Native liquid glass was disabled for recovery.",
+                message = "Previous startup did not complete. Recovery event recorded.",
                 stack = lastExitInfo?.traceExcerpt,
                 threadName = "main",
                 metadata = buildMap {
@@ -154,49 +129,6 @@ object RuntimeDiagnostics {
             }
 
             installed = true
-        }
-
-        return StartupState(
-            liquidGlassSupported = supported,
-            liquidGlassEnabled = isLiquidGlassEnabled(application),
-            liquidGlassAutoDisabled = wasLiquidGlassAutoDisabled(application),
-        )
-    }
-
-    fun isLiquidGlassSupported(): Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE
-
-    fun isLiquidGlassEnabled(context: Context): Boolean =
-        isLiquidGlassSupported() && prefs(context).getBoolean(KEY_LIQUID_GLASS_ENABLED, isLiquidGlassSupported())
-
-    fun wasLiquidGlassAutoDisabled(context: Context): Boolean =
-        prefs(context).getBoolean(KEY_LIQUID_GLASS_AUTO_DISABLED, false)
-
-    fun setLiquidGlassEnabled(context: Context, enabled: Boolean) {
-        prefs(context).edit()
-            .putBoolean(KEY_LIQUID_GLASS_ENABLED, enabled && isLiquidGlassSupported())
-            .putBoolean(KEY_LIQUID_GLASS_AUTO_DISABLED, false)
-            .apply()
-    }
-
-    fun autoDisableLiquidGlass(context: Context, reason: String, metadata: Map<String, String> = emptyMap()) {
-        val wasEnabled = isLiquidGlassEnabled(context)
-        prefs(context).edit()
-            .putBoolean(KEY_LIQUID_GLASS_ENABLED, false)
-            .putBoolean(KEY_LIQUID_GLASS_AUTO_DISABLED, true)
-            .apply()
-
-        if (wasEnabled) {
-            recordEvent(
-                context = context,
-                type = "liquid_glass_auto_disabled",
-                message = "Native liquid glass was auto-disabled after a runtime failure.",
-                stack = null,
-                threadName = Thread.currentThread().name,
-                metadata = buildMap {
-                    put("reason", reason)
-                    metadata.forEach { (key, value) -> put(key, value) }
-                },
-            )
         }
     }
 
@@ -274,9 +206,6 @@ object RuntimeDiagnostics {
         payload.put("appVersion", BuildConfig.VERSION_NAME)
         payload.put("device", "${Build.MANUFACTURER} ${Build.MODEL}".trim())
         payload.put("androidVersion", "Android ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})")
-        payload.put("liquidGlassSupported", isLiquidGlassSupported())
-        payload.put("liquidGlassEnabled", isLiquidGlassEnabled(context))
-        payload.put("liquidGlassAutoDisabled", wasLiquidGlassAutoDisabled(context))
         payload.put("startupPending", prefs.getBoolean(KEY_STARTUP_PENDING, false))
         payload.put("startupStartedAt", prefs.getLong(KEY_STARTUP_STARTED_AT, 0L))
         payload.put("startupCompletedAt", prefs.getLong(KEY_STARTUP_COMPLETED_AT, 0L))
@@ -317,9 +246,6 @@ object RuntimeDiagnostics {
         report.put("appVersion", BuildConfig.VERSION_NAME)
         report.put("device", "${Build.MANUFACTURER} ${Build.MODEL}".trim())
         report.put("androidVersion", "Android ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})")
-        report.put("liquidGlassEnabled", isLiquidGlassEnabled(context))
-        report.put("liquidGlassSupported", isLiquidGlassSupported())
-        report.put("liquidGlassAutoDisabled", wasLiquidGlassAutoDisabled(context))
         report.put("startupPending", prefs(context).getBoolean(KEY_STARTUP_PENDING, false))
         if (!stack.isNullOrBlank()) {
             report.put("stack", stack)

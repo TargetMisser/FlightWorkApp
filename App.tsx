@@ -18,10 +18,9 @@ import SettingsScreen from './src/screens/SettingsScreen';
 import PasswordScreen from './src/screens/PasswordScreen';
 import DrawerMenu from './src/components/DrawerMenu';
 import ProfileSwitcherModal from './src/components/ProfileSwitcherModal';
-import LiquidGlassSurface from './src/components/LiquidGlassSurface';
+import FrostedSurface from './src/components/FrostedSurface';
 import {
   installGlobalCrashHandler,
-  isNativeLiquidGlassEnabledAtLaunch,
   markRuntimeStartupCompleted,
 } from './src/utils/runtimeDiagnostics';
 import { autoScheduleNotifications } from './src/utils/autoNotifications';
@@ -30,8 +29,6 @@ import UpdateModal from './src/components/UpdateModal';
 import { useAirport } from './src/context/AirportContext';
 
 installGlobalCrashHandler();
-
-const NATIVE_GLASS_STARTUP_GRACE_MS = 2500;
 
 type Tab = 'Shifts' | 'Calendar' | 'Flights' | 'TravelDoc';
 type OverlayScreen = 'Notepad' | 'Phonebook' | 'Passwords' | 'Manuals' | 'Settings' | null;
@@ -113,9 +110,7 @@ function AppInner() {
 
   // ─── Auto-schedule flight notifications on startup ─────────────────────────
   useEffect(() => {
-    const startupTimer = setTimeout(() => {
-      markRuntimeStartupCompleted().catch(() => {});
-    }, isNativeLiquidGlassEnabledAtLaunch() ? NATIVE_GLASS_STARTUP_GRACE_MS : 0);
+    markRuntimeStartupCompleted().catch(() => {});
 
     autoScheduleNotifications().then(count => {
       if (count > 0 && __DEV__) console.log(`Auto-scheduled ${count} notifications`);
@@ -127,7 +122,6 @@ function AppInner() {
       if (!seen) setPendingUpdate(info);
     }).catch(() => {});
 
-    return () => clearTimeout(startupTimer);
   }, []);
 
   // ─── Android back button: overlay → home, drawer → close ───────────────────
@@ -214,7 +208,7 @@ function AppInner() {
         backgroundColor={colors.appBar}
       />
 
-      {/* Top App Bar — liquid glass */}
+      {/* Top App Bar */}
       <ExpoBlurView
         intensity={colors.isDark ? 60 : 50}
         tint={colors.isDark ? 'dark' : 'light'}
@@ -279,18 +273,11 @@ function AppInner() {
       {/* Bottom Nav — Glassmorphic Floating Pill (hidden on overlay screens) */}
       {!overlay && (
         <View style={styles.tabBarWrapper} {...swipePan.panHandlers}>
-          <LiquidGlassSurface
+          <FrostedSurface
             style={styles.tabBarBlur}
-            tintColor={colors.isDark ? '#1C1C1E' : '#F2F2F7'}
-            glassOpacity={colors.isDark ? 0.18 : 0.12}
-            blurRadius={8}
-            dispersion={0.38}
-            cornerRadius={33}
-            refractionHeight={18}
-            refractionOffset={-52}
-            fallbackBlurIntensity={80}
-            fallbackBlurTint={colors.isDark ? 'dark' : 'light'}
-            fallbackGradientColors={colors.isDark
+            blurIntensity={80}
+            blurTint={colors.isDark ? 'dark' : 'light'}
+            gradientColors={colors.isDark
               ? ['rgba(255,255,255,0.08)', 'rgba(10,10,12,0.34)']
               : ['rgba(255,255,255,0.34)', 'rgba(255,244,230,0.14)']}
           >
@@ -313,7 +300,7 @@ function AppInner() {
                 );
               })}
             </View>
-          </LiquidGlassSurface>
+          </FrostedSurface>
         </View>
       )}
 

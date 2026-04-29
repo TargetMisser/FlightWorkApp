@@ -1,4 +1,4 @@
-import { NativeModules, Platform } from 'react-native';
+import { NativeModules } from 'react-native';
 
 export type RuntimeReport = {
   type: string;
@@ -9,9 +9,6 @@ export type RuntimeReport = {
   appVersion?: string;
   device?: string;
   androidVersion?: string;
-  liquidGlassEnabled?: boolean;
-  liquidGlassSupported?: boolean;
-  liquidGlassAutoDisabled?: boolean;
   startupPending?: boolean;
   metadata?: Record<string, string>;
 };
@@ -33,9 +30,6 @@ export type RuntimeDiagnosticsState = {
   appVersion: string;
   device: string;
   androidVersion: string;
-  liquidGlassSupported: boolean;
-  liquidGlassEnabled: boolean;
-  liquidGlassAutoDisabled: boolean;
   startupPending: boolean;
   startupStartedAt?: number;
   startupCompletedAt?: number;
@@ -45,14 +39,10 @@ export type RuntimeDiagnosticsState = {
 };
 
 type RuntimeDiagnosticsNativeModule = {
-  liquidGlassSupported?: boolean;
-  liquidGlassEnabled?: boolean;
-  liquidGlassAutoDisabled?: boolean;
   initialDiagnosticsJson?: string;
   getRuntimeDiagnostics?: () => Promise<string>;
   clearLastReport?: () => Promise<boolean>;
   markStartupCompleted?: () => Promise<boolean>;
-  setLiquidGlassEnabled?: (enabled: boolean) => Promise<boolean>;
   recordJsError?: (
     message: string,
     stack: string,
@@ -73,9 +63,6 @@ function fallbackState(): RuntimeDiagnosticsState {
     appVersion: '',
     device: '',
     androidVersion: '',
-    liquidGlassSupported: false,
-    liquidGlassEnabled: false,
-    liquidGlassAutoDisabled: false,
     startupPending: false,
     lastReport: null,
   };
@@ -117,12 +104,6 @@ function normalizeError(error: unknown): { message: string; stack: string } {
   };
 }
 
-export function isNativeLiquidGlassEnabledAtLaunch(): boolean {
-  return Platform.OS === 'android'
-    && initialRuntimeDiagnostics.liquidGlassSupported
-    && initialRuntimeDiagnostics.liquidGlassEnabled;
-}
-
 export async function getRuntimeDiagnostics(): Promise<RuntimeDiagnosticsState> {
   if (!runtimeModule?.getRuntimeDiagnostics) {
     return initialRuntimeDiagnostics;
@@ -142,10 +123,6 @@ export async function clearLastRuntimeReport(): Promise<void> {
 
 export async function markRuntimeStartupCompleted(): Promise<void> {
   await runtimeModule?.markStartupCompleted?.();
-}
-
-export async function setNativeLiquidGlassEnabled(enabled: boolean): Promise<void> {
-  await runtimeModule?.setLiquidGlassEnabled?.(enabled);
 }
 
 export async function recordRuntimeError(

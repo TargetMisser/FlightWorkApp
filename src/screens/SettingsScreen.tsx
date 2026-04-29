@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, ActivityIndicator,
-  Modal, KeyboardAvoidingView, Platform, Share, TextInput,
+  Modal, KeyboardAvoidingView, Platform, TextInput,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -23,13 +23,6 @@ import {
 } from '../utils/updateChecker';
 import UpdateModal from '../components/UpdateModal';
 import { exportBackup, importBackup } from '../utils/backupManager';
-import { getStaffMonitorDebugStatus, getStaffMonitorDebugColumns, getStaffMonitorDebugFlights } from '../utils/staffMonitor';
-import {
-  clearLastRuntimeReport,
-  getRuntimeDiagnostics,
-  setNativeLiquidGlassEnabled,
-  type RuntimeDiagnosticsState,
-} from '../utils/runtimeDiagnostics';
 
 // ─── Tema picker ──────────────────────────────────────────────────────────────
 type ThemeOption = {
@@ -208,11 +201,8 @@ export default function SettingsScreen() {
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [exportingBackup, setExportingBackup] = useState(false);
   const [importingBackup, setImportingBackup] = useState(false);
-  const [runtimeDiagnostics, setRuntimeDiagnostics] = useState<RuntimeDiagnosticsState | null>(null);
-
   useEffect(() => {
     getCachedUpdateInfo().then(setUpdateInfo);
-    getRuntimeDiagnostics().then(setRuntimeDiagnostics).catch(() => {});
   }, []);
 
   const showDialog = useCallback((dialog: DialogState) => {
@@ -257,137 +247,6 @@ export default function SettingsScreen() {
       setShowUpdateModal(true);
     }
   }, [updateInfo]);
-
-  const refreshRuntimeDiagnostics = useCallback(async () => {
-    const next = await getRuntimeDiagnostics();
-    setRuntimeDiagnostics(next);
-    return next;
-  }, []);
-
-  const runtimeStatusLabel = useCallback((diag: RuntimeDiagnosticsState | null) => {
-    if (!diag) {
-      return 'Controllo stato runtime...';
-    }
-    if (!diag.liquidGlassSupported) {
-      return 'Fallback attivo: dispositivo non supportato';
-    }
-    if (diag.liquidGlassAutoDisabled) {
-      return 'Fallback attivo dopo errore runtime del nativo';
-    }
-    if (diag.liquidGlassEnabled) {
-      return 'Nativo attivo su Android 14+';
-    }
-    return 'Fallback attivo: nativo disattivato';
-  }, []);
-
-  const runtimeDialogMessage = useCallback((diag: RuntimeDiagnosticsState) => {
-    const lines = [
-      `Liquid glass supportato: ${diag.liquidGlassSupported ? 'si' : 'no'}`,
-      `Liquid glass attivo: ${diag.liquidGlassEnabled ? 'si' : 'no'}`,
-      `Auto-disabilitato: ${diag.liquidGlassAutoDisabled ? 'si' : 'no'}`,
-      `Startup pendente: ${diag.startupPending ? 'si' : 'no'}`,
-      `Device: ${diag.device || 'n/d'}`,
-      `Android: ${diag.androidVersion || 'n/d'}`,
-      `Log file: ${diag.logFilePath || 'n/d'}`,
-    ];
-
-    if (diag.lastExitInfo) {
-      lines.push(
-        '',
-        'Ultimo exit Android',
-        `Quando: ${new Date(diag.lastExitInfo.timestamp).toLocaleString(lang === 'it' ? 'it-IT' : 'en-GB')}`,
-        `Reason: ${diag.lastExitInfo.reasonLabel} (${diag.lastExitInfo.reasonCode})`,
-        `Status: ${diag.lastExitInfo.status}`,
-        `Importance: ${diag.lastExitInfo.importance}`,
-        `Processo: ${diag.lastExitInfo.processName || 'n/d'}`,
-        `Trace disponibile: ${diag.lastExitInfo.traceAvailable ? 'si' : 'no'}`,
-        `PSS: ${diag.lastExitInfo.pssKb > 0 ? `${diag.lastExitInfo.pssKb} kB` : 'n/d'}`,
-        `RSS: ${diag.lastExitInfo.rssKb > 0 ? `${diag.lastExitInfo.rssKb} kB` : 'n/d'}`,
-        `Descrizione: ${diag.lastExitInfo.description || 'n/d'}`,
-      );
-    }
-
-    if (!diag.lastReport) {
-      lines.push('', 'Nessun crash log salvato.');
-      return lines.join('\n');
-    }
-
-    const metadata = diag.lastReport.metadata
-      ? Object.entries(diag.lastReport.metadata).map(([key, value]) => `${key}: ${value}`).join('\n')
-      : 'n/d';
-
-    lines.push(
-      '',
-      'Ultimo evento runtime',
-      `Tipo: ${diag.lastReport.type}`,
-      `Quando: ${new Date(diag.lastReport.timestamp).toLocaleString(lang === 'it' ? 'it-IT' : 'en-GB')}`,
-      `Messaggio: ${diag.lastReport.message}`,
-      `Thread: ${diag.lastReport.thread || 'n/d'}`,
-      `Metadata:\n${metadata}`,
-    );
-
-    if (diag.lastReport.stack) {
-      lines.push('', 'Stack', diag.lastReport.stack);
-    }
-
-    return lines.join('\n');
-  }, [lang]);
-
-  const handleOpenRuntimeDiagnostics = useCallback(async () => {
-    const diag = runtimeDiagnostics ?? await refreshRuntimeDiagnostics();
-    showDialog({
-      title: 'Liquid glass runtime',
-      message: runtimeDialogMessage(diag),
-      tone: diag.lastReport ? 'warning' : 'info',
-      scrollable: true,
-      actions: [
-        { label: t('ok'), style: 'secondary' },
-        ...(diag.lastReport ? [{
-          label: 'Condividi log',
-          style: 'primary' as const,
-          onPress: async () => {
-            await Share.share({ message: runtimeDialogMessage(diag) });
-          },
-        }] : []),
-        ...(diag.lastReport ? [{
-          label: 'Pulisci log',
-          style: 'secondary' as const,
-          onPress: async () => {
-            await clearLastRuntimeReport();
-            await refreshRuntimeDiagnostics();
-          },
-        }] : []),
-        ...(diag.liquidGlassSupported && !diag.liquidGlassEnabled ? [{
-          label: diag.liquidGlassAutoDisabled ? 'Riattiva' : 'Attiva',
-          style: 'primary' as const,
-          onPress: async () => {
-            await setNativeLiquidGlassEnabled(true);
-            const next = await refreshRuntimeDiagnostics();
-            showDialog({
-              title: 'Liquid glass riattivato',
-              message: next.liquidGlassAutoDisabled
-                ? 'C\'e` ancora un blocco di sicurezza attivo. Chiudi e riapri l\'app, poi ritesta.'
-                : 'Chiudi e riapri l\'app per attivare il renderer nativo. Se si rompe di nuovo, al riavvio tornera` al fallback e il log restera` qui.',
-              tone: 'success',
-            });
-          },
-        }] : []),
-        ...(diag.liquidGlassSupported && diag.liquidGlassEnabled ? [{
-          label: 'Disattiva',
-          style: 'secondary' as const,
-          onPress: async () => {
-            await setNativeLiquidGlassEnabled(false);
-            await refreshRuntimeDiagnostics();
-            showDialog({
-              title: 'Fallback attivato',
-              message: 'Chiudi e riapri l\'app per usare solo blur/gradient senza renderer nativo.',
-              tone: 'info',
-            });
-          },
-        }] : []),
-      ],
-    });
-  }, [refreshRuntimeDiagnostics, runtimeDiagnostics, runtimeDialogMessage, showDialog, t]);
 
   const handleExport = useCallback(async () => {
     setExportingBackup(true);
@@ -556,40 +415,6 @@ export default function SettingsScreen() {
       <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>{t('sectionApp')}</Text>
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }, colors.isDark && { elevation: 0, shadowOpacity: 0, borderWidth: 1 }]}>
         <SettingRow icon="info-outline" label={t('appVersion')} sublabel={`v${APP_VERSION}`} type="info" />
-        <View style={[styles.divider, { backgroundColor: colors.border }]} />
-        <TouchableOpacity
-          style={styles.row}
-          onPress={handleOpenRuntimeDiagnostics}
-          activeOpacity={0.8}
-        >
-          <View style={[styles.iconWrap, { backgroundColor: colors.primaryLight }]}>
-            <MaterialIcons name="blur-on" size={20} color={colors.primary} />
-          </View>
-          <View style={styles.rowText}>
-            <Text style={[styles.rowLabel, { color: colors.text }]}>Liquid glass runtime</Text>
-            <Text style={[styles.rowSub, { color: colors.textMuted }]}>{runtimeStatusLabel(runtimeDiagnostics)}</Text>
-          </View>
-          <MaterialIcons name="chevron-right" size={20} color={colors.border} />
-        </TouchableOpacity>
-        <View style={[styles.divider, { backgroundColor: colors.border }]} />
-        <TouchableOpacity
-          style={styles.row}
-          onPress={() => showDialog({
-            title: 'StaffMonitor debug',
-            message: `Stato: ${getStaffMonitorDebugStatus()}\n\nColonne:\n${getStaffMonitorDebugColumns()}\n\nVoli (D, primi 5):\n${getStaffMonitorDebugFlights()}`,
-            tone: 'info',
-            scrollable: true,
-          })}
-          activeOpacity={0.8}
-        >
-          <View style={[styles.iconWrap, { backgroundColor: colors.primaryLight }]}>
-            <MaterialIcons name="bug-report" size={20} color={colors.primary} />
-          </View>
-          <View style={styles.rowText}>
-            <Text style={[styles.rowLabel, { color: colors.text }]}>Debug StaffMonitor</Text>
-            <Text style={[styles.rowSub, { color: colors.textMuted }]}>Tocca per vedere colonne rilevate</Text>
-          </View>
-        </TouchableOpacity>
       </View>
 
       {/* ── Sezione Aggiornamenti ── */}

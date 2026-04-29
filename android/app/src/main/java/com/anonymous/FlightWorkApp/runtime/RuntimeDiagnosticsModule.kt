@@ -11,9 +11,6 @@ class RuntimeDiagnosticsModule(reactContext: ReactApplicationContext) :
     override fun getName(): String = "RuntimeDiagnostics"
 
     override fun getConstants(): MutableMap<String, Any> = mutableMapOf(
-        "liquidGlassSupported" to RuntimeDiagnostics.isLiquidGlassSupported(),
-        "liquidGlassEnabled" to RuntimeDiagnostics.isLiquidGlassEnabled(reactApplicationContext),
-        "liquidGlassAutoDisabled" to RuntimeDiagnostics.wasLiquidGlassAutoDisabled(reactApplicationContext),
         "initialDiagnosticsJson" to RuntimeDiagnostics.getDiagnosticsJson(reactApplicationContext),
     )
 
@@ -31,12 +28,6 @@ class RuntimeDiagnosticsModule(reactContext: ReactApplicationContext) :
     @ReactMethod
     fun markStartupCompleted(promise: Promise) {
         RuntimeDiagnostics.markStartupCompleted(reactApplicationContext)
-        promise.resolve(true)
-    }
-
-    @ReactMethod
-    fun setLiquidGlassEnabled(enabled: Boolean, promise: Promise) {
-        RuntimeDiagnostics.setLiquidGlassEnabled(reactApplicationContext, enabled)
         promise.resolve(true)
     }
 

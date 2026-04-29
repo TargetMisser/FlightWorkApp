@@ -8,7 +8,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme, type ThemeColors } from '../context/ThemeContext';
 import AeroStaffLogo from './AeroStaffLogo';
-import LiquidGlassSurface from './LiquidGlassSurface';
+import FrostedSurface from './FrostedSurface';
 import { useLanguage } from '../context/LanguageContext';
 
 type DrawerItem = {
@@ -89,18 +89,11 @@ export default function DrawerMenu({ visible, onClose, onSelect }: Props) {
 
         {/* Drawer */}
         <Animated.View style={[styles.drawerWrapper, { transform: [{ translateX: slideAnim }] }]}>
-          <LiquidGlassSurface
+          <FrostedSurface
             style={styles.blurFill}
-            tintColor={colors.isDark ? '#140E0A' : '#FFFCF8'}
-            glassOpacity={colors.isDark ? 0.24 : 0.14}
-            blurRadius={10}
-            dispersion={0.46}
-            cornerRadius={0}
-            refractionHeight={24}
-            refractionOffset={-60}
-            fallbackBlurIntensity={colors.isDark ? 56 : 44}
-            fallbackBlurTint={colors.isDark ? 'dark' : 'light'}
-            fallbackGradientColors={colors.isDark
+            blurIntensity={colors.isDark ? 56 : 44}
+            blurTint={colors.isDark ? 'dark' : 'light'}
+            gradientColors={colors.isDark
               ? ['rgba(255,255,255,0.06)', 'rgba(20,14,10,0.52)']
               : ['rgba(255,255,255,0.40)', 'rgba(255,244,236,0.22)']}
           >
@@ -145,7 +138,7 @@ export default function DrawerMenu({ visible, onClose, onSelect }: Props) {
             <View style={styles.divider} />
 
             <Text style={styles.version}>AeroStaff Pro · v{version}</Text>
-          </LiquidGlassSurface>
+          </FrostedSurface>
         </Animated.View>
       </View>
     </Modal>
