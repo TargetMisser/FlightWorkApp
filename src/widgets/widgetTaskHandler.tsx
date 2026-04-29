@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { WidgetTaskHandlerProps } from 'react-native-android-widget';
 import type { HexColor } from '../utils/airlineOps';
 import { getAirlineOps, getAirlineColor } from '../utils/airlineOps';
-import { getStoredAirportCode, buildFr24ScheduleUrl, getAirportAirlines } from '../utils/airportSettings';
+import { getStoredAirportCode, buildFr24ScheduleUrl, getStoredAirportAirlines, storeDetectedAirportAirlines } from '../utils/airportSettings';
 import { ShiftWidget } from './ShiftWidget';
 
 /** Key used by the main app (FlightScreen) to push pre-built widget data */
@@ -100,7 +100,7 @@ async function fetchFreshWidgetData(): Promise<WidgetData> {
 
     const shiftToday = shiftData.shiftToday;
     const airportCode = await getStoredAirportCode();
-    const allAirlines = getAirportAirlines(airportCode);
+    const allAirlines = await getStoredAirportAirlines(airportCode);
     const filterRaw = await AsyncStorage.getItem('aerostaff_flight_filter_v1');
     const allowedAirlines: string[] = filterRaw ? JSON.parse(filterRaw) : allAirlines;
     const url = buildFr24ScheduleUrl(airportCode);
@@ -112,6 +112,7 @@ async function fetchFreshWidgetData(): Promise<WidgetData> {
       const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: controller.signal });
       const json = await res.json();
       allDepartures = json.result?.response?.airport?.pluginData?.schedule?.departures?.data || [];
+      await storeDetectedAirportAirlines(airportCode, allDepartures);
     } finally {
       clearTimeout(timer);
     }
@@ -120,9 +121,11 @@ async function fetchFreshWidgetData(): Promise<WidgetData> {
     const nowHH = fmtTs(Date.now() / 1000);
     const shiftLabel = `${fmtTs(shiftToday.start)} – ${fmtTs(shiftToday.end)}`;
 
-    const filteredDeps = allDepartures.filter(item =>
-      allowedAirlines.some(key => (item.flight?.airline?.name || '').toLowerCase().includes(key)),
-    );
+    const filteredDeps = allowedAirlines.length === 0
+      ? allDepartures
+      : allDepartures.filter(item =>
+          allowedAirlines.some(key => (item.flight?.airline?.name || '').toLowerCase().includes(key)),
+        );
 
     const wFlights: WidgetFlight[] = filteredDeps
       .filter(item => {

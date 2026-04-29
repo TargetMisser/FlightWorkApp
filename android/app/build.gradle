@@ -80,6 +80,19 @@ def enableMinifyInReleaseBuilds = (findProperty('android.enableMinifyInReleaseBu
  * this variant is about 6MiB larger per architecture than default.
  */
 def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
+def releaseStoreFile = System.getenv("RELEASE_STORE_FILE") ?: findProperty("android.releaseStoreFile")
+def releaseStorePassword = System.getenv("RELEASE_STORE_PASSWORD") ?: findProperty("android.releaseStorePassword")
+def releaseKeyAlias = System.getenv("RELEASE_KEY_ALIAS") ?: findProperty("android.releaseKeyAlias")
+def releaseKeyPassword = System.getenv("RELEASE_KEY_PASSWORD") ?: findProperty("android.releaseKeyPassword")
+def hasReleaseSigning = [releaseStoreFile, releaseStorePassword, releaseKeyAlias, releaseKeyPassword]
+    .every { it != null && it.toString().trim() }
+def wantsReleaseBuild = gradle.startParameter.taskNames.any { it.toLowerCase().contains("release") }
+
+if (wantsReleaseBuild && !hasReleaseSigning) {
+    throw new GradleException(
+        "Missing release signing config. Set RELEASE_STORE_FILE, RELEASE_STORE_PASSWORD, RELEASE_KEY_ALIAS, and RELEASE_KEY_PASSWORD."
+    )
+}
 
 android {
     ndkVersion rootProject.ext.ndkVersion
@@ -92,8 +105,8 @@ android {
         applicationId 'com.aerostaffpro.app'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 12
-        versionName "2.6.3"
+        versionCode 38
+        versionName "2.6.29"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
     }
@@ -104,15 +117,23 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+        if (hasReleaseSigning) {
+            release {
+                storeFile file(releaseStoreFile)
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+            }
+        }
     }
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
         }
         release {
-            // Caution! In production, you need to generate your own keystore file.
-            // see https://reactnative.dev/docs/signed-apk-android.
-            signingConfig signingConfigs.debug
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
             def enableShrinkResources = findProperty('android.enableShrinkResourcesInReleaseBuilds') ?: 'false'
             shrinkResources enableShrinkResources.toBoolean()
             minifyEnabled enableMinifyInReleaseBuilds

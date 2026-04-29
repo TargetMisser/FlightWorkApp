@@ -87,21 +87,29 @@ npm run typecheck
 
 APK files are published in [GitHub Releases](https://github.com/TargetMisser/FlightWorkApp/releases).
 
-Latest stable: **v1.3.2**
+Latest stable: **v2.6.29**
 
 To install:
 
-1. Open the Releases section and download `FlightWorkApp-vX.X.X.apk`.
+1. Open the Releases section and download `AeroStaffPro-vX.X.X.apk`.
 2. Transfer to your Android device and install (enable "Unknown sources" if needed).
 3. For Wear OS, pair the phone app — the watch companion installs automatically.
 
 To build locally:
 
 ```bash
+$env:RELEASE_STORE_FILE="C:\path\to\release.keystore"
+$env:RELEASE_STORE_PASSWORD="your-keystore-password"
+$env:RELEASE_KEY_ALIAS="your-key-alias"
+$env:RELEASE_KEY_PASSWORD="your-key-password"
+
 cd android
 .\gradlew.bat assembleRelease
 # Output: android/app/build/outputs/apk/release/app-release.apk
 ```
+
+The GitHub Actions release workflow expects these repository secrets:
+`KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, and `KEY_PASSWORD`.
 
 ## Branch Structure
 

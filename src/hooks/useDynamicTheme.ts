@@ -17,7 +17,7 @@ const themes: Record<string, Theme> = {
     cardBackground: 'rgba(255, 255, 255, 0.12)',
     textColor: '#e8f4fd',
     primaryButton: '#136DEC',
-    icon: '🌤️',
+    icon: 'weather-partly-cloudy',
     description: 'Mattina Soleggiata',
   },
   afternoon_clear: {
@@ -25,7 +25,7 @@ const themes: Record<string, Theme> = {
     cardBackground: 'rgba(255, 255, 255, 0.10)',
     textColor: '#e8f4fd',
     primaryButton: '#136DEC',
-    icon: '☀️',
+    icon: 'weather-sunny',
     description: 'Pomeriggio Sereno',
   },
   evening_clear: {
@@ -33,7 +33,7 @@ const themes: Record<string, Theme> = {
     cardBackground: 'rgba(19, 109, 236, 0.18)',
     textColor: '#ecf0f1',
     primaryButton: '#136DEC',
-    icon: '🌅',
+    icon: 'weather-sunset',
     description: 'Tramonto',
   },
   night_clear: {
@@ -41,7 +41,7 @@ const themes: Record<string, Theme> = {
     cardBackground: 'rgba(19, 109, 236, 0.15)',
     textColor: '#cfd8e3',
     primaryButton: '#136DEC',
-    icon: '🌙',
+    icon: 'weather-night',
     description: 'Notte Serena',
   },
   cloudy: {
@@ -49,7 +49,7 @@ const themes: Record<string, Theme> = {
     cardBackground: 'rgba(255, 255, 255, 0.08)',
     textColor: '#b2bec3',
     primaryButton: '#136DEC',
-    icon: '☁️',
+    icon: 'weather-cloudy',
     description: 'Nuvoloso',
   },
   rain: {
@@ -57,7 +57,7 @@ const themes: Record<string, Theme> = {
     cardBackground: 'rgba(19, 109, 236, 0.12)',
     textColor: '#a8c5e8',
     primaryButton: '#136DEC',
-    icon: '🌧️',
+    icon: 'weather-rainy',
     description: 'Pioggia',
   },
   default: {
@@ -65,7 +65,7 @@ const themes: Record<string, Theme> = {
     cardBackground: 'rgba(255, 255, 255, 0.10)',
     textColor: '#e8f4fd',
     primaryButton: '#136DEC',
-    icon: '✨',
+    icon: 'star-four-points-outline',
     description: 'Tema Standard',
   }
 };

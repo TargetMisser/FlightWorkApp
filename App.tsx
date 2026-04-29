@@ -17,9 +17,18 @@ import PhonebookScreen from './src/screens/PhonebookScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import PasswordScreen from './src/screens/PasswordScreen';
 import DrawerMenu from './src/components/DrawerMenu';
+import ProfileSwitcherModal from './src/components/ProfileSwitcherModal';
+import FrostedSurface from './src/components/FrostedSurface';
+import {
+  installGlobalCrashHandler,
+  markRuntimeStartupCompleted,
+} from './src/utils/runtimeDiagnostics';
 import { autoScheduleNotifications } from './src/utils/autoNotifications';
 import { checkForUpdate, wasUpdateSeen, markUpdateSeen, type UpdateInfo } from './src/utils/updateChecker';
 import UpdateModal from './src/components/UpdateModal';
+import { useAirport } from './src/context/AirportContext';
+
+installGlobalCrashHandler();
 
 type Tab = 'Shifts' | 'Calendar' | 'Flights' | 'TravelDoc';
 type OverlayScreen = 'Notepad' | 'Phonebook' | 'Passwords' | 'Manuals' | 'Settings' | null;
@@ -50,13 +59,13 @@ function GlassTab({ icon, label, focused, activeColor, inactiveColor, onPress }:
 }) {
   const scale = useRef(new Animated.Value(focused ? 1.15 : 1)).current;
   const translateY = useRef(new Animated.Value(focused ? -4 : 0)).current;
-  const opacity = useRef(new Animated.Value(focused ? 1 : 0.6)).current;
+  const opacity = useRef(new Animated.Value(focused ? 1 : 0.78)).current;
 
   useEffect(() => {
     Animated.parallel([
       Animated.spring(scale, { toValue: focused ? 1.15 : 1, useNativeDriver: true, tension: 200, friction: 15 }),
       Animated.spring(translateY, { toValue: focused ? -4 : 0, useNativeDriver: true, tension: 200, friction: 15 }),
-      Animated.timing(opacity, { toValue: focused ? 1 : 0.5, duration: 150, useNativeDriver: true }),
+      Animated.timing(opacity, { toValue: focused ? 1 : 0.74, duration: 150, useNativeDriver: true }),
     ]).start();
   }, [focused]);
 
@@ -81,10 +90,13 @@ function GlassTab({ icon, label, focused, activeColor, inactiveColor, onPress }:
 function AppInner() {
   const { colors, mode } = useAppTheme();
   const { t } = useLanguage();
+  const { profileInitials } = useAirport();
   const [activeTab, setActiveTab]   = useState<Tab>('Shifts');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [overlay, setOverlay]       = useState<OverlayScreen>(null);
+  const [openFlightNotifSettingsSignal, setOpenFlightNotifSettingsSignal] = useState(0);
   const [pendingUpdate, setPendingUpdate] = useState<UpdateInfo | null>(null);
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
 
   const tabLabels: Record<Tab, string> = {
     Shifts: t('tabHome'), Calendar: t('tabShifts'), Flights: t('tabFlights'), TravelDoc: t('tabTravelDoc'),
@@ -99,6 +111,8 @@ function AppInner() {
 
   // ─── Auto-schedule flight notifications on startup ─────────────────────────
   useEffect(() => {
+    markRuntimeStartupCompleted().catch(() => {});
+
     autoScheduleNotifications().then(count => {
       if (count > 0 && __DEV__) console.log(`Auto-scheduled ${count} notifications`);
     }).catch(() => {});
@@ -108,6 +122,7 @@ function AppInner() {
       const seen = await wasUpdateSeen(info.latestVersion);
       if (!seen) setPendingUpdate(info);
     }).catch(() => {});
+
   }, []);
 
   // ─── Android back button: overlay → home, drawer → close ───────────────────
@@ -131,6 +146,13 @@ function AppInner() {
     activeIdxRef.current = newIdx;
     offsetX.setValue(-newIdx * SCREEN_W);
     setActiveTab(TABS[newIdx].id);
+  };
+
+  const openFlightNotificationsFromSettings = () => {
+    setDrawerOpen(false);
+    setOverlay(null);
+    goToTab(2);
+    setOpenFlightNotifSettingsSignal(prev => prev + 1);
   };
 
   const swipePan = useMemo(() => PanResponder.create({
@@ -170,7 +192,7 @@ function AppInner() {
     if (overlay === 'Phonebook') return <PhonebookScreen />;
     if (overlay === 'Passwords') return <PasswordScreen />;
     if (overlay === 'Manuals')   return <ManualsScreen />;
-    if (overlay === 'Settings')  return <SettingsScreen />;
+    if (overlay === 'Settings')  return <SettingsScreen onOpenFlightNotifications={openFlightNotificationsFromSettings} />;
     return null;
   };
 
@@ -178,7 +200,7 @@ function AppInner() {
     switch (tab) {
       case 'Shifts':    return <HomeScreen isFocused={activeTab === 'Shifts'} />;
       case 'Calendar':  return <CalendarScreen />;
-      case 'Flights':   return <FlightScreen />;
+      case 'Flights':   return <FlightScreen openNotifSettingsSignal={openFlightNotifSettingsSignal} />;
       case 'TravelDoc': return <TraveldocScreen />;
     }
   };
@@ -186,6 +208,7 @@ function AppInner() {
 
   const appBarTitle = overlay ? overlayTitles[overlay] : 'AeroStaff Pro';
   const isWeather   = mode === 'weather' && !!colors.gradient;
+  const tabInactiveColor = colors.isDark ? 'rgba(235,239,245,0.78)' : colors.tabIconInactive;
 
   return (
     <View style={[styles.root, { backgroundColor: colors.bg, paddingTop: StatusBar.currentHeight || 48 }]}>
@@ -194,7 +217,7 @@ function AppInner() {
         backgroundColor={colors.appBar}
       />
 
-      {/* Top App Bar — liquid glass */}
+      {/* Top App Bar */}
       <ExpoBlurView
         intensity={colors.isDark ? 60 : 50}
         tint={colors.isDark ? 'dark' : 'light'}
@@ -216,14 +239,16 @@ function AppInner() {
             <Text style={styles.weatherChip}>{colors.weatherIcon} {colors.weatherLabel}</Text>
           )}
         </View>
-        <LinearGradient
-          colors={[colors.primaryLight, colors.primary]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.avatar}
-        >
-          <Text style={styles.avatarText}>MR</Text>
-        </LinearGradient>
+        <TouchableOpacity onPress={() => setProfileModalOpen(true)} activeOpacity={0.85}>
+          <LinearGradient
+            colors={[colors.primaryLight, colors.primary]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.avatar}
+          >
+            <Text style={styles.avatarText}>{profileInitials}</Text>
+          </LinearGradient>
+        </TouchableOpacity>
       </ExpoBlurView>
 
       {/* Screen Content */}
@@ -257,12 +282,16 @@ function AppInner() {
       {/* Bottom Nav — Glassmorphic Floating Pill (hidden on overlay screens) */}
       {!overlay && (
         <View style={styles.tabBarWrapper} {...swipePan.panHandlers}>
-          <View style={[styles.tabBarBlur, { backgroundColor: colors.isDark ? 'rgba(28,28,30,0.82)' : 'rgba(242,242,247,0.82)' }]}>
-            <ExpoBlurView
-              intensity={80}
-              tint={colors.isDark ? 'dark' : 'light'}
-              style={StyleSheet.absoluteFill}
-            />
+          <FrostedSurface
+            style={styles.tabBarBlur}
+            blurIntensity={90}
+            blurTint={colors.isDark ? 'dark' : 'light'}
+            baseColor={colors.isDark ? 'rgba(8,11,16,0.84)' : 'rgba(248,250,255,0.88)'}
+            gradientColors={colors.isDark
+              ? ['rgba(255,255,255,0.05)', 'rgba(9,11,15,0.66)']
+              : ['rgba(255,255,255,0.55)', 'rgba(255,244,230,0.34)']}
+            overlayColor={colors.isDark ? 'rgba(0,0,0,0.40)' : 'rgba(255,255,255,0.10)'}
+          >
             <View style={styles.tabBarRow}>
               {TABS.map(tab => {
                 const active = activeTab === tab.id;
@@ -273,7 +302,7 @@ function AppInner() {
                     label={tabLabels[tab.id]}
                     focused={active}
                     activeColor={colors.tabIconActive}
-                    inactiveColor={colors.tabIconInactive}
+                    inactiveColor={tabInactiveColor}
                     onPress={() => {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                       goToTab(TABS.findIndex(t => t.id === tab.id));
@@ -282,7 +311,7 @@ function AppInner() {
                 );
               })}
             </View>
-          </View>
+          </FrostedSurface>
         </View>
       )}
 
@@ -291,6 +320,10 @@ function AppInner() {
         visible={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         onSelect={handleDrawerSelect}
+      />
+      <ProfileSwitcherModal
+        visible={profileModalOpen}
+        onClose={() => setProfileModalOpen(false)}
       />
       {pendingUpdate && (
         <UpdateModal
@@ -358,8 +391,13 @@ const styles = StyleSheet.create({
     height: 66,
     borderRadius: 33,
     overflow: 'hidden',
-    borderWidth: 0.75,
-    borderColor: 'rgba(255,255,255,0.22)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.28)',
+    shadowColor: '#000',
+    shadowOpacity: 0.24,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 12,
   },
   tabBarRow: {
     flex: 1,

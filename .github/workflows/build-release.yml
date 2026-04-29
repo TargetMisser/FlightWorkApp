@@ -11,7 +11,7 @@ on:
       ref:
         description: 'Branch o commit da buildare'
         required: false
-        default: 'claude/fix-shift-permissions-Cn8gk'
+        default: 'main'
       version_override:
         description: 'Tag release (es. v2.6.2). Vuoto = legge app.json'
         required: false
@@ -28,6 +28,11 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      RELEASE_STORE_FILE: ${{ github.workspace }}/android/app/release.keystore
+      RELEASE_STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+      RELEASE_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+      RELEASE_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
     steps:
       - name: Compute checkout ref
@@ -38,7 +43,7 @@ jobs:
           elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
             echo "ref=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
           else
-            echo "ref=claude/fix-shift-permissions-Cn8gk" >> "$GITHUB_OUTPUT"
+            echo "ref=main" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Checkout
@@ -74,8 +79,8 @@ jobs:
         run: |
           echo "y" | sdkmanager \
             "ndk;27.1.12297006" \
-            "build-tools;36.0.0" \
-            "platforms;android-36" \
+            "build-tools;37.0.0" \
+            "platforms;android-37.0" \
             "cmake;3.22.1"
 
       - name: Install dependencies
@@ -104,10 +109,20 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
-      - name: Restore stable keystore
+      - name: Restore release keystore
         run: |
+          if [[ -z "${{ secrets.KEYSTORE_BASE64 }}" ]]; then
+            echo "Missing KEYSTORE_BASE64 secret"
+            exit 1
+          fi
+          for var in RELEASE_STORE_PASSWORD RELEASE_KEY_ALIAS RELEASE_KEY_PASSWORD; do
+            if [[ -z "${!var}" ]]; then
+              echo "Missing $var secret"
+              exit 1
+            fi
+          done
           mkdir -p android/app
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/app/debug.keystore
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > "$RELEASE_STORE_FILE"
 
       - name: Build release APK
         run: |
@@ -131,34 +146,7 @@ jobs:
         with:
           tag_name: ${{ steps.meta.outputs.tag }}
           name: "AeroStaff Pro ${{ steps.meta.outputs.tag }}"
-          body: |
-            ## 📦 AeroStaff Pro ${{ steps.meta.outputs.tag }}
-
-            ### Novità
-            - **Backup / Ripristino**: esporta tutti i dati dell'app in un file JSON e reimportali in qualsiasi momento da Impostazioni
-            - **Aggiornamento in-app**: popup stile Mihon con changelog e download APK diretto; controllo automatico all'avvio ogni 24h
-            - **Impostazioni riprogettate**: sezione aggiornamenti con card dedicata e badge NEW; backup con due tile colorate (esporta verde, importa blu)
-
-            ### Bug fix – Turni e Home
-            - **HomeScreen "Giorno di riposo" errato**: l'evento Lavoro nel calendario ora ha sempre la precedenza su un eventuale evento Riposo dello stesso giorno
-            - **Widget "Giorno di riposo" errato**: WIDGET_SHIFT_KEY è ora la fonte autoritativa per classificare lavoro/riposo, impedendo che dati in cache stantii sovrascrivano il turno reale
-            - **FlightScreen**: trovato evento Lavoro nel calendario non azzerava `isRestDay` se preceduto da un evento Riposo; corretto
-
-            ### Bug fix – Voli
-            - **Aggiornamento automatico voli**: i dati FR24 ora si ricaricano ogni 2 minuti senza riaprire l'app
-            - **Duplicati voli**: chiave di merge stabilizzata su `numeroVolo_tsPartenza` (prima usava `identification.id` che FR24 a volte omette)
-
-            ### Bug fix – StaffMonitor stand / gate / arrivi
-            - **Colonne non rilevate**: rimosso il requisito di trovare stand/gate/belt prima di parsare; prima saltava tutte le righe
-            - **Nomi handler nella colonna stand**: `cell()` ora estrae solo il primo token alfanumerico (es. `17◆ Federico` → `17`)
-            - **Numeri di telefono come stand**: `isPhoneOrJunk` individua sequenze di 8+ cifre ovunque nella stringa
-            - **Colonna "ADDETTO STAND"**: word-boundary `\bstand\b` per evitare falsi positivi
-            - **Arrivi in parallelo + cache**: 7 varianti URL `nature=A` in simultanea, prima risposta vince in ≤40s; cache AsyncStorage 20 min
-            - **Sessione Tomcat (JSESSIONID)**: cookie catturato dalla risposta D e inoltrato alle richieste A — fix AbortError sugli arrivi
-            - **Numeri volo corrotti**: rimossi URL fallback senza `nature=A`
-            - **Timeout partenze**: ripristinato a 25s
-
-            Scarica `AeroStaffPro-${{ steps.meta.outputs.tag }}.apk` e installalo sul tuo dispositivo Android.
+          generate_release_notes: true
           files: ${{ env.apk }}
           draft: false
           prerelease: false

@@ -5,7 +5,7 @@ import {
   Platform, UIManager
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
 import * as ImagePicker from 'expo-image-picker';
 import * as Calendar from 'expo-calendar';
@@ -29,13 +29,6 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 
 const PINNED_FLIGHT_KEY = 'pinned_flight_v1';
 const HOME_REST_TIMING = { startHour: 12, startMinute: 0, endHour: 14, endMinute: 0, allDay: true };
-
-const weatherMap: Record<number, { text: string; icon: string }> = {
-  0: { text: 'Sereno', icon: '☀️' }, 1: { text: 'Poco Nuvoloso', icon: '🌤️' },
-  2: { text: 'Nuvoloso', icon: '⛅' }, 3: { text: 'Coperto', icon: '☁️' },
-  45: { text: 'Nebbia', icon: '🌫️' }, 61: { text: 'Pioggia Leggera', icon: '🌦️' },
-  63: { text: 'Pioggia', icon: '🌧️' }, 80: { text: 'Rovesci', icon: '🌧️' },
-};
 
 // months comes from useLanguage() context
 
@@ -155,10 +148,10 @@ export default function HomeScreen({ isFocused }: { isFocused?: boolean }) {
   const { t, months, locale, weatherMap } = useLanguage();
   const [timelineKey, setTimelineKey] = React.useState(0);
   React.useEffect(() => { if (isFocused) setTimelineKey(k => k + 1); }, [isFocused]);
-  const HOME_SHIFT_TITLES = { work: t('homeShiftWork'), rest: '🌴 Riposo' };
+  const HOME_SHIFT_TITLES = { work: 'Lavoro', rest: 'Riposo' };
   const today = new Date();
   const [shiftEvent, setShiftEvent] = useState<any>(null);
-  const [weather, setWeather] = useState<{ text: string; icon: string; temp: number } | null>(null);
+  const [weather, setWeather] = useState<{ text: string; iconName: string; temp: number } | null>(null);
   const [loadingShift, setLoadingShift] = useState(true);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [imageList, setImageList] = useState<string[]>([]);
@@ -274,7 +267,7 @@ export default function HomeScreen({ isFocused }: { isFocused?: boolean }) {
       const json = await res.json();
       const code = json.current?.weather_code ?? 0;
       const temp = Math.round(json.current?.temperature_2m ?? 0);
-      const w = weatherMap[code] || { text: 'Sereno', icon: '☀️' };
+      const w = weatherMap[code] || { text: 'Sereno', iconName: 'weather-sunny' };
       setWeather({ ...w, temp });
     } catch (e) { if (__DEV__) console.warn('[weather]', e); }
   };
@@ -375,7 +368,12 @@ export default function HomeScreen({ isFocused }: { isFocused?: boolean }) {
         <View style={s.weatherCard}>
           {weather ? (
             <>
-              <Text style={s.weatherEmoji}>{weather.icon}</Text>
+              <MaterialCommunityIcons
+                name={weather.iconName as keyof typeof MaterialCommunityIcons.glyphMap}
+                size={28}
+                color={colors.primaryDark}
+                style={s.weatherIcon}
+              />
               <Text style={s.weatherTemp}>{weather.temp}°</Text>
               <Text style={s.weatherDesc}>{t('homeWeatherLocal')} • {weather.text}</Text>
             </>
@@ -414,7 +412,9 @@ export default function HomeScreen({ isFocused }: { isFocused?: boolean }) {
           </>
         ) : isRest ? (
           <View style={s.restRow}>
-            <Text style={{ fontSize: 28, marginRight: 12 }}>🌴</Text>
+            <View style={s.restIconWrap}>
+              <MaterialIcons name="hotel" size={22} color="#10b981" />
+            </View>
             <Text style={s.restText}>{t('homeRestDay')}</Text>
           </View>
         ) : (
@@ -444,7 +444,7 @@ function makeStyles(c: ThemeColors) {
     hiddenWV: { height: 1, width: 1, opacity: 0, position: 'absolute', top: -100 },
     topRow: { flexDirection: 'row', gap: 12, padding: 16, paddingBottom: 8 },
     weatherCard: { flex: 1, backgroundColor: c.card, borderRadius: 18, padding: 16, alignItems: 'center', shadowColor: c.isDark ? '#000000' : c.primary, shadowOpacity: 0.12, shadowRadius: 12, elevation: 4, borderWidth: 1, borderColor: c.glassBorder },
-    weatherEmoji: { fontSize: 28, marginBottom: 4 },
+    weatherIcon: { marginBottom: 4 },
     weatherTemp: { fontSize: 28, fontWeight: '700', color: c.primaryDark },
     weatherDesc: { fontSize: 11, color: c.textSub, textAlign: 'center', marginTop: 2 },
     dateCard: { width: 90, backgroundColor: c.primaryDark, borderRadius: 18, padding: 14, alignItems: 'center', justifyContent: 'center', shadowColor: c.isDark ? '#000000' : c.primary, shadowOpacity: 0.30, shadowRadius: 12, elevation: 6 },
@@ -461,6 +461,7 @@ function makeStyles(c: ThemeColors) {
     shiftTime: { fontSize: 22, fontWeight: '700', color: c.primary, marginBottom: 4 },
     timelineCard: { backgroundColor: c.card, borderRadius: 18, marginHorizontal: 16, marginTop: 12, padding: 16, shadowColor: c.isDark ? '#000000' : c.primary, shadowOpacity: 0.08, shadowRadius: 10, elevation: 3, borderWidth: 1, borderColor: c.glassBorder },
     restRow: { flexDirection: 'row', alignItems: 'center' },
+    restIconWrap: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#10b98122', alignItems: 'center', justifyContent: 'center', marginRight: 12 },
     restText: { fontSize: 18, fontWeight: '700', color: '#10b981' },
     emptyShift: { color: c.textSub, fontSize: 15, lineHeight: 24, textAlign: 'center', flex: 1 },
     uploadToggle: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 16, marginTop: 16, backgroundColor: c.card, borderRadius: 18, paddingHorizontal: 16, paddingVertical: 14, shadowColor: c.isDark ? '#000000' : c.primary, shadowOpacity: 0.08, shadowRadius: 8, elevation: 3, borderWidth: 1, borderColor: c.glassBorder },

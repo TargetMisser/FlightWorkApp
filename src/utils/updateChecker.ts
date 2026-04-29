@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { nativeApplicationVersion } from 'expo-application';
 
-export const APP_VERSION = '2.6.0';
+export const APP_VERSION = nativeApplicationVersion ?? '2.6.16';
 const REPO = 'targetmisser/flightworkapp';
 const CHECK_KEY = 'aerostaff_update_check_v1';
 const SEEN_KEY = 'aerostaff_update_seen_v1';
@@ -8,11 +9,19 @@ const SEEN_KEY = 'aerostaff_update_seen_v1';
 export type UpdateInfo = {
   available: boolean;
   latestVersion: string;
-  downloadUrl: string;
+  downloadUrl: string | null;
   releaseUrl: string;
   releaseNotes: string;
+  assetName: string | null;
   checkedAt: number;
 };
+
+function normalizeUpdateInfo(info: UpdateInfo): UpdateInfo {
+  return {
+    ...info,
+    available: isNewer(info.latestVersion, APP_VERSION),
+  };
+}
 
 function parseVersion(v: string): number[] {
   return v.replace(/^v/, '').split('.').map(n => parseInt(n, 10) || 0);
@@ -35,14 +44,14 @@ export async function checkForUpdate(force = false): Promise<UpdateInfo | null> 
     if (!force) {
       const raw = await AsyncStorage.getItem(CHECK_KEY);
       if (raw) {
-        const cached: UpdateInfo = JSON.parse(raw);
+        const cached = normalizeUpdateInfo(JSON.parse(raw) as UpdateInfo);
         if (now - cached.checkedAt < 24 * 60 * 60 * 1000) return cached;
       }
     }
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 10_000);
-    let json: any;
+    let json: Record<string, unknown>;
     try {
       const resp = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, {
         signal: controller.signal,
@@ -50,23 +59,33 @@ export async function checkForUpdate(force = false): Promise<UpdateInfo | null> 
       });
       clearTimeout(timer);
       if (!resp.ok) return null;
-      json = await resp.json();
+      json = await resp.json() as Record<string, unknown>;
     } catch {
       clearTimeout(timer);
       return null;
     }
 
-    const tag: string = json.tag_name ?? '';
-    const apkAsset = json.assets?.find((a: any) => (a.name as string).endsWith('.apk'));
+    const tag = typeof json.tag_name === 'string' ? json.tag_name : '';
+    const assets = Array.isArray(json.assets) ? json.assets : [];
+    const apkAsset = assets.find((asset): asset is { name?: string; browser_download_url?: string } => {
+      if (!asset || typeof asset !== 'object') {
+        return false;
+      }
 
-    const info: UpdateInfo = {
+      const name = 'name' in asset ? asset.name : undefined;
+      return typeof name === 'string' && name.toLowerCase().endsWith('.apk');
+    });
+    const releaseUrl = typeof json.html_url === 'string' ? json.html_url : '';
+
+    const info = normalizeUpdateInfo({
       available: isNewer(tag, APP_VERSION),
       latestVersion: tag,
-      downloadUrl: apkAsset?.browser_download_url ?? json.html_url,
-      releaseUrl: json.html_url ?? '',
-      releaseNotes: json.body ?? '',
+      downloadUrl: typeof apkAsset?.browser_download_url === 'string' ? apkAsset.browser_download_url : null,
+      releaseUrl,
+      releaseNotes: typeof json.body === 'string' ? json.body : '',
+      assetName: typeof apkAsset?.name === 'string' ? apkAsset.name : null,
       checkedAt: now,
-    };
+    });
 
     await AsyncStorage.setItem(CHECK_KEY, JSON.stringify(info));
     return info;
@@ -78,7 +97,7 @@ export async function checkForUpdate(force = false): Promise<UpdateInfo | null> 
 export async function getCachedUpdateInfo(): Promise<UpdateInfo | null> {
   try {
     const raw = await AsyncStorage.getItem(CHECK_KEY);
-    return raw ? JSON.parse(raw) : null;
+    return raw ? normalizeUpdateInfo(JSON.parse(raw) as UpdateInfo) : null;
   } catch {
     return null;
   }

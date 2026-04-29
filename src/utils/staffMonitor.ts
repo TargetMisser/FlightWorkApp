@@ -198,6 +198,7 @@ const FETCH_HEADERS = {
 // Tomcat JSESSIONID captured from D responses and forwarded to A requests.
 // The arrivals servlet likely requires an active session; departures may not.
 let _sessionCookie: string | null = null;
+const _inFlightByNature: Partial<Record<'D' | 'A', Promise<StaffMonitorFlight[]>>> = {};
 
 function captureSessionCookie(resp: Response): void {
   const raw = resp.headers.get('set-cookie') ?? '';
@@ -227,6 +228,22 @@ async function tryFetch(url: string, timeoutMs: number): Promise<string> {
   }
 }
 
+function isAbortLikeError(error: unknown): boolean {
+  const msg = String(error ?? '').toLowerCase();
+  return msg.includes('abort');
+}
+
+async function tryFetchWithRetry(url: string, timeoutMs: number): Promise<string> {
+  try {
+    return await tryFetch(url, timeoutMs);
+  } catch (e) {
+    // Mobile networks can intermittently abort long requests even when the endpoint is healthy.
+    // Retry once with a longer timeout before considering this URL failed.
+    if (!isAbortLikeError(e)) throw e;
+    return tryFetch(url, Math.max(timeoutMs + 12_000, Math.round(timeoutMs * 1.5)));
+  }
+}
+
 /**
  * Fire all URLs simultaneously and resolve with the first successful HTML.
  * Returns null only if every URL fails or times out.
@@ -236,7 +253,7 @@ function raceUrls(urls: string[], timeoutMs: number): Promise<string | null> {
     let done = false;
     let pending = urls.length;
     for (const url of urls) {
-      tryFetch(url, timeoutMs)
+      tryFetchWithRetry(url, timeoutMs)
         .then(html => { if (!done) { done = true; resolve(html); } })
         .catch(() => { pending--; if (pending === 0 && !done) { done = true; resolve(null); } });
     }
@@ -279,6 +296,10 @@ export function getStaffMonitorDebugFlights(): string {
 }
 
 export async function fetchStaffMonitorData(nature: 'D' | 'A'): Promise<StaffMonitorFlight[]> {
+  const running = _inFlightByNature[nature];
+  if (running) return running;
+
+  const run = (async () => {
   const base = 'https://servizi.pisa-airport.com/staffMonitor/staffMonitor';
 
   // Primary URLs for the requested nature
@@ -304,7 +325,7 @@ export async function fetchStaffMonitorData(nature: 'D' | 'A'): Promise<StaffMon
       // Departures: sequential — server is slow, use 25s to avoid false timeouts
       for (const url of primaryUrls) {
         try {
-          html = await tryFetch(url, 25_000);
+          html = await tryFetchWithRetry(url, 25_000);
           _lastDebugStatus = `D:200 len=${html.length}`;
           _lastDebugHtml = html.replace(/\s+/g, ' ').slice(0, 300);
           break;
@@ -318,7 +339,7 @@ export async function fetchStaffMonitorData(nature: 'D' | 'A'): Promise<StaffMon
       // The Tomcat arrivals servlet likely requires an active JSESSIONID.
       if (!_sessionCookie) {
         try {
-          await tryFetch(`${base}?trans=true&nature=D`, 12_000);
+          await tryFetchWithRetry(`${base}?trans=true&nature=D`, 12_000);
           console.warn('[staffMonitor] session primed for A:', _sessionCookie ?? 'none');
         } catch {
           console.warn('[staffMonitor] session prime failed, proceeding anyway');
@@ -371,6 +392,15 @@ export async function fetchStaffMonitorData(nature: 'D' | 'A'): Promise<StaffMon
   } catch (e) {
     console.error(`[staffMonitor] error for nature=${nature}:`, e);
     const cached = await loadCached(nature);
+    if (cached) _lastDebugStatus = `${nature}:ERR->CACHE(${cached.length})`;
     return cached ?? [];
+  }
+  })();
+
+  _inFlightByNature[nature] = run;
+  try {
+    return await run;
+  } finally {
+    delete _inFlightByNature[nature];
   }
 }

@@ -2,7 +2,7 @@
   "expo": {
     "name": "AeroStaff Pro",
     "slug": "AeroStaffPro",
-    "version": "2.6.3",
+    "version": "2.6.29",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -31,7 +31,7 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/icon.png",
+          "icon": "./assets/notification-icon.png",
           "color": "#F47B16",
           "defaultChannel": "voli"
         }

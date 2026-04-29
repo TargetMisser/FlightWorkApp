@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ActivityIndicator, ScrollView, TouchableOpacity,
-  PanResponder, Platform, UIManager, Animated, Dimensions, Modal, Alert, FlatList, TextInput,
+  Platform, Modal, Alert, FlatList, TextInput,
   Linking,
 } from 'react-native';
 import * as SystemCalendar from 'expo-calendar';
@@ -9,9 +9,10 @@ import * as Location from 'expo-location';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { WebView } from 'react-native-webview';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { requestWidgetUpdate } from 'react-native-android-widget';
+import { Calendar as RNCalendar, LocaleConfig, type DateData } from 'react-native-calendars';
 import { useAppTheme, type ThemeColors } from '../context/ThemeContext';
 import TimeCarouselPicker from '../components/TimeCarouselPicker';
 import { useAirport } from '../context/AirportContext';
@@ -26,7 +27,7 @@ import type { WidgetShiftData } from '../widgets/widgetTaskHandler';
 import { ShiftWidget } from '../widgets/ShiftWidget';
 import {
   getPdfExtractorHtml, parseShiftCells,
-  type ParsedSchedule, type ParsedEmployee, type ParsedShift,
+  type ParsedSchedule, type ParsedEmployee,
 } from '../utils/pdfShiftParser';
 import { useLanguage } from '../context/LanguageContext';
 
@@ -39,12 +40,18 @@ type ShiftEvent = {
   endDate: string | Date;
 };
 
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
+type DayStats = {
+  weatherText: string;
+  weatherIconName: string;
+  flightCount: number;
+};
 
-// weatherMap comes from useLanguage() context
-
+type CalendarMarkedDates = Record<string, {
+  dots?: Array<{ key: string; color: string; selectedDotColor?: string }>;
+  selected?: boolean;
+  selectedColor?: string;
+  selectedTextColor?: string;
+}>;
 
 function getMonday(d: Date | null | undefined): Date {
   if (!d || isNaN(d.getTime())) return getMonday(new Date());
@@ -54,15 +61,38 @@ function getMonday(d: Date | null | undefined): Date {
   return date;
 }
 
+function toLocalIso(dateValue: string | Date): string {
+  const date = new Date(dateValue);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function fromIsoDate(iso: string): Date {
+  return new Date(`${iso}T00:00:00`);
+}
+
+function getMonthStart(date: Date): Date {
+  const next = new Date(date);
+  next.setDate(1);
+  next.setHours(0, 0, 0, 0);
+  return next;
+}
+
+function isSameMonth(date: Date, iso: string): boolean {
+  const target = fromIsoDate(iso);
+  return target.getFullYear() === date.getFullYear() && target.getMonth() === date.getMonth();
+}
+
 export default function CalendarScreen() {
   const { colors } = useAppTheme();
-  const { t, months, weekDaysShort, locale, weatherMap } = useLanguage();
+  const { lang, t, months, weekDaysShort, weekDaysLong, locale, weatherMap } = useLanguage();
   const { airportCode, isLoading: airportLoading } = useAirport();
-  const [currentWeekStart, setCurrentWeekStart] = useState<Date>(getMonday(new Date()));
-  const [selectedDay, setSelectedDay] = useState<string>(new Date().toISOString().split('T')[0]);
-  const [markedDates, setMarkedDates] = useState<Record<string, string>>({});
+  const [visibleMonth, setVisibleMonth] = useState<Date>(() => getMonthStart(new Date()));
+  const [selectedDay, setSelectedDay] = useState<string>(() => toLocalIso(new Date()));
   const [eventsData, setEventsData] = useState<Record<string, ShiftEvent[]>>({});
-  const [dailyStats, setDailyStats] = useState<Record<string, { weatherText: string; weatherIcon: string; flightCount: number }>>({});
+  const [dailyStats, setDailyStats] = useState<Record<string, DayStats>>({});
   const [loading, setLoading] = useState(true);
   const [calId, setCalId] = useState<string | null>(null);
 
@@ -85,12 +115,55 @@ export default function CalendarScreen() {
   const [manualEndH, setManualEndH] = useState(16);
   const [manualEndM, setManualEndM] = useState(0);
 
+  const getManualPrefillForSelectedDay = () => {
+    const dayEvents = eventsData[selectedDay] || [];
+    const existingWork = dayEvents.find(event => event.title.includes('Lavoro'));
+    const existingRest = dayEvents.find(event => event.title.includes('Riposo'));
+
+    if (existingWork) {
+      const startDate = new Date(existingWork.startDate);
+      const endDate = new Date(existingWork.endDate);
+
+      return {
+        date: selectedDay,
+        type: 'Lavoro' as const,
+        startH: startDate.getHours(),
+        startM: startDate.getMinutes(),
+        endH: endDate.getHours(),
+        endM: endDate.getMinutes(),
+      };
+    }
+
+    if (existingRest) {
+      return {
+        date: selectedDay,
+        type: 'Riposo' as const,
+        startH: 8,
+        startM: 0,
+        endH: 16,
+        endM: 0,
+      };
+    }
+
+    return {
+      date: selectedDay,
+      type: 'Lavoro' as const,
+      startH: 8,
+      startM: 0,
+      endH: 16,
+      endM: 0,
+    };
+  };
+
   const openManualEntry = () => {
+    const prefill = getManualPrefillForSelectedDay();
     setEditMenuOpen(false);
-    setManualDate(selectedDay);
-    setManualType('Lavoro');
-    setManualStartH(8); setManualStartM(0);
-    setManualEndH(16); setManualEndM(0);
+    setManualDate(prefill.date);
+    setManualType(prefill.type);
+    setManualStartH(prefill.startH);
+    setManualStartM(prefill.startM);
+    setManualEndH(prefill.endH);
+    setManualEndM(prefill.endM);
     setPickerKey(k => k + 1);
     setManualModalOpen(true);
   };
@@ -157,60 +230,46 @@ export default function CalendarScreen() {
     } catch (e: any) { Alert.alert('Errore', e.message); }
   };
 
-  const SCREEN_W = Dimensions.get('window').width;
-  const weekSlideX = useRef(new Animated.Value(0)).current;
-
   // Load saved name
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY).then(n => { if (n) setSavedName(n); });
   }, []);
 
-  const changeWeek = (dir: 1 | -1) => {
-    Animated.timing(weekSlideX, {
-      toValue: dir * SCREEN_W, duration: 120, useNativeDriver: true,
-    }).start(() => {
-      setCurrentWeekStart(d => { const n = new Date(d); n.setDate(n.getDate() + dir * -7); return n; });
-      weekSlideX.setValue(-dir * SCREEN_W);
-      Animated.timing(weekSlideX, {
-        toValue: 0, duration: 120, useNativeDriver: true,
-      }).start();
-    });
-  };
+  useEffect(() => {
+    const localeConfig = LocaleConfig as unknown as {
+      locales?: Record<string, {
+        monthNames: string[];
+        monthNamesShort: string[];
+        dayNames: string[];
+        dayNamesShort: string[];
+        today: string;
+      }>;
+      defaultLocale?: string;
+    };
 
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 15,
-      onMoveShouldSetPanResponderCapture: (_, g) => Math.abs(g.dx) > 15 && Math.abs(g.dx) > Math.abs(g.dy) * 1.5,
-      onPanResponderTerminationRequest: () => false,
-      onPanResponderMove: (_, g) => { weekSlideX.setValue(g.dx); },
-      onPanResponderRelease: (_, g) => {
-        if (Math.abs(g.dx) > SCREEN_W * 0.2) {
-          changeWeek(g.dx > 0 ? 1 : -1);
-        } else {
-          Animated.spring(weekSlideX, {
-            toValue: 0, useNativeDriver: true, tension: 120, friction: 10,
-          }).start();
-        }
-      },
-    })
-  ).current;
-
-  const getWeekDays = (start: Date) =>
-    Array.from({ length: 7 }).map((_, i) => {
-      const d = new Date(start);
-      d.setDate(d.getDate() + i);
-      const iso = d.toISOString().split('T')[0];
-      return {
-        date: d, iso,
-        dayNum: d.getDate(),
-        dayName: weekDaysShort[d.getDay()],
-      };
-    });
+    localeConfig.locales ??= {};
+    localeConfig.locales[lang] = {
+      monthNames: months,
+      monthNamesShort: months.map(month => month.slice(0, 3)),
+      dayNames: weekDaysLong,
+      dayNamesShort: weekDaysShort,
+      today: lang === 'it' ? 'Oggi' : 'Today',
+    };
+    localeConfig.defaultLocale = lang;
+  }, [lang, months, weekDaysLong, weekDaysShort]);
 
   useEffect(() => {
     if (!airportLoading) fetchCalendar();
-  }, [currentWeekStart, airportCode, airportLoading]);
+  }, [visibleMonth, airportCode, airportLoading]);
+
+  useEffect(() => {
+    if (airportLoading || loading) return;
+    const weekStart = getMonday(fromIsoDate(selectedDay));
+    weekStart.setHours(0, 0, 0, 0);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 7);
+    fetchWeatherAndFlights(weekStart, weekEnd, eventsData);
+  }, [selectedDay, eventsData, airportCode, airportLoading, loading, weatherMap]);
 
   const fetchCalendar = async (silent = false) => {
     try {
@@ -221,31 +280,24 @@ export default function CalendarScreen() {
       const cal = calendars.find(c => c.allowsModifications && c.isPrimary) || calendars.find(c => c.allowsModifications);
       if (!cal) { setLoading(false); return; }
       setCalId(cal.id);
-      const start = new Date(currentWeekStart); start.setHours(0, 0, 0, 0);
-      const end = new Date(currentWeekStart); end.setDate(end.getDate() + 7);
-      const events = await SystemCalendar.getEventsAsync([cal.id], start, end);
-      const dots: Record<string, string> = {};
+      const monthStart = getMonthStart(visibleMonth);
+      const monthEnd = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1, 1, 0, 0, 0, 0);
+      const events = await SystemCalendar.getEventsAsync([cal.id], monthStart, monthEnd);
       const localData: Record<string, ShiftEvent[]> = {};
       events.forEach(e => {
         if (e.title.includes('Lavoro') || e.title.includes('Riposo')) {
-          const iso = new Date(e.startDate).toISOString().split('T')[0];
+          const iso = toLocalIso(e.startDate);
           if (!localData[iso]) localData[iso] = [];
           localData[iso].push({ id: e.id, title: e.title, startDate: e.startDate, endDate: e.endDate });
-          // Lavoro has priority over Riposo for dot color
-          if (e.title.includes('Lavoro') || !dots[iso]) {
-            dots[iso] = e.title.includes('Riposo') ? '#10b981' : colors.primary;
-          }
         }
       });
-      setMarkedDates(dots);
       setEventsData(localData);
       setLoading(false);
-      fetchWeatherAndFlights(start, end, localData);
     } catch (e) { if (__DEV__) console.error(e); setLoading(false); }
   };
 
   const fetchWeatherAndFlights = async (start: Date, end: Date, localData: Record<string, ShiftEvent[]>) => {
-    const dict: Record<string, { weatherText: string; weatherIcon: string; flightCount: number }> = {};
+    const dict: Record<string, DayStats> = {};
     try {
       await Location.requestForegroundPermissionsAsync();
       const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
@@ -255,8 +307,8 @@ export default function CalendarScreen() {
       const wj = await wr.json();
       if (wj.daily?.time) {
         wj.daily.time.forEach((date: string, i: number) => {
-          const m = weatherMap[wj.daily.weather_code[i] || 0] || { text: 'Sereno', icon: '☀️' };
-          dict[date] = { weatherText: m.text, weatherIcon: m.icon, flightCount: 0 };
+          const m = weatherMap[wj.daily.weather_code[i] || 0] || { text: 'Sereno', iconName: 'weather-sunny' };
+          dict[date] = { weatherText: m.text, weatherIconName: m.iconName, flightCount: 0 };
         });
       }
     } catch (e) { if (__DEV__) console.warn('[calWeather]', e); }
@@ -272,7 +324,7 @@ export default function CalendarScreen() {
             const ts = f.flight?.time?.scheduled?.arrival || f.flight?.time?.scheduled?.departure;
             return ts && ts >= sTS && ts <= eTS;
           }).length;
-          if (dict[iso]) dict[iso].flightCount = cnt; else dict[iso] = { weatherText: 'N/A', weatherIcon: '❓', flightCount: cnt };
+          if (dict[iso]) dict[iso].flightCount = cnt; else dict[iso] = { weatherText: 'N/A', weatherIconName: 'cloud-question', flightCount: cnt };
         }
       });
     } catch (e) { if (__DEV__) console.warn('[calFlights]', e); }
@@ -385,7 +437,7 @@ export default function CalendarScreen() {
       });
 
       // Push today's shift to widget if it's included in the import
-      const todayIso = new Date().toISOString().split('T')[0];
+      const todayIso = toLocalIso(new Date());
       const todayShift = selectedEmployee.shifts.find(s => s.date === todayIso);
       if (todayShift) {
         const [sh, sm] = (todayShift.start || '00:00').split(':').map(Number);
@@ -407,19 +459,129 @@ export default function CalendarScreen() {
     }
   };
 
-  const weekDays = getWeekDays(currentWeekStart);
-  const monthLabel = currentWeekStart.toLocaleDateString(locale, { month: 'long', year: 'numeric' });
+  const monthLabel = visibleMonth.toLocaleDateString(locale, { month: 'long', year: 'numeric' });
+  const todayIso = toLocalIso(new Date());
   const selectedEvents = eventsData[selectedDay] || [];
   const workEvent = selectedEvents.find(e => e.title.includes('Lavoro'));
   const restEvent = selectedEvents.find(e => e.title.includes('Riposo'));
   const stats = dailyStats[selectedDay];
   const s = useMemo(() => makeStyles(colors), [colors]);
+  const markedDates = useMemo<CalendarMarkedDates>(() => {
+    const next: CalendarMarkedDates = {};
+    for (const [iso, events] of Object.entries(eventsData)) {
+      const dots = [];
+      if (events.some(event => event.title.includes('Lavoro'))) {
+        dots.push({ key: 'work', color: colors.primary, selectedDotColor: '#fff' });
+      }
+      if (events.some(event => event.title.includes('Riposo'))) {
+        dots.push({ key: 'rest', color: '#10b981', selectedDotColor: '#fff' });
+      }
+      if (dots.length > 0) next[iso] = { dots };
+    }
+    next[selectedDay] = {
+      ...(next[selectedDay] ?? {}),
+      selected: true,
+      selectedColor: colors.primary,
+      selectedTextColor: '#fff',
+    };
+    return next;
+  }, [eventsData, selectedDay, colors.primary]);
+  const monthHoursSummary = useMemo(() => {
+    const year = visibleMonth.getFullYear();
+    const month = visibleMonth.getMonth();
+    const dayEntries = Object.entries(eventsData)
+      .filter(([iso]) => {
+        const d = fromIsoDate(iso);
+        return d.getFullYear() === year && d.getMonth() === month;
+      })
+      .sort((a, b) => a[0].localeCompare(b[0]));
+
+    let totalMinutes = 0;
+    const workDays: Array<{ iso: string; hours: number }> = [];
+    for (const [iso, events] of dayEntries) {
+      const work = events.find(e => e.title.includes('Lavoro'));
+      if (!work) continue;
+      const start = new Date(work.startDate).getTime();
+      const end = new Date(work.endDate).getTime();
+      const minutes = Math.max(0, Math.round((end - start) / 60000));
+      totalMinutes += minutes;
+      workDays.push({ iso, hours: minutes / 60 });
+    }
+    return { totalHours: totalMinutes / 60, shiftsCount: workDays.length, workDays };
+  }, [eventsData, visibleMonth]);
 
   const fmtDate = (iso: string) => {
     const [y, m, d] = iso.split('-');
     const dt = new Date(+y, +m - 1, +d);
-    const dayName = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'][dt.getDay()];
+    const dayName = weekDaysShort[dt.getDay()];
     return `${dayName} ${d}/${m}`;
+  };
+
+  const handleDayPress = (day: DateData) => {
+    setSelectedDay(day.dateString);
+    const nextMonth = new Date(day.year, day.month - 1, 1);
+    if (!isSameMonth(visibleMonth, day.dateString)) {
+      setVisibleMonth(nextMonth);
+    }
+  };
+
+  const handleMonthChange = (day: DateData) => {
+    const nextMonth = new Date(day.year, day.month - 1, 1);
+    setVisibleMonth(nextMonth);
+    if (!isSameMonth(nextMonth, selectedDay)) {
+      setSelectedDay(day.dateString);
+    }
+  };
+
+  const renderCalendarDay = (props: any) => {
+    const { date, state, marking, onPress } = props as {
+      date?: DateData;
+      state?: string;
+      marking?: CalendarMarkedDates[string] & { dots?: Array<{ key?: string; color: string; selectedDotColor?: string }> };
+      onPress?: (value?: DateData) => void;
+    };
+
+    if (!date) return <View style={s.dayCellWrap} />;
+
+    const isSelected = !!marking?.selected;
+    const isToday = date.dateString === todayIso;
+    const isInactive = state === 'disabled' || state === 'inactive';
+    const dots = marking?.dots ?? [];
+
+    return (
+      <TouchableOpacity style={s.dayCellWrap} activeOpacity={0.85} onPress={() => onPress?.(date)}>
+        <View
+          style={[
+            s.dayCellInner,
+            isSelected && s.dayCellInnerSelected,
+            isToday && s.dayCellInnerToday,
+            isToday && isSelected && s.dayCellInnerTodaySelected,
+          ]}
+        >
+          <Text
+            style={[
+              s.dayCellText,
+              isInactive && s.dayCellTextInactive,
+              isToday && s.dayCellTextToday,
+              isSelected && s.dayCellTextSelected,
+            ]}
+          >
+            {date.day}
+          </Text>
+        </View>
+        <View style={s.dayDotsRow}>
+          {dots.slice(0, 2).map(dot => (
+            <View
+              key={dot.key ?? dot.color}
+              style={[
+                s.dayDot,
+                { backgroundColor: isSelected ? (dot.selectedDotColor ?? '#fff') : dot.color },
+              ]}
+            />
+          ))}
+        </View>
+      </TouchableOpacity>
+    );
   };
 
   return (
@@ -439,74 +601,125 @@ export default function CalendarScreen() {
           </View>
         </View>
 
-        {/* Week strip + contenuto animato */}
-        <Animated.View style={{ transform: [{ translateX: weekSlideX }] }}>
-        <View style={s.weekRow} {...panResponder.panHandlers}>
-          <TouchableOpacity onPress={() => setCurrentWeekStart(d => { const n = new Date(d); n.setDate(n.getDate() - 7); return n; })} style={s.navBtn}>
-            <Text style={s.navArrow}>◀</Text>
-          </TouchableOpacity>
-          {weekDays.map(day => {
-            const isSelected = day.iso === selectedDay;
-            const dotColor = markedDates[day.iso];
-            return (
-              <TouchableOpacity key={day.iso} style={s.dayChipWrap} onPress={() => setSelectedDay(day.iso)}>
-                <View style={[s.dayChip, isSelected && s.dayChipSelected]}>
-                  <Text style={[s.dayChipName, isSelected && s.dayChipNameSel]}>{day.dayName}</Text>
-                  <Text style={[s.dayChipNum, isSelected && s.dayChipNumSel]}>{day.dayNum}</Text>
-                </View>
-                {dotColor && <View style={[s.dot, { backgroundColor: isSelected ? '#fff' : dotColor }]} />}
-              </TouchableOpacity>
-            );
-          })}
-          <TouchableOpacity onPress={() => setCurrentWeekStart(d => { const n = new Date(d); n.setDate(n.getDate() + 7); return n; })} style={s.navBtn}>
-            <Text style={s.navArrow}>▶</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Main Shift Card */}
         {loading ? (
           <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 40 }} />
         ) : (
-          <View style={s.mainCard}>
-            {stats && (
-              <View style={s.weatherBadge}>
-                <Text style={s.weatherIcon}>{stats.weatherIcon}</Text>
-                <View>
-                  <Text style={s.weatherPlace}>{t('calWeatherLocal')}</Text>
-                  <Text style={s.weatherText}>{stats.weatherText}</Text>
-                </View>
+          <>
+            <View style={s.mainCard}>
+              <View style={s.selectedDayHeader}>
+                <Text style={s.selectedDayLabel}>{fmtDate(selectedDay)}</Text>
               </View>
-            )}
-
-            {workEvent ? (
-              <>
-                <View style={s.shiftTypeRow}>
-                  <View style={s.shiftIconBox}><Text style={{ fontSize: 22 }}>✈️</Text></View>
-                  <Text style={s.shiftTypeName}>{t('calShiftWork')}</Text>
-                </View>
-                <View style={s.timeRow}>
-                  <Text style={{ fontSize: 18, marginRight: 6 }}>🕒</Text>
-                  <Text style={s.timeText}>
-                    {new Date(workEvent.startDate).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })} — {new Date(workEvent.endDate).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}
-                  </Text>
-                </View>
-                {stats?.flightCount > 0 && (
-                  <View style={s.flightBadge}>
-                    <Text style={s.flightBadgeText}>✈️ {stats.flightCount} voli nel turno</Text>
+              {stats && (
+                <View style={s.weatherBadge}>
+                  <MaterialCommunityIcons
+                    name={stats.weatherIconName as keyof typeof MaterialCommunityIcons.glyphMap}
+                    size={18}
+                    color={colors.primaryDark}
+                    style={s.weatherIcon}
+                  />
+                  <View>
+                    <Text style={s.weatherPlace}>{t('calWeatherLocal')}</Text>
+                    <Text style={s.weatherText}>{stats.weatherText}</Text>
                   </View>
+                </View>
+              )}
+
+              {workEvent ? (
+                <>
+                  <View style={s.shiftTypeRow}>
+                    <View style={s.shiftIconBox}>
+                      <MaterialIcons name="flight" size={20} color={colors.primary} />
+                    </View>
+                    <Text style={s.shiftTypeName}>{t('calShiftWork')}</Text>
+                  </View>
+                  <View style={s.timeRow}>
+                    <MaterialIcons name="schedule" size={18} color={colors.textSub} style={{ marginRight: 6 }} />
+                    <Text style={s.timeText}>
+                      {new Date(workEvent.startDate).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })} — {new Date(workEvent.endDate).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}
+                    </Text>
+                  </View>
+                  {stats?.flightCount > 0 && (
+                    <View style={s.flightBadge}>
+                      <View style={s.flightBadgeRow}>
+                        <MaterialIcons name="flight-takeoff" size={14} color={colors.primary} />
+                        <Text style={s.flightBadgeText}>{stats.flightCount} voli nel turno</Text>
+                      </View>
+                    </View>
+                  )}
+                </>
+              ) : restEvent ? (
+                <View style={s.restRow}>
+                  <View style={s.restIconBox}>
+                    <MaterialIcons name="hotel" size={22} color="#10b981" />
+                  </View>
+                  <Text style={s.restText}>{t('calRestDay')}</Text>
+                </View>
+              ) : (
+                <Text style={s.emptyText}>{t('calNoShift')}{'\n'}{selectedDay.split('-').reverse().join('/')}</Text>
+              )}
+            </View>
+
+            <View style={s.calendarCard}>
+              <RNCalendar
+                current={toLocalIso(visibleMonth)}
+                markedDates={markedDates}
+                markingType="multi-dot"
+                dayComponent={renderCalendarDay}
+                onDayPress={handleDayPress}
+                onMonthChange={handleMonthChange}
+                enableSwipeMonths
+                firstDay={1}
+                renderArrow={direction => (
+                  <MaterialIcons
+                    name={direction === 'left' ? 'chevron-left' : 'chevron-right'}
+                    size={22}
+                    color={colors.primary}
+                  />
                 )}
-              </>
-            ) : restEvent ? (
-              <View style={s.restRow}>
-                <Text style={{ fontSize: 32, marginRight: 12 }}>🌴</Text>
-                <Text style={s.restText}>{t('calRestDay')}</Text>
+                theme={{
+                  calendarBackground: 'transparent',
+                  monthTextColor: colors.primaryDark,
+                  dayTextColor: colors.text,
+                  textDisabledColor: colors.textMuted,
+                  todayTextColor: colors.primary,
+                  selectedDayTextColor: '#fff',
+                  arrowColor: colors.primary,
+                  textSectionTitleColor: colors.textSub,
+                  textMonthFontSize: 18,
+                  textMonthFontWeight: '800',
+                  textDayHeaderFontSize: 12,
+                  textDayHeaderFontWeight: '700',
+                  textDayFontSize: 15,
+                }}
+                style={s.monthCalendar}
+                headerStyle={s.monthCalendarHeader}
+              />
+              <View style={s.calendarLegend}>
+                <View style={s.legendItem}>
+                  <View style={[s.legendDot, { backgroundColor: colors.primary }]} />
+                  <Text style={s.legendText}>{t('calTypeWork')}</Text>
+                </View>
+                <View style={s.legendItem}>
+                  <View style={[s.legendDot, { backgroundColor: '#10b981' }]} />
+                  <Text style={s.legendText}>{t('calTypeRest')}</Text>
+                </View>
+                <View style={s.legendItem}>
+                  <View style={s.legendTodayRing}>
+                    <View style={s.legendTodayCenter} />
+                  </View>
+                  <Text style={s.legendText}>{t('calToday')}</Text>
+                </View>
               </View>
-            ) : (
-              <Text style={s.emptyText}>{t('calNoShift')}{'\n'}{selectedDay.split('-').reverse().join('/')}</Text>
-            )}
-          </View>
+              <View style={s.calendarSummary}>
+                <Text style={s.calendarSummaryLabel}>{t('calMonthTotalHours')}</Text>
+                <Text style={s.calendarSummaryValue}>{monthHoursSummary.totalHours.toFixed(1)} h</Text>
+                <Text style={s.calendarSummaryMeta}>
+                  {t('calMonthShiftsCount').replace('{count}', String(monthHoursSummary.shiftsCount))}
+                </Text>
+              </View>
+            </View>
+          </>
         )}
-        </Animated.View>
       </ScrollView>
 
       {/* ─── Edit Menu Modal ─── */}
@@ -550,11 +763,12 @@ export default function CalendarScreen() {
             </View>
 
             {/* Contenuto scrollabile */}
-            <ScrollView
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40 }}
-            >
+              <ScrollView
+                keyboardShouldPersistTaps="handled"
+                nestedScrollEnabled
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40 }}
+              >
               {/* Data */}
               <Text style={[s.manualLabel, { color: colors.textSub }]}>{t('calDataLabel')}</Text>
               <TextInput
@@ -575,7 +789,16 @@ export default function CalendarScreen() {
                     style={[s.manualTypeBtn, { borderColor: colors.border }, manualType === shiftType && { backgroundColor: colors.primary, borderColor: colors.primary }]}
                     onPress={() => setManualType(shiftType)}
                   >
-                    <Text style={{ color: manualType === shiftType ? '#fff' : colors.text, fontWeight: '700' }}>{shiftType === 'Lavoro' ? t('calTypeWork') : t('calTypeRest')}</Text>
+                    <View style={s.manualTypeInner}>
+                      <MaterialIcons
+                        name={shiftType === 'Lavoro' ? 'flight' : 'hotel'}
+                        size={16}
+                        color={manualType === shiftType ? '#fff' : colors.textSub}
+                      />
+                      <Text style={{ color: manualType === shiftType ? '#fff' : colors.text, fontWeight: '700' }}>
+                        {shiftType === 'Lavoro' ? t('calTypeWork') : t('calTypeRest')}
+                      </Text>
+                    </View>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -751,17 +974,44 @@ function makeStyles(c: ThemeColors) {
     pageSub: { fontSize: 11, color: c.textSub, letterSpacing: 1.5, marginTop: 3 },
     importBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 },
     importBtnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
-    weekRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: c.card, paddingVertical: 12, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: c.border },
-    navBtn: { paddingHorizontal: 8, paddingVertical: 6 },
-    navArrow: { color: c.textSub, fontSize: 13, fontWeight: 'bold' },
-    dayChipWrap: { flex: 1, alignItems: 'center' },
-    dayChip: { alignItems: 'center', paddingVertical: 6, paddingHorizontal: 2, borderRadius: 20, width: 36 },
-    dayChipSelected: { backgroundColor: c.primary },
-    dayChipName: { fontSize: 10, color: c.textSub, marginBottom: 3 },
-    dayChipNameSel: { color: '#fff' },
-    dayChipNum: { fontSize: 15, fontWeight: '600', color: c.text },
-    dayChipNumSel: { color: '#fff', fontWeight: 'bold' },
-    dot: { width: 5, height: 5, borderRadius: 3, marginTop: 3 },
+    calendarCard: {
+      backgroundColor: c.card,
+      borderRadius: 20,
+      marginHorizontal: 16,
+      marginTop: 16,
+      paddingHorizontal: 12,
+      paddingTop: 8,
+      paddingBottom: 14,
+      shadowColor: c.primary,
+      shadowOpacity: c.isDark ? 0 : 0.08,
+      shadowRadius: 10,
+      elevation: c.isDark ? 0 : 4,
+      borderWidth: c.isDark ? 1 : 0,
+      borderColor: c.glassBorder,
+    },
+    monthCalendar: { borderRadius: 16 },
+    monthCalendarHeader: { paddingBottom: 8, marginBottom: 6 },
+    dayCellWrap: { alignItems: 'center', justifyContent: 'center', paddingVertical: 2 },
+    dayCellInner: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: 'transparent' },
+    dayCellInnerSelected: { backgroundColor: c.primary },
+    dayCellInnerToday: { borderColor: c.primary, backgroundColor: c.primaryLight },
+    dayCellInnerTodaySelected: { borderColor: c.primaryDark },
+    dayCellText: { color: c.text, fontSize: 15, fontWeight: '600' },
+    dayCellTextInactive: { color: c.textMuted },
+    dayCellTextToday: { color: c.primaryDark, fontWeight: '800' },
+    dayCellTextSelected: { color: '#fff' },
+    dayDotsRow: { minHeight: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 3 },
+    dayDot: { width: 5, height: 5, borderRadius: 2.5, marginHorizontal: 1.5 },
+    calendarLegend: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, paddingHorizontal: 6, paddingTop: 8 },
+    legendItem: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    legendDot: { width: 8, height: 8, borderRadius: 4 },
+    legendTodayRing: { width: 12, height: 12, borderRadius: 6, borderWidth: 1.5, borderColor: c.primary, alignItems: 'center', justifyContent: 'center' },
+    legendTodayCenter: { width: 4, height: 4, borderRadius: 2, backgroundColor: c.primary },
+    legendText: { color: c.textSub, fontSize: 12, fontWeight: '600' },
+    calendarSummary: { marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: c.border },
+    calendarSummaryLabel: { color: c.textSub, fontSize: 12, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase' },
+    calendarSummaryValue: { color: c.primary, fontSize: 28, fontWeight: '800', marginTop: 6 },
+    calendarSummaryMeta: { color: c.textSub, fontSize: 13, fontWeight: '600', marginTop: 4 },
     mainCard: {
       backgroundColor: c.card, borderRadius: 14,
       marginHorizontal: 16, marginTop: 16,
@@ -769,13 +1019,15 @@ function makeStyles(c: ThemeColors) {
       shadowColor: c.primary, shadowOpacity: c.isDark ? 0 : 0.08, shadowRadius: 10, elevation: c.isDark ? 0 : 4, borderWidth: c.isDark ? 1 : 0, borderColor: c.glassBorder,
       minHeight: 160,
     },
+    selectedDayHeader: { marginBottom: 12, paddingRight: 90 },
+    selectedDayLabel: { color: c.textSub, fontSize: 12, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase' },
     weatherBadge: {
       position: 'absolute', top: 14, right: 14,
       flexDirection: 'row', alignItems: 'center',
       backgroundColor: c.bg, borderRadius: 10,
       paddingHorizontal: 10, paddingVertical: 6, gap: 6,
     },
-    weatherIcon: { fontSize: 18 },
+    weatherIcon: { marginRight: 2 },
     weatherPlace: { fontSize: 10, color: c.textSub, fontWeight: '600' },
     weatherText: { fontSize: 12, color: c.text, fontWeight: '600' },
     shiftTypeRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14, marginTop: 6 },
@@ -784,8 +1036,10 @@ function makeStyles(c: ThemeColors) {
     timeRow: { flexDirection: 'row', alignItems: 'center' },
     timeText: { fontSize: 22, fontWeight: 'bold', color: c.primary },
     flightBadge: { marginTop: 14, backgroundColor: c.primaryLight, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8, alignSelf: 'flex-start' },
+    flightBadgeRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     flightBadgeText: { color: c.primary, fontWeight: '700', fontSize: 13 },
     restRow: { flexDirection: 'row', alignItems: 'center', marginTop: 10 },
+    restIconBox: { width: 48, height: 48, borderRadius: 14, backgroundColor: '#10b98122', alignItems: 'center', justifyContent: 'center', marginRight: 12 },
     restText: { fontSize: 20, fontWeight: 'bold', color: '#10b981' },
     emptyText: { textAlign: 'center', color: c.textSub, fontSize: 15, marginTop: 20, lineHeight: 24 },
     // Modal
@@ -820,6 +1074,7 @@ function makeStyles(c: ThemeColors) {
     manualTimeRow: { flexDirection: 'row', gap: 10, marginBottom: 14 },
     manualTimeInput: { flex: 1, textAlign: 'center' },
     manualTypeBtn: { flex: 1, paddingVertical: 12, borderRadius: 10, borderWidth: 1.5, alignItems: 'center' },
+    manualTypeInner: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   });
 }
 
