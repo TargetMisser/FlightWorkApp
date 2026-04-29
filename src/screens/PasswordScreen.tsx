@@ -136,7 +136,14 @@ function PasswordRowComponent({ item, onEdit, onDelete }: { item: PasswordEntry;
         {item.username ? <Text style={s.username}>{item.username}</Text> : null}
         <View style={s.pwRow}>
           <Text style={s.pw}>{revealed ? item.password : '••••••••'}</Text>
-          <TouchableOpacity onPress={() => setRevealed(r => !r)} style={s.eyeBtn}>
+          <TouchableOpacity
+            onPress={() => setRevealed(r => !r)}
+            style={s.eyeBtn}
+            accessible={true}
+            accessibilityRole="button"
+            accessibilityLabel={revealed ? 'Nascondi password' : 'Mostra password'}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
             <MaterialIcons name={revealed ? 'visibility-off' : 'visibility'} size={16} color={colors.textSub} />
           </TouchableOpacity>
         </View>
