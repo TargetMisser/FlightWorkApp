@@ -140,6 +140,105 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
+const AIRLINE_IATA_CODES: Record<string, string> = {
+  'ryanair': 'FR',
+  'easyjet': 'U2',
+  'wizz': 'W6',
+  'volotea': 'V7',
+  'vueling': 'VY',
+  'transavia': 'TO',
+  'aer lingus': 'EI',
+  'british airways': 'BA',
+  'sas': 'SK',
+  'scandinavian': 'SK',
+  'flydubai': 'FZ',
+  'aeroitalia': 'XZ',
+  'air arabia maroc': '3O',
+  'air arabia': 'G9',
+  'air dolomiti': 'EN',
+  'buzz': 'RR',
+  'dhl': 'QY',
+  'eurowings': 'EW',
+  'ita airways': 'AZ',
+  'lufthansa': 'LH',
+};
+
+const FALLBACK_BRAND_COLORS = [
+  '#2563EB',
+  '#0EA5E9',
+  '#06B6D4',
+  '#14B8A6',
+  '#22C55E',
+  '#84CC16',
+  '#F59E0B',
+  '#F97316',
+  '#D946EF',
+  '#8B5CF6',
+] as const;
+
+function stableBrandColor(key: string): string {
+  let hash = 0;
+  for (let i = 0; i < key.length; i += 1) {
+    hash = ((hash << 5) - hash + key.charCodeAt(i)) | 0;
+  }
+  return FALLBACK_BRAND_COLORS[Math.abs(hash) % FALLBACK_BRAND_COLORS.length];
+}
+
+function getAirlineBrandColor(key: string, label: string): string {
+  const normalized = normalizeAirlineKey(`${key} ${label}`);
+  for (const [needle, color] of Object.entries(AIRLINE_COLORS)) {
+    if (normalized.includes(needle)) {
+      return color;
+    }
+  }
+  return stableBrandColor(normalized || key || label);
+}
+
+function getAirlineIataCode(key: string, label: string): string {
+  const normalized = normalizeAirlineKey(`${key} ${label}`);
+  for (const [needle, code] of Object.entries(AIRLINE_IATA_CODES)) {
+    if (normalized.includes(needle)) {
+      return code;
+    }
+  }
+  return '';
+}
+
+function getAirlineMonogram(label: string): string {
+  const words = label
+    .split(/[\s._-]+/)
+    .filter(Boolean);
+  if (words.length === 0) {
+    return '??';
+  }
+  return words
+    .slice(0, 2)
+    .map(part => part[0] ?? '')
+    .join('')
+    .toUpperCase()
+    .padEnd(2, '?')
+    .slice(0, 2);
+}
+
+function prettifyAirlineLabel(key: string): string {
+  return key.replace(/\b\w/g, ch => ch.toUpperCase());
+}
+
+function hexToRgba(hex: string, alpha: number): string {
+  const raw = hex.trim().replace('#', '');
+  const normalized = raw.length === 3
+    ? raw.split('').map(ch => ch + ch).join('')
+    : raw;
+  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) {
+    return `rgba(37,99,235,${alpha})`;
+  }
+  const int = parseInt(normalized, 16);
+  const r = (int >> 16) & 255;
+  const g = (int >> 8) & 255;
+  const b = int & 255;
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
 // Handler: mostra notifiche anche con app aperta (wrapped for Expo Go compat)
 try { Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -166,6 +265,33 @@ function LogoPill({ iataCode, airlineName, color }: { iataCode: string; airlineN
   return (
     <View style={{ width: 52, height: 32, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.9)', justifyContent: 'center', alignItems: 'center' }}>
       <Text style={{ color, fontWeight: '800', fontSize: 11 }}>{initials}</Text>
+    </View>
+  );
+}
+
+function AirlineFilterLogo({
+  iataCode,
+  label,
+  color,
+}: {
+  iataCode: string;
+  label: string;
+  color: string;
+}) {
+  const [err, setErr] = useState(false);
+  const logoUri = iataCode ? `https://pics.avs.io/160/60/${iataCode.toUpperCase()}.png` : '';
+  const monogram = getAirlineMonogram(label);
+  if (iataCode && !err) {
+    return (
+      <View style={{ width: 44, height: 32, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.94)', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' }}>
+        <Image source={{ uri: logoUri }} style={{ width: 38, height: 24 }} resizeMode="contain" onError={() => setErr(true)} />
+      </View>
+    );
+  }
+
+  return (
+    <View style={{ width: 44, height: 32, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.94)', justifyContent: 'center', alignItems: 'center' }}>
+      <Text style={{ color, fontWeight: '900', fontSize: 12, letterSpacing: 0.4 }}>{monogram}</Text>
     </View>
   );
 }
@@ -1447,12 +1573,22 @@ export default function FlightScreen() {
             <ScrollView showsVerticalScrollIndicator={false}>
               {airportAirlines.map(key => {
                 const checked = selectedAirlines.includes(key);
-                const dot = AIRLINE_COLORS[key] ?? '#2563EB';
-                const label = AIRLINE_DISPLAY_NAMES[key] ?? key;
+                const label = AIRLINE_DISPLAY_NAMES[key] ?? prettifyAirlineLabel(key);
+                const brandColor = getAirlineBrandColor(key, label);
+                const iataCode = getAirlineIataCode(key, label);
+                const activeBg = hexToRgba(brandColor, colors.isDark ? 0.24 : 0.18);
+                const inactiveBg = colors.isDark ? 'rgba(2,6,18,0.92)' : 'rgba(255,255,255,0.92)';
                 return (
                   <TouchableOpacity
                     key={key}
-                    style={[s.filterOption, checked && s.filterOptionActive]}
+                    style={[
+                      s.filterOption,
+                      {
+                        backgroundColor: checked ? activeBg : inactiveBg,
+                        borderColor: checked ? hexToRgba(brandColor, 0.72) : hexToRgba(brandColor, 0.28),
+                      },
+                      checked && s.filterOptionActive,
+                    ]}
                     activeOpacity={0.8}
                     onPress={() => {
                       const next = checked
@@ -1461,12 +1597,20 @@ export default function FlightScreen() {
                       applySelectedAirlines(next);
                     }}
                   >
-                    <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: dot }} />
-                    <Text style={[s.filterOptionText, { flex: 1 }, checked && { color: colors.primary }]}>{label}</Text>
+                    <AirlineFilterLogo iataCode={iataCode} label={label} color={brandColor} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={[s.filterOptionText, checked && { color: brandColor }]}>{label}</Text>
+                      <Text style={s.filterOptionSub}>
+                        {iataCode ? `IATA ${iataCode}` : key}
+                      </Text>
+                    </View>
+                    <View style={[s.filterBrandDotWrap, { backgroundColor: hexToRgba(brandColor, 0.16), borderColor: hexToRgba(brandColor, 0.45) }]}>
+                      <View style={[s.filterBrandDot, { backgroundColor: brandColor }]} />
+                    </View>
                     <MaterialIcons
                       name={checked ? 'check-box' : 'check-box-outline-blank'}
                       size={22}
-                      color={checked ? colors.primary : '#9CA3AF'}
+                      color={checked ? brandColor : '#9CA3AF'}
                     />
                   </TouchableOpacity>
                 );
@@ -1763,10 +1907,26 @@ function makeStyles(c: ThemeColors) {
     notifStepper: { flexDirection: 'row', alignItems: 'center', backgroundColor: c.bg, borderRadius: 10, padding: 4 },
     notifStepperBtn: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: c.card },
     notifStepperValue: { minWidth: 54, textAlign: 'center', fontSize: 14, fontWeight: '800', color: c.primaryDark },
-    filterOption: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 14, marginBottom: 8, backgroundColor: c.bg },
-    filterOptionActive: { backgroundColor: c.primaryLight, borderWidth: 1.5, borderColor: c.primaryLight },
+    filterOption: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 14, marginBottom: 8, borderWidth: 1.5 },
+    filterOptionActive: {
+      borderWidth: 1.5,
+      shadowColor: c.primary,
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: c.isDark ? 0.25 : 0.16,
+      shadowRadius: 7,
+      elevation: 4,
+    },
     filterOptionText: { fontSize: 15, fontWeight: '600', color: c.text },
     filterOptionSub: { fontSize: 12, color: c.textSub, marginTop: 2 },
+    filterBrandDotWrap: {
+      width: 22,
+      height: 22,
+      borderRadius: 11,
+      justifyContent: 'center',
+      alignItems: 'center',
+      borderWidth: 1,
+    },
+    filterBrandDot: { width: 10, height: 10, borderRadius: 5 },
     smFooter: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: 14, paddingBottom: 10, backgroundColor: c.card },
     smPill: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: c.primaryLight, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
     smPillText: { fontSize: 11, fontWeight: '700', color: c.primaryDark },

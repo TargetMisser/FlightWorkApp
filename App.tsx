@@ -59,13 +59,13 @@ function GlassTab({ icon, label, focused, activeColor, inactiveColor, onPress }:
 }) {
   const scale = useRef(new Animated.Value(focused ? 1.15 : 1)).current;
   const translateY = useRef(new Animated.Value(focused ? -4 : 0)).current;
-  const opacity = useRef(new Animated.Value(focused ? 1 : 0.6)).current;
+  const opacity = useRef(new Animated.Value(focused ? 1 : 0.78)).current;
 
   useEffect(() => {
     Animated.parallel([
       Animated.spring(scale, { toValue: focused ? 1.15 : 1, useNativeDriver: true, tension: 200, friction: 15 }),
       Animated.spring(translateY, { toValue: focused ? -4 : 0, useNativeDriver: true, tension: 200, friction: 15 }),
-      Animated.timing(opacity, { toValue: focused ? 1 : 0.5, duration: 150, useNativeDriver: true }),
+      Animated.timing(opacity, { toValue: focused ? 1 : 0.74, duration: 150, useNativeDriver: true }),
     ]).start();
   }, [focused]);
 
@@ -200,6 +200,7 @@ function AppInner() {
 
   const appBarTitle = overlay ? overlayTitles[overlay] : 'AeroStaff Pro';
   const isWeather   = mode === 'weather' && !!colors.gradient;
+  const tabInactiveColor = colors.isDark ? 'rgba(235,239,245,0.78)' : colors.tabIconInactive;
 
   return (
     <View style={[styles.root, { backgroundColor: colors.bg, paddingTop: StatusBar.currentHeight || 48 }]}>
@@ -275,11 +276,13 @@ function AppInner() {
         <View style={styles.tabBarWrapper} {...swipePan.panHandlers}>
           <FrostedSurface
             style={styles.tabBarBlur}
-            blurIntensity={80}
+            blurIntensity={90}
             blurTint={colors.isDark ? 'dark' : 'light'}
+            baseColor={colors.isDark ? 'rgba(8,11,16,0.84)' : 'rgba(248,250,255,0.88)'}
             gradientColors={colors.isDark
-              ? ['rgba(255,255,255,0.08)', 'rgba(10,10,12,0.34)']
-              : ['rgba(255,255,255,0.34)', 'rgba(255,244,230,0.14)']}
+              ? ['rgba(255,255,255,0.05)', 'rgba(9,11,15,0.66)']
+              : ['rgba(255,255,255,0.55)', 'rgba(255,244,230,0.34)']}
+            overlayColor={colors.isDark ? 'rgba(0,0,0,0.40)' : 'rgba(255,255,255,0.10)'}
           >
             <View style={styles.tabBarRow}>
               {TABS.map(tab => {
@@ -291,7 +294,7 @@ function AppInner() {
                     label={tabLabels[tab.id]}
                     focused={active}
                     activeColor={colors.tabIconActive}
-                    inactiveColor={colors.tabIconInactive}
+                    inactiveColor={tabInactiveColor}
                     onPress={() => {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                       goToTab(TABS.findIndex(t => t.id === tab.id));
@@ -380,8 +383,13 @@ const styles = StyleSheet.create({
     height: 66,
     borderRadius: 33,
     overflow: 'hidden',
-    borderWidth: 0.75,
-    borderColor: 'rgba(255,255,255,0.22)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.28)',
+    shadowColor: '#000',
+    shadowOpacity: 0.24,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 12,
   },
   tabBarRow: {
     flex: 1,

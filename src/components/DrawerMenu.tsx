@@ -91,11 +91,13 @@ export default function DrawerMenu({ visible, onClose, onSelect }: Props) {
         <Animated.View style={[styles.drawerWrapper, { transform: [{ translateX: slideAnim }] }]}>
           <FrostedSurface
             style={styles.blurFill}
-            blurIntensity={colors.isDark ? 56 : 44}
+            blurIntensity={colors.isDark ? 72 : 58}
             blurTint={colors.isDark ? 'dark' : 'light'}
+            baseColor={colors.isDark ? 'rgba(8,12,18,0.86)' : 'rgba(248,250,255,0.90)'}
             gradientColors={colors.isDark
-              ? ['rgba(255,255,255,0.06)', 'rgba(20,14,10,0.52)']
-              : ['rgba(255,255,255,0.40)', 'rgba(255,244,236,0.22)']}
+              ? ['rgba(255,255,255,0.05)', 'rgba(8,12,18,0.72)']
+              : ['rgba(255,255,255,0.60)', 'rgba(255,244,236,0.40)']}
+            overlayColor={colors.isDark ? 'rgba(0,0,0,0.42)' : 'rgba(255,255,255,0.10)'}
           >
             {/* Orange gradient header */}
             <LinearGradient
@@ -173,7 +175,8 @@ function makeStyles(c: ThemeColors) {
     },
     closeIconBtn: { padding: 6 },
     sectionLabel: {
-      fontSize: 10, fontWeight: '700', color: c.textMuted,
+      fontSize: 10, fontWeight: '700',
+      color: c.isDark ? 'rgba(229,233,240,0.72)' : c.textMuted,
       letterSpacing: 1.4, paddingHorizontal: 20, paddingTop: 20, paddingBottom: 8,
     },
     items: { paddingHorizontal: 10 },
@@ -181,6 +184,7 @@ function makeStyles(c: ThemeColors) {
       flexDirection: 'row', alignItems: 'center', gap: 12,
       paddingVertical: 13, paddingHorizontal: 10,
       borderRadius: 16, marginBottom: 2,
+      backgroundColor: c.isDark ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.62)',
     },
     itemIcon: {
       width: 42, height: 42, borderRadius: 14,
@@ -188,8 +192,8 @@ function makeStyles(c: ThemeColors) {
       justifyContent: 'center', alignItems: 'center',
     },
     itemLabel: { fontSize: 14, fontWeight: '600', color: c.text },
-    itemSub:   { fontSize: 11, color: c.textMuted, marginTop: 1 },
+    itemSub:   { fontSize: 11, color: c.isDark ? 'rgba(229,233,240,0.68)' : c.textMuted, marginTop: 1 },
     divider:   { height: 1, backgroundColor: c.border, marginHorizontal: 18, marginTop: 16 },
-    version:   { fontSize: 11, color: c.textMuted, textAlign: 'center', paddingTop: 14 },
+    version:   { fontSize: 11, color: c.isDark ? 'rgba(229,233,240,0.62)' : c.textMuted, textAlign: 'center', paddingTop: 14 },
   });
 }

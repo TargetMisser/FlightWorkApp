@@ -7,6 +7,7 @@ type FrostedSurfaceProps = ViewProps & {
   blurIntensity?: number;
   blurTint?: 'light' | 'dark';
   gradientColors?: [string, string, ...string[]];
+  baseColor?: string;
   overlayColor?: string;
 };
 
@@ -15,12 +16,17 @@ export default function FrostedSurface({
   blurIntensity = 80,
   blurTint = 'dark',
   gradientColors = ['rgba(10,14,22,0.66)', 'rgba(10,14,22,0.42)'],
+  baseColor = 'rgba(10,14,22,0.62)',
   overlayColor = 'rgba(0,0,0,0.22)',
   style,
   ...viewProps
 }: FrostedSurfaceProps) {
   return (
     <View {...viewProps} style={[styles.shell, style]}>
+      <View
+        pointerEvents="none"
+        style={[StyleSheet.absoluteFill, { backgroundColor: baseColor }]}
+      />
       <BlurView
         intensity={blurIntensity}
         tint={blurTint}
