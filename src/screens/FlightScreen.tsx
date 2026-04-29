@@ -876,7 +876,11 @@ async function schedulePinnedNotifications(
 }
 
 // ─── Screen ────────────────────────────────────────────────────────────────────
-export default function FlightScreen() {
+type FlightScreenProps = {
+  openNotifSettingsSignal?: number;
+};
+
+export default function FlightScreen({ openNotifSettingsSignal = 0 }: FlightScreenProps) {
   const { colors } = useAppTheme();
   const { t, locale } = useLanguage();
   const {
@@ -909,6 +913,7 @@ export default function FlightScreen() {
   const [staffMonitorDeps, setStaffMonitorDeps] = useState<StaffMonitorFlight[]>([]);
   const [staffMonitorArrs, setStaffMonitorArrs] = useState<StaffMonitorFlight[]>([]);
   const [notifSettings, setNotifSettings] = useState<FlightNotificationSettings>(DEFAULT_NOTIFICATION_SETTINGS);
+  const lastOpenNotifSettingsSignalRef = useRef(openNotifSettingsSignal);
   const applySelectedAirlines = useCallback((next: string[]) => {
     setSelectedAirlines(next);
     persistSelectedAirlines(next).catch(() => {});
@@ -929,6 +934,14 @@ export default function FlightScreen() {
   useEffect(() => {
     notifSettingsRef.current = notifSettings;
   }, [notifSettings]);
+
+  useEffect(() => {
+    if (openNotifSettingsSignal === lastOpenNotifSettingsSignalRef.current) {
+      return;
+    }
+    lastOpenNotifSettingsSignalRef.current = openNotifSettingsSignal;
+    setNotifSettingsVisible(true);
+  }, [openNotifSettingsSignal]);
 
   useEffect(() => {
     AsyncStorage.getItem(NOTIF_ENABLED_KEY).then(v => setNotifsEnabled(v === 'true'));
@@ -1809,6 +1822,15 @@ export default function FlightScreen() {
 }
 
 function makeStyles(c: ThemeColors) {
+  const filterOptionActiveShadow = Platform.OS === 'android'
+    ? {}
+    : {
+      shadowColor: c.primary,
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: c.isDark ? 0.25 : 0.16,
+      shadowRadius: 7,
+    };
+
   return StyleSheet.create({
     pageHeader: { backgroundColor: c.card, paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: c.border, flexDirection: 'row', alignItems: 'center' },
     notifBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: c.cardSecondary, justifyContent: 'center', alignItems: 'center' },
@@ -1910,11 +1932,7 @@ function makeStyles(c: ThemeColors) {
     filterOption: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 14, marginBottom: 8, borderWidth: 1.5 },
     filterOptionActive: {
       borderWidth: 1.5,
-      shadowColor: c.primary,
-      shadowOffset: { width: 0, height: 3 },
-      shadowOpacity: c.isDark ? 0.25 : 0.16,
-      shadowRadius: 7,
-      elevation: 4,
+      ...filterOptionActiveShadow,
     },
     filterOptionText: { fontSize: 15, fontWeight: '600', color: c.text },
     filterOptionSub: { fontSize: 12, color: c.textSub, marginTop: 2 },

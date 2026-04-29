@@ -94,6 +94,7 @@ function AppInner() {
   const [activeTab, setActiveTab]   = useState<Tab>('Shifts');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [overlay, setOverlay]       = useState<OverlayScreen>(null);
+  const [openFlightNotifSettingsSignal, setOpenFlightNotifSettingsSignal] = useState(0);
   const [pendingUpdate, setPendingUpdate] = useState<UpdateInfo | null>(null);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
 
@@ -147,6 +148,13 @@ function AppInner() {
     setActiveTab(TABS[newIdx].id);
   };
 
+  const openFlightNotificationsFromSettings = () => {
+    setDrawerOpen(false);
+    setOverlay(null);
+    goToTab(2);
+    setOpenFlightNotifSettingsSignal(prev => prev + 1);
+  };
+
   const swipePan = useMemo(() => PanResponder.create({
     onMoveShouldSetPanResponder: (_, g) =>
       Math.abs(g.dx) > 30 && Math.abs(g.dx) > Math.abs(g.dy) * 2,
@@ -184,7 +192,7 @@ function AppInner() {
     if (overlay === 'Phonebook') return <PhonebookScreen />;
     if (overlay === 'Passwords') return <PasswordScreen />;
     if (overlay === 'Manuals')   return <ManualsScreen />;
-    if (overlay === 'Settings')  return <SettingsScreen />;
+    if (overlay === 'Settings')  return <SettingsScreen onOpenFlightNotifications={openFlightNotificationsFromSettings} />;
     return null;
   };
 
@@ -192,7 +200,7 @@ function AppInner() {
     switch (tab) {
       case 'Shifts':    return <HomeScreen isFocused={activeTab === 'Shifts'} />;
       case 'Calendar':  return <CalendarScreen />;
-      case 'Flights':   return <FlightScreen />;
+      case 'Flights':   return <FlightScreen openNotifSettingsSignal={openFlightNotifSettingsSignal} />;
       case 'TravelDoc': return <TraveldocScreen />;
     }
   };

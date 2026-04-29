@@ -54,6 +54,34 @@ function normalizeAirlineKey(value: string | null | undefined): string {
   return (value ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
+const AIRLINE_CANONICAL_RULES: Array<{ canonical: string; needles: string[] }> = [
+  { canonical: 'ryanair', needles: ['ryanair'] },
+  { canonical: 'easyjet', needles: ['easyjet', 'easyjet europe', 'easyjet switzerland', 'easyjet uk'] },
+  { canonical: 'wizz', needles: ['wizz', 'wizz air malta', 'wizz air uk', 'wizz air abu dhabi'] },
+  { canonical: 'volotea', needles: ['volotea'] },
+  { canonical: 'vueling', needles: ['vueling'] },
+  { canonical: 'transavia', needles: ['transavia france', 'transavia holland', 'transavia airlines', 'transavia'] },
+  { canonical: 'aer lingus', needles: ['aer lingus'] },
+  { canonical: 'british airways', needles: ['british airways'] },
+  { canonical: 'sas', needles: ['sas', 'scandinavian'] },
+  { canonical: 'flydubai', needles: ['flydubai'] },
+];
+
+function canonicalizeAirlineKey(value: string | null | undefined): string {
+  const normalized = normalizeAirlineKey(value);
+  if (!normalized) {
+    return '';
+  }
+
+  for (const rule of AIRLINE_CANONICAL_RULES) {
+    if (rule.needles.some(needle => normalized.includes(needle))) {
+      return rule.canonical;
+    }
+  }
+
+  return normalized;
+}
+
 function sortAirlineKeys(values: string[]): string[] {
   return [...values].sort((left, right) => {
     const leftLabel = AIRLINE_DISPLAY_NAMES[left] ?? left;
@@ -63,7 +91,7 @@ function sortAirlineKeys(values: string[]): string[] {
 }
 
 function sanitizeAirlineList(values: string[], fallback: string[] = ALLOWED_AIRLINES): string[] {
-  const unique = Array.from(new Set(values.map(normalizeAirlineKey).filter(Boolean)));
+  const unique = Array.from(new Set(values.map(canonicalizeAirlineKey).filter(Boolean)));
   if (unique.length === 0) {
     return [...fallback];
   }

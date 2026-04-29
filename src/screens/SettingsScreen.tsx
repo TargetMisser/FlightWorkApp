@@ -182,8 +182,12 @@ type DialogState = {
   scrollable?: boolean;
 };
 
+type SettingsScreenProps = {
+  onOpenFlightNotifications?: () => void;
+};
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
-export default function SettingsScreen() {
+export default function SettingsScreen({ onOpenFlightNotifications }: SettingsScreenProps) {
   const { colors, mode, setMode, isLoading } = useAppTheme();
   const { airport, airportCode, setAirportCode, isLoading: airportLoading } = useAirport();
   const { t, lang, setLang, languages } = useLanguage();
@@ -338,6 +342,18 @@ export default function SettingsScreen() {
     }
   };
 
+  const handleOpenFlightNotifications = useCallback(() => {
+    if (onOpenFlightNotifications) {
+      onOpenFlightNotifications();
+      return;
+    }
+    showDialog({
+      title: t('notifFlights'),
+      message: t('notifFlightsSub'),
+      tone: 'info',
+    });
+  }, [onOpenFlightNotifications, showDialog, t]);
+
   return (
     <>
       <ScrollView
@@ -406,7 +422,13 @@ export default function SettingsScreen() {
       {/* ── Sezione Notifiche ── */}
       <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>{t('sectionNotifications')}</Text>
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }, colors.isDark && { elevation: 0, shadowOpacity: 0, borderWidth: 1 }]}>
-        <SettingRow icon="notifications"   label={t('notifFlights')} sublabel={t('notifFlightsSub')}  type="info" />
+        <SettingRow
+          icon="notifications"
+          label={t('notifFlights')}
+          sublabel={t('notifFlightsSub')}
+          type="arrow"
+          onPress={handleOpenFlightNotifications}
+        />
         <View style={[styles.divider, { backgroundColor: colors.border }]} />
         <SettingRow icon="alarm"           label={t('notifReminder')} sublabel={t('notifReminderSub')}            type="toggle" disabled />
       </View>
