@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View, Text, StyleSheet, ActivityIndicator, Modal, ScrollView,
-  FlatList, TouchableOpacity, RefreshControl, Image, Alert,
-  Animated, PanResponder, NativeModules, Platform,
+  FlatList, TouchableOpacity, RefreshControl, Image,
+  Animated, PanResponder, NativeModules, Platform, Switch,
 } from 'react-native';
 import { Easing } from 'react-native';
 import * as Calendar from 'expo-calendar';
@@ -21,16 +21,91 @@ import type { WidgetData, WidgetFlight, WidgetShiftData } from '../widgets/widge
 import { ShiftWidget } from '../widgets/ShiftWidget';
 import { useLanguage } from '../context/LanguageContext';
 import type { TranslationKey } from '../i18n/translations';
+import { dismissPinnedFlightNotification, showOrUpdatePinnedFlightNotification } from '../utils/pinnedFlightOngoingNotification';
 
 const WearDataSender = Platform.OS === 'android' ? NativeModules.WearDataSender : null;
 
 const NOTIF_IDS_KEY = 'aerostaff_notif_ids_v1';
 const NOTIF_ENABLED_KEY = 'aerostaff_notif_enabled';
+const NOTIF_SETTINGS_KEY = 'aerostaff_notif_settings_v1';
 const PINNED_FLIGHT_KEY = 'pinned_flight_v1';
 const PINNED_NOTIF_IDS_KEY = 'pinned_notif_ids_v1';
 const FLIGHT_FILTER_KEY = 'aerostaff_flight_filter_v1';
 const FLIGHTS_CACHE_KEY = 'aerostaff_flights_cache_v2';
 const FLIGHTS_RETENTION_SECONDS = 60 * 60;
+const MIN_NOTIF_MINUTES = 1;
+const MAX_NOTIF_MINUTES = 90;
+type FlightAlertTone = 'success' | 'warning' | 'info';
+
+type FlightNotificationSettings = {
+  onlyTrackedAirlines: boolean;
+  includeArrivals: boolean;
+  includeDepartures: boolean;
+  includeShiftEnd: boolean;
+  sticky: boolean;
+  arrivalLeadMinutes: number;
+  departureLeadMinutes: number;
+};
+
+const DEFAULT_NOTIFICATION_SETTINGS: FlightNotificationSettings = {
+  onlyTrackedAirlines: true,
+  includeArrivals: true,
+  includeDepartures: false,
+  includeShiftEnd: true,
+  sticky: false,
+  arrivalLeadMinutes: 15,
+  departureLeadMinutes: 10,
+};
+
+function normalizeAirlineKey(value: unknown): string {
+  return typeof value === 'string'
+    ? value.trim().toLowerCase().replace(/\s+/g, ' ')
+    : '';
+}
+
+function sanitizeNotificationSettings(value: unknown): FlightNotificationSettings {
+  const raw = (value && typeof value === 'object') ? (value as Record<string, unknown>) : {};
+  const num = (field: string, fallback: number) => {
+    const v = raw[field];
+    if (typeof v !== 'number' || !Number.isFinite(v)) return fallback;
+    return clamp(Math.round(v), MIN_NOTIF_MINUTES, MAX_NOTIF_MINUTES);
+  };
+
+  return {
+    onlyTrackedAirlines: typeof raw.onlyTrackedAirlines === 'boolean'
+      ? raw.onlyTrackedAirlines
+      : DEFAULT_NOTIFICATION_SETTINGS.onlyTrackedAirlines,
+    includeArrivals: typeof raw.includeArrivals === 'boolean'
+      ? raw.includeArrivals
+      : DEFAULT_NOTIFICATION_SETTINGS.includeArrivals,
+    includeDepartures: typeof raw.includeDepartures === 'boolean'
+      ? raw.includeDepartures
+      : DEFAULT_NOTIFICATION_SETTINGS.includeDepartures,
+    includeShiftEnd: typeof raw.includeShiftEnd === 'boolean'
+      ? raw.includeShiftEnd
+      : DEFAULT_NOTIFICATION_SETTINGS.includeShiftEnd,
+    sticky: typeof raw.sticky === 'boolean'
+      ? raw.sticky
+      : DEFAULT_NOTIFICATION_SETTINGS.sticky,
+    arrivalLeadMinutes: num('arrivalLeadMinutes', DEFAULT_NOTIFICATION_SETTINGS.arrivalLeadMinutes),
+    departureLeadMinutes: num('departureLeadMinutes', DEFAULT_NOTIFICATION_SETTINGS.departureLeadMinutes),
+  };
+}
+
+function shouldNotifyAirline(
+  item: any,
+  settings: FlightNotificationSettings,
+  selectedAirlines: string[],
+): boolean {
+  if (!settings.onlyTrackedAirlines || selectedAirlines.length === 0) {
+    return true;
+  }
+  const airline = normalizeAirlineKey(item?.flight?.airline?.name);
+  if (!airline) {
+    return false;
+  }
+  return selectedAirlines.some(key => airline.includes(normalizeAirlineKey(key)));
+}
 
 function flightKey(item: any, tsField: string): string {
   // Use flight number + scheduled time as a stable key.
@@ -217,6 +292,8 @@ function FlightRowComponent({ item, activeTab, userShift, pinnedFlightId, onPin,
   const reg = item.flight?.aircraft?.registration;
   const inboundTs = reg ? inboundArrivals[reg] : undefined;
   const gateOpenFromInbound = activeTab === 'departures' && ts && inboundTs ? inboundTs : undefined;
+  const pulseAnim = useRef(new Animated.Value(0)).current;
+  const [nowTs, setNowTs] = useState(() => Date.now() / 1000);
 
   const flightId = item.flight?.identification?.number?.default || null;
   const isPinned = flightId !== null && flightId === pinnedFlightId;
@@ -254,6 +331,64 @@ function FlightRowComponent({ item, activeTab, userShift, pinnedFlightId, onPin,
     };
   })() : null;
 
+  const checkinShouldPulse = activeTab === 'departures' && ts && ops ? (() => {
+    const ciOpenTs = ts - ops.checkInOpen * 60;
+    const ciCloseTs = ts - ops.checkInClose * 60;
+    return (nowTs >= ciOpenTs - 10 * 60 && nowTs < ciOpenTs)
+      || (nowTs >= ciCloseTs - 10 * 60 && nowTs < ciCloseTs);
+  })() : false;
+  const gateShouldPulse = activeTab === 'departures' && ts && ops ? (() => {
+    const gateOpenTs = gateOpenFromInbound ?? (ts - ops.gateOpen * 60);
+    const gateCloseTs = ts - ops.gateClose * 60;
+    return (nowTs >= gateOpenTs - 5 * 60 && nowTs < gateOpenTs)
+      || (nowTs >= gateCloseTs - 5 * 60 && nowTs < gateCloseTs);
+  })() : false;
+
+  useEffect(() => {
+    if (!checkinShouldPulse && !gateShouldPulse) {
+      pulseAnim.stopAnimation();
+      pulseAnim.setValue(0);
+      return;
+    }
+
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 1, duration: 520, useNativeDriver: false }),
+        Animated.timing(pulseAnim, { toValue: 0, duration: 520, useNativeDriver: false }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [checkinShouldPulse, gateShouldPulse, pulseAnim]);
+
+  const checkinPulseStyle = checkinShouldPulse
+    ? {
+        borderWidth: 1.5,
+        borderColor: '#F59E0B',
+        backgroundColor: pulseAnim.interpolate({
+          inputRange: [0, 1],
+          outputRange: [colors.primaryLight, 'rgba(245, 158, 11, 0.26)'],
+        }),
+      }
+    : null;
+  const gatePulseStyle = gateShouldPulse
+    ? {
+        borderWidth: 1.5,
+        borderColor: '#F97316',
+        backgroundColor: pulseAnim.interpolate({
+          inputRange: [0, 1],
+          outputRange: [colors.primaryLight, 'rgba(249, 115, 22, 0.28)'],
+        }),
+      }
+    : null;
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setNowTs(Date.now() / 1000);
+    }, 15000);
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <SwipeableFlightCard
       isPinned={isPinned}
@@ -279,14 +414,14 @@ function FlightRowComponent({ item, activeTab, userShift, pinnedFlightId, onPin,
         <View style={s.cardBody}>
           {activeTab === 'departures' && ops ? (
             <View style={s.opsRow}>
-              <View style={s.opsBadge}>
+              <Animated.View style={[s.opsBadge, checkinPulseStyle]}>
                 <MaterialIcons name="desktop-windows" size={16} color={colors.primary} />
                 <View>
                   <Text style={s.opsLabel}>{t('flightCheckin')}</Text>
                   <Text style={s.opsTime}>{fmt(ops.checkInOpen)} – {fmt(ops.checkInClose)}</Text>
                 </View>
-              </View>
-              <View style={s.opsBadge}>
+              </Animated.View>
+              <Animated.View style={[s.opsBadge, gatePulseStyle]}>
                 <MaterialIcons name="meeting-room" size={16} color={colors.primary} />
                 <View>
                   <Text style={s.opsLabel}>{t('flightGate')}</Text>
@@ -294,7 +429,7 @@ function FlightRowComponent({ item, activeTab, userShift, pinnedFlightId, onPin,
                     {gateOpenFromInbound ? fmtTs(gateOpenFromInbound) : fmt(ops.gateOpen)} – {fmt(ops.gateClose)}
                   </Text>
                 </View>
-              </View>
+              </Animated.View>
             </View>
           ) : activeTab === 'arrivals' && ts ? (() => {
             const realDep = item.flight?.time?.real?.departure;
@@ -437,53 +572,95 @@ async function cancelPreviousNotifications() {
 }
 
 async function scheduleShiftNotifications(
-  shiftFlights: any[],
+  shiftArrivals: any[],
+  shiftDepartures: any[],
   shiftEnd: number,
   locale: string,
+  settings: FlightNotificationSettings,
+  selectedAirlines: string[],
 ): Promise<number> {
   await cancelPreviousNotifications();
   const now = Date.now() / 1000;
   const newIds: string[] = [];
+  const canNotify = (item: any) => shouldNotifyAirline(item, settings, selectedAirlines);
 
-  for (const item of shiftFlights) {
-    const ts: number | undefined = item.flight?.time?.scheduled?.arrival;
-    if (!ts) continue;
-    const secondsUntilNotify = ts - 15 * 60 - now; // 15 min prima
-    if (secondsUntilNotify <= 0) continue;           // già passato
+  if (settings.includeArrivals) {
+    for (const item of shiftArrivals) {
+      if (!canNotify(item)) continue;
+      const ts: number | undefined = item.flight?.time?.scheduled?.arrival;
+      if (!ts) continue;
+      const secondsUntilNotify = ts - settings.arrivalLeadMinutes * 60 - now;
+      if (secondsUntilNotify <= 0) continue;
 
-    const flightNumber = item.flight?.identification?.number?.default || 'N/A';
-    const airline      = item.flight?.airline?.name || 'Sconosciuta';
-    const origin       = item.flight?.airport?.origin?.name
-                      || item.flight?.airport?.origin?.code?.iata
-                      || 'N/A';
-    const arrivalTime  = new Date(ts * 1000).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+      const flightNumber = item.flight?.identification?.number?.default || 'N/A';
+      const airline = item.flight?.airline?.name || 'Sconosciuta';
+      const origin = item.flight?.airport?.origin?.name
+        || item.flight?.airport?.origin?.code?.iata
+        || 'N/A';
+      const arrivalTime = new Date(ts * 1000).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
 
-    const id = await Notifications.scheduleNotificationAsync({
-      content: {
-        title: `Arrivo tra 15 min - ${flightNumber}`,
-        body: `${airline} da ${origin} · atterraggio alle ${arrivalTime}`,
-        sound: true,
-        data: { flightNumber, ts },
-      },
-      trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: Math.round(secondsUntilNotify), repeats: false },
-    });
-    newIds.push(id);
+      const id = await Notifications.scheduleNotificationAsync({
+        content: {
+          title: `Arrivo tra ${settings.arrivalLeadMinutes} min - ${flightNumber}`,
+          body: `${airline} da ${origin} · atterraggio alle ${arrivalTime}`,
+          sound: true,
+          sticky: settings.sticky,
+          autoDismiss: !settings.sticky,
+          data: { flightNumber, ts, type: 'arrival_shift' },
+        },
+        trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: Math.round(secondsUntilNotify), repeats: false },
+      });
+      newIds.push(id);
+    }
   }
 
-  // Notifica fine turno
-  const secondsUntilEnd = shiftEnd - now;
-  if (secondsUntilEnd > 0) {
-    const endTime = new Date(shiftEnd * 1000).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
-    const endId = await Notifications.scheduleNotificationAsync({
-      content: {
-        title: 'Turno terminato',
-        body: `Buon lavoro! Il tuo turno delle ${endTime} è concluso.`,
-        sound: true,
-        data: { type: 'shift_end' },
-      },
-      trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: Math.round(secondsUntilEnd), repeats: false },
-    });
-    newIds.push(endId);
+  if (settings.includeDepartures) {
+    for (const item of shiftDepartures) {
+      if (!canNotify(item)) continue;
+      const ts: number | undefined = item.flight?.time?.scheduled?.departure;
+      if (!ts) continue;
+      const secondsUntilNotify = ts - settings.departureLeadMinutes * 60 - now;
+      if (secondsUntilNotify <= 0) continue;
+
+      const flightNumber = item.flight?.identification?.number?.default || 'N/A';
+      const airline = item.flight?.airline?.name || 'Sconosciuta';
+      const destination = item.flight?.airport?.destination?.name
+        || item.flight?.airport?.destination?.code?.iata
+        || 'N/A';
+      const departureTime = new Date(ts * 1000).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+
+      const id = await Notifications.scheduleNotificationAsync({
+        content: {
+          title: `Partenza tra ${settings.departureLeadMinutes} min - ${flightNumber}`,
+          body: `${airline} → ${destination} · decollo alle ${departureTime}`,
+          sound: true,
+          sticky: settings.sticky,
+          autoDismiss: !settings.sticky,
+          data: { flightNumber, ts, type: 'departure_shift' },
+        },
+        trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: Math.round(secondsUntilNotify), repeats: false },
+      });
+      newIds.push(id);
+    }
+  }
+
+  if (settings.includeShiftEnd) {
+    const secondsUntilEnd = shiftEnd - now;
+    if (secondsUntilEnd > 0) {
+      const endTime = new Date(shiftEnd * 1000).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+      const endId = await Notifications.scheduleNotificationAsync({
+        content: {
+          title: 'Turno terminato',
+          body: `Buon lavoro! Il tuo turno delle ${endTime} è concluso.`,
+          sound: true,
+          sticky: settings.sticky,
+          autoDismiss: !settings.sticky,
+          data: { type: 'shift_end' },
+        },
+        trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: Math.round(secondsUntilEnd), repeats: false },
+      });
+      newIds.push(endId);
+    }
   }
 
   await AsyncStorage.setItem(NOTIF_IDS_KEY, JSON.stringify(newIds));
@@ -498,7 +675,12 @@ async function cancelPinnedNotifications() {
   await AsyncStorage.removeItem(PINNED_NOTIF_IDS_KEY);
 }
 
-async function schedulePinnedNotifications(item: any, tab: 'arrivals' | 'departures', locale: string): Promise<void> {
+async function schedulePinnedNotifications(
+  item: any,
+  tab: 'arrivals' | 'departures',
+  locale: string,
+  settings: FlightNotificationSettings,
+): Promise<void> {
   await cancelPinnedNotifications();
   const now = Date.now() / 1000;
   const ids: string[] = [];
@@ -507,17 +689,19 @@ async function schedulePinnedNotifications(item: any, tab: 'arrivals' | 'departu
   const airline = item.flight?.airline?.name || 'Sconosciuta';
 
   if (tab === 'arrivals') {
-    const ts = item.flight?.time?.scheduled?.arrival;
+    const ts: number | undefined = item.flight?.time?.scheduled?.arrival;
     if (!ts) return;
     const origin = item.flight?.airport?.origin?.name || item.flight?.airport?.origin?.code?.iata || 'N/A';
     const arrTime = new Date(ts * 1000).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
-    const secsUntil = ts - 15 * 60 - now;
+    const secsUntil = ts - settings.arrivalLeadMinutes * 60 - now;
     if (secsUntil > 0) {
       const id = await Notifications.scheduleNotificationAsync({
         content: {
-          title: `Arrivo tra 15 min - ${flightNumber}`,
+          title: `Arrivo tra ${settings.arrivalLeadMinutes} min - ${flightNumber}`,
           body: `${airline} da ${origin} · atterraggio alle ${arrTime}`,
           sound: true,
+          sticky: settings.sticky,
+          autoDismiss: !settings.sticky,
           data: { flightNumber, ts, pinned: true },
         },
         trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: Math.round(secsUntil), repeats: false },
@@ -535,7 +719,11 @@ async function schedulePinnedNotifications(item: any, tab: 'arrivals' | 'departu
       { offset: ops.checkInOpen, title: `Check-in aperto - ${flightNumber}`, body: `Check-in aperto per il volo delle ${depTime} → ${dest}` },
       { offset: ops.gateOpen, title: `Gate aperto - ${flightNumber}`, body: `Gate aperto per il volo delle ${depTime} → ${dest}` },
       { offset: ops.gateClose, title: `Chiusura gate - ${flightNumber}`, body: `Gate in chiusura per il volo delle ${depTime} → ${dest}` },
-      { offset: 10, title: `Partenza tra 10 min - ${flightNumber}`, body: `${airline} → ${dest} · partenza alle ${depTime}` },
+      {
+        offset: settings.departureLeadMinutes,
+        title: `Partenza tra ${settings.departureLeadMinutes} min - ${flightNumber}`,
+        body: `${airline} → ${dest} · partenza alle ${depTime}`,
+      },
     ];
 
     for (const phase of phases) {
@@ -546,6 +734,8 @@ async function schedulePinnedNotifications(item: any, tab: 'arrivals' | 'departu
           title: phase.title,
           body: phase.body,
           sound: true,
+          sticky: settings.sticky,
+          autoDismiss: !settings.sticky,
           data: { flightNumber, ts, pinned: true },
         },
         trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: Math.round(secsUntil), repeats: false },
@@ -584,18 +774,23 @@ export default function FlightScreen() {
   const [pinnedFlightId, setPinnedFlightId] = useState<string | null>(null);
   const [inboundArrivals, setInboundArrivals] = useState<Record<string, number>>({});
   const [filterMenuVisible, setFilterMenuVisible] = useState(false);
+  const [notifSettingsVisible, setNotifSettingsVisible] = useState(false);
+  const [notifDialog, setNotifDialog] = useState<{ title: string; message: string; tone: FlightAlertTone } | null>(null);
   const [allArrivalsFull, setAllArrivalsFull] = useState<any[]>([]);
   const [allDeparturesFull, setAllDeparturesFull] = useState<any[]>([]);
   const [airportAirlines, setAirportAirlines] = useState<string[]>([]);
   const [selectedAirlines, setSelectedAirlines] = useState<string[]>([]);
   const [staffMonitorDeps, setStaffMonitorDeps] = useState<StaffMonitorFlight[]>([]);
   const [staffMonitorArrs, setStaffMonitorArrs] = useState<StaffMonitorFlight[]>([]);
+  const [notifSettings, setNotifSettings] = useState<FlightNotificationSettings>(DEFAULT_NOTIFICATION_SETTINGS);
   const applySelectedAirlines = useCallback((next: string[]) => {
     setSelectedAirlines(next);
     persistSelectedAirlines(next).catch(() => {});
   }, [persistSelectedAirlines]);
   const airportAirlinesRef = useRef<string[]>([]);
   const selectedAirlinesRef = useRef<string[]>([]);
+  const notifSettingsRef = useRef<FlightNotificationSettings>(DEFAULT_NOTIFICATION_SETTINGS);
+  const selectedAirlinesNotifSignatureRef = useRef<string>('');
 
   useEffect(() => {
     airportAirlinesRef.current = airportAirlines;
@@ -606,7 +801,18 @@ export default function FlightScreen() {
   }, [selectedAirlines]);
 
   useEffect(() => {
+    notifSettingsRef.current = notifSettings;
+  }, [notifSettings]);
+
+  useEffect(() => {
     AsyncStorage.getItem(NOTIF_ENABLED_KEY).then(v => setNotifsEnabled(v === 'true'));
+    AsyncStorage.getItem(NOTIF_SETTINGS_KEY).then(raw => {
+      if (!raw) return;
+      try {
+        const next = sanitizeNotificationSettings(JSON.parse(raw));
+        setNotifSettings(next);
+      } catch {}
+    });
     // Carica voli accumulati oggi così sono visibili prima del primo fetch
     const today = new Date().toISOString().split('T')[0];
     AsyncStorage.getItem(FLIGHTS_CACHE_KEY).then(raw => {
@@ -722,6 +928,7 @@ export default function FlightScreen() {
       setDepartures(fetchedDepartures);
 
       // Auto-clear expired pinned flight or stale data from another airport
+      const notificationsEnabledNow = (await AsyncStorage.getItem(NOTIF_ENABLED_KEY)) === 'true';
       const pinnedRaw = await AsyncStorage.getItem(PINNED_FLIGHT_KEY);
       if (pinnedRaw) {
         try {
@@ -736,7 +943,16 @@ export default function FlightScreen() {
           if ((pinTs && pinTs < Date.now() / 1000) || !stillPresent) {
             await AsyncStorage.removeItem(PINNED_FLIGHT_KEY);
             await cancelPinnedNotifications();
+            await dismissPinnedFlightNotification();
             setPinnedFlightId(null);
+          } else if (stillPresent && pinId && notificationsEnabledNow) {
+            const updated = pool.find(item => item.flight?.identification?.number?.default === pinId);
+            if (updated) {
+              await showOrUpdatePinnedFlightNotification(updated, pinTab, notifSettingsRef.current.sticky);
+            }
+          } else if (!notificationsEnabledNow) {
+            await cancelPinnedNotifications();
+            await dismissPinnedFlightNotification();
           }
         } catch {}
       }
@@ -850,13 +1066,23 @@ export default function FlightScreen() {
       } catch {}
 
       // Schedula notifiche se attive (solo turno di oggi)
-      const enabled = (await AsyncStorage.getItem(NOTIF_ENABLED_KEY)) === 'true';
-      if (enabled && shiftToday) {
-        const shiftFlights = fetchedArrivals.filter(item => {
+      if (notificationsEnabledNow && shiftToday) {
+        const shiftArrivals = fetchedArrivals.filter(item => {
           const ts = item.flight?.time?.scheduled?.arrival;
-          return ts && ts >= shiftToday!.start && ts <= shiftToday!.end;
+          return ts && ts >= shiftToday.start && ts <= shiftToday.end;
         });
-        const count = await scheduleShiftNotifications(shiftFlights, shiftToday!.end, locale);
+        const shiftDepartures = fetchedDepartures.filter(item => {
+          const ts = item.flight?.time?.scheduled?.departure;
+          return ts && ts >= shiftToday.start && ts <= shiftToday.end;
+        });
+        const count = await scheduleShiftNotifications(
+          shiftArrivals,
+          shiftDepartures,
+          shiftToday.end,
+          locale,
+          notifSettingsRef.current,
+          selectedAirlinesRef.current,
+        );
         setScheduledCount(count);
       } else {
         await cancelPreviousNotifications();
@@ -911,43 +1137,121 @@ export default function FlightScreen() {
     return () => clearInterval(iv);
   }, []);
 
-  // Toggle notifiche
-  const toggleNotifications = useCallback(async () => {
-    const { status } = await Notifications.requestPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert(t('flightNotifPermDenied'), t('flightNotifPermMsg'));
+  const showNotifDialog = useCallback((title: string, message: string, tone: FlightAlertTone) => {
+    setNotifDialog({ title, message, tone });
+  }, []);
+
+  const scheduleNotificationsForCurrentShift = useCallback(async (
+    settings: FlightNotificationSettings = notifSettingsRef.current,
+  ): Promise<number> => {
+    if (!shifts.today) {
+      await cancelPreviousNotifications();
+      setScheduledCount(0);
+      return 0;
+    }
+
+    const shiftArrivals = arrivals.filter(item => {
+      const ts = item.flight?.time?.scheduled?.arrival;
+      return ts && ts >= shifts.today!.start && ts <= shifts.today!.end;
+    });
+    const shiftDepartures = departures.filter(item => {
+      const ts = item.flight?.time?.scheduled?.departure;
+      return ts && ts >= shifts.today!.start && ts <= shifts.today!.end;
+    });
+    const count = await scheduleShiftNotifications(
+      shiftArrivals,
+      shiftDepartures,
+      shifts.today.end,
+      locale,
+      settings,
+      selectedAirlinesRef.current,
+    );
+    setScheduledCount(count);
+    return count;
+  }, [arrivals, departures, locale, shifts.today]);
+
+  const setNotificationsEnabled = useCallback(async (next: boolean) => {
+    if (!next) {
+      setNotifsEnabled(false);
+      await AsyncStorage.setItem(NOTIF_ENABLED_KEY, 'false');
+      await cancelPreviousNotifications();
+      await cancelPinnedNotifications();
+      await dismissPinnedFlightNotification();
+      setScheduledCount(0);
       return;
     }
-    const next = !notifsEnabled;
-    setNotifsEnabled(next);
-    await AsyncStorage.setItem(NOTIF_ENABLED_KEY, String(next));
 
-    if (!next) {
+    const { status } = await Notifications.requestPermissionsAsync();
+    if (status !== 'granted') {
+      showNotifDialog(t('flightNotifPermDenied'), t('flightNotifPermMsg'), 'warning');
+      return;
+    }
+
+    if (!shifts.today) {
+      showNotifDialog(t('flightNoShift'), t('flightNoShiftMsg'), 'info');
+      setNotifsEnabled(false);
+      await AsyncStorage.setItem(NOTIF_ENABLED_KEY, 'false');
       await cancelPreviousNotifications();
       setScheduledCount(0);
       return;
     }
 
-    // Schedula subito con i dati già caricati (turno di oggi)
-    if (shifts.today) {
-      const shiftFlights = arrivals.filter(item => {
-        const ts = item.flight?.time?.scheduled?.arrival;
-        return ts && ts >= shifts.today!.start && ts <= shifts.today!.end;
-      });
-      const count = await scheduleShiftNotifications(shiftFlights, shifts.today!.end, locale);
-      setScheduledCount(count);
-      Alert.alert(
-        t('flightNotifEnabled'),
-        count > 0
-          ? `${t('flightNotifMsg1').replace('{count}', String(count))}`
-          : t('flightNotifMsg0'),
-      );
-    } else {
-      Alert.alert(t('flightNoShift'), t('flightNoShiftMsg'));
-      setNotifsEnabled(false);
-      await AsyncStorage.setItem(NOTIF_ENABLED_KEY, 'false');
+    setNotifsEnabled(true);
+    await AsyncStorage.setItem(NOTIF_ENABLED_KEY, 'true');
+    const pinnedRaw = await AsyncStorage.getItem(PINNED_FLIGHT_KEY);
+    if (pinnedRaw) {
+      try {
+        const pinned = JSON.parse(pinnedRaw);
+        const pinTab = pinned._pinTab || 'departures';
+        await schedulePinnedNotifications(pinned, pinTab, locale, notifSettingsRef.current);
+        await showOrUpdatePinnedFlightNotification(pinned, pinTab, notifSettingsRef.current.sticky);
+      } catch {}
     }
-  }, [notifsEnabled, shifts, arrivals]);
+    const count = await scheduleNotificationsForCurrentShift();
+    showNotifDialog(
+      t('flightNotifEnabled'),
+      count > 0
+        ? t('flightNotifMsg1').replace('{count}', String(count))
+        : t('flightNotifMsg0'),
+      'success',
+    );
+  }, [scheduleNotificationsForCurrentShift, shifts.today, showNotifDialog, t]);
+
+  const persistNotificationSettings = useCallback(async (next: FlightNotificationSettings) => {
+    setNotifSettings(next);
+    await AsyncStorage.setItem(NOTIF_SETTINGS_KEY, JSON.stringify(next));
+  }, []);
+
+  const updateNotificationSettings = useCallback(async (
+    patch: Partial<FlightNotificationSettings>,
+  ) => {
+    const next = sanitizeNotificationSettings({ ...notifSettingsRef.current, ...patch });
+    await persistNotificationSettings(next);
+
+    if (notifsEnabled && pinnedFlightId) {
+      const pinnedRaw = await AsyncStorage.getItem(PINNED_FLIGHT_KEY);
+      if (pinnedRaw) {
+        try {
+          const pinned = JSON.parse(pinnedRaw);
+          const pinTab = pinned._pinTab || 'departures';
+          await schedulePinnedNotifications(pinned, pinTab, locale, next);
+          await showOrUpdatePinnedFlightNotification(pinned, pinTab, next.sticky);
+        } catch {}
+      }
+    }
+
+    if (notifsEnabled) {
+      await scheduleNotificationsForCurrentShift(next);
+    }
+  }, [locale, notifsEnabled, persistNotificationSettings, pinnedFlightId, scheduleNotificationsForCurrentShift]);
+
+  useEffect(() => {
+    const signature = selectedAirlines.join('|');
+    const changed = signature !== selectedAirlinesNotifSignatureRef.current;
+    selectedAirlinesNotifSignatureRef.current = signature;
+    if (!changed || !notifsEnabled) return;
+    scheduleNotificationsForCurrentShift().catch(() => {});
+  }, [notifsEnabled, scheduleNotificationsForCurrentShift, selectedAirlines]);
 
   const pinFlight = useCallback(async (item: any) => {
     try {
@@ -956,7 +1260,12 @@ export default function FlightScreen() {
       const tab = activeTab;
       await AsyncStorage.setItem(PINNED_FLIGHT_KEY, JSON.stringify({ ...item, _pinTab: tab, _pinnedAt: Date.now() }));
       setPinnedFlightId(id);
-      try { await schedulePinnedNotifications(item, tab, locale); } catch (e) { if (__DEV__) console.warn('[pinnedNotif]', e); }
+      if (notifsEnabled) {
+        try { await schedulePinnedNotifications(item, tab, locale, notifSettingsRef.current); } catch (e) { if (__DEV__) console.warn('[pinnedNotif]', e); }
+        await showOrUpdatePinnedFlightNotification(item, tab, notifSettingsRef.current.sticky);
+      } else {
+        await dismissPinnedFlightNotification();
+      }
       // Send to watch
       if (WearDataSender) {
         const payload = JSON.stringify({
@@ -978,12 +1287,13 @@ export default function FlightScreen() {
         WearDataSender.sendPinnedFlight(payload);
       }
     } catch {}
-  }, [activeTab, inboundArrivals]);
+  }, [activeTab, inboundArrivals, locale, notifsEnabled]);
 
   const unpinFlight = useCallback(async () => {
     try {
       await AsyncStorage.removeItem(PINNED_FLIGHT_KEY);
       try { await cancelPinnedNotifications(); } catch (e) { if (__DEV__) console.warn('[cancelPinNotif]', e); }
+      await dismissPinnedFlightNotification();
       setPinnedFlightId(null);
       if (WearDataSender) WearDataSender.clearPinnedFlight();
     } catch (e) { if (__DEV__) console.error('[unpin]', e); }
@@ -1029,6 +1339,9 @@ export default function FlightScreen() {
       t={t}
     />
   ), [activeTab, userShift, s, pinnedFlightId, pinFlight, unpinFlight, inboundArrivals, colors, staffMonitorDeps, staffMonitorArrs, locale, t]);
+  const notifSummary = scheduledCount > 0
+    ? t('flightNotifMsg1').replace('{count}', String(scheduledCount))
+    : t('flightNotifMsg0');
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
@@ -1049,10 +1362,10 @@ export default function FlightScreen() {
         </TouchableOpacity>
         <TouchableOpacity
           style={[s.notifBtn, notifsEnabled && s.notifBtnActive]}
-          onPress={toggleNotifications}
+          onPress={() => setNotifSettingsVisible(true)}
           activeOpacity={0.8}
           accessible
-          accessibilityLabel={notifsEnabled ? 'Disattiva notifiche voli' : 'Attiva notifiche voli'}
+          accessibilityLabel={t('flightNotifSettingsTitle')}
           accessibilityRole="button"
         >
           <MaterialIcons
@@ -1162,6 +1475,191 @@ export default function FlightScreen() {
           </View>
         </TouchableOpacity>
       </Modal>
+
+      <Modal
+        visible={notifSettingsVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setNotifSettingsVisible(false)}
+      >
+        <TouchableOpacity
+          style={s.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setNotifSettingsVisible(false)}
+        >
+          <View style={s.filterSheet} onStartShouldSetResponder={() => true}>
+            <View style={s.filterSheetHandle} />
+            <Text style={s.filterSheetTitle}>{t('flightNotifSettingsTitle')}</Text>
+            <Text style={s.notifSheetSub}>{t('flightNotifSettingsSub')}</Text>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <View style={s.notifRow}>
+                <View style={s.notifRowTextWrap}>
+                  <Text style={s.notifRowTitle}>{notifsEnabled ? t('flightNotifAccessDisable') : t('flightNotifAccessEnable')}</Text>
+                  <Text style={s.notifRowSub}>{notifSummary}</Text>
+                </View>
+                <Switch
+                  value={notifsEnabled}
+                  onValueChange={(value) => { setNotificationsEnabled(value).catch(() => {}); }}
+                  trackColor={{ false: '#94A3B8', true: colors.primary }}
+                  thumbColor="#fff"
+                />
+              </View>
+
+              <View style={s.notifDivider} />
+
+              <View style={s.notifRow}>
+                <View style={s.notifRowTextWrap}>
+                  <Text style={s.notifRowTitle}>{t('flightNotifOnlyTracked')}</Text>
+                  <Text style={s.notifRowSub}>{t('flightNotifOnlyTrackedSub')}</Text>
+                </View>
+                <Switch
+                  value={notifSettings.onlyTrackedAirlines}
+                  onValueChange={(value) => { updateNotificationSettings({ onlyTrackedAirlines: value }).catch(() => {}); }}
+                  trackColor={{ false: '#94A3B8', true: colors.primary }}
+                  thumbColor="#fff"
+                />
+              </View>
+
+              <View style={s.notifRow}>
+                <View style={s.notifRowTextWrap}>
+                  <Text style={s.notifRowTitle}>{t('flightNotifArrivalsToggle')}</Text>
+                  <Text style={s.notifRowSub}>{t('flightNotifArrivalsToggleSub')}</Text>
+                </View>
+                <Switch
+                  value={notifSettings.includeArrivals}
+                  onValueChange={(value) => { updateNotificationSettings({ includeArrivals: value }).catch(() => {}); }}
+                  trackColor={{ false: '#94A3B8', true: colors.primary }}
+                  thumbColor="#fff"
+                />
+              </View>
+
+              <View style={s.notifRow}>
+                <View style={s.notifRowTextWrap}>
+                  <Text style={s.notifRowTitle}>{t('flightNotifDeparturesToggle')}</Text>
+                  <Text style={s.notifRowSub}>{t('flightNotifDeparturesToggleSub')}</Text>
+                </View>
+                <Switch
+                  value={notifSettings.includeDepartures}
+                  onValueChange={(value) => { updateNotificationSettings({ includeDepartures: value }).catch(() => {}); }}
+                  trackColor={{ false: '#94A3B8', true: colors.primary }}
+                  thumbColor="#fff"
+                />
+              </View>
+
+              <View style={s.notifRow}>
+                <View style={s.notifRowTextWrap}>
+                  <Text style={s.notifRowTitle}>{t('flightNotifShiftEndToggle')}</Text>
+                  <Text style={s.notifRowSub}>{t('flightNotifShiftEndToggleSub')}</Text>
+                </View>
+                <Switch
+                  value={notifSettings.includeShiftEnd}
+                  onValueChange={(value) => { updateNotificationSettings({ includeShiftEnd: value }).catch(() => {}); }}
+                  trackColor={{ false: '#94A3B8', true: colors.primary }}
+                  thumbColor="#fff"
+                />
+              </View>
+
+              <View style={s.notifRow}>
+                <View style={s.notifRowTextWrap}>
+                  <Text style={s.notifRowTitle}>{t('flightNotifStickyToggle')}</Text>
+                  <Text style={s.notifRowSub}>{t('flightNotifStickyToggleSub')}</Text>
+                </View>
+                <Switch
+                  value={notifSettings.sticky}
+                  onValueChange={(value) => { updateNotificationSettings({ sticky: value }).catch(() => {}); }}
+                  trackColor={{ false: '#94A3B8', true: colors.primary }}
+                  thumbColor="#fff"
+                />
+              </View>
+
+              <View style={s.notifDivider} />
+
+              <View style={s.notifMinutesRow}>
+                <Text style={s.notifRowTitle}>{t('flightNotifArrivalLead')}</Text>
+                <View style={s.notifStepper}>
+                  <TouchableOpacity
+                    style={s.notifStepperBtn}
+                    onPress={() => updateNotificationSettings({
+                      arrivalLeadMinutes: clamp(notifSettings.arrivalLeadMinutes - 1, MIN_NOTIF_MINUTES, MAX_NOTIF_MINUTES),
+                    }).catch(() => {})}
+                  >
+                    <MaterialIcons name="remove" size={18} color={colors.primaryDark} />
+                  </TouchableOpacity>
+                  <Text style={s.notifStepperValue}>{notifSettings.arrivalLeadMinutes}m</Text>
+                  <TouchableOpacity
+                    style={s.notifStepperBtn}
+                    onPress={() => updateNotificationSettings({
+                      arrivalLeadMinutes: clamp(notifSettings.arrivalLeadMinutes + 1, MIN_NOTIF_MINUTES, MAX_NOTIF_MINUTES),
+                    }).catch(() => {})}
+                  >
+                    <MaterialIcons name="add" size={18} color={colors.primaryDark} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <View style={s.notifMinutesRow}>
+                <Text style={s.notifRowTitle}>{t('flightNotifDepartureLead')}</Text>
+                <View style={s.notifStepper}>
+                  <TouchableOpacity
+                    style={s.notifStepperBtn}
+                    onPress={() => updateNotificationSettings({
+                      departureLeadMinutes: clamp(notifSettings.departureLeadMinutes - 1, MIN_NOTIF_MINUTES, MAX_NOTIF_MINUTES),
+                    }).catch(() => {})}
+                  >
+                    <MaterialIcons name="remove" size={18} color={colors.primaryDark} />
+                  </TouchableOpacity>
+                  <Text style={s.notifStepperValue}>{notifSettings.departureLeadMinutes}m</Text>
+                  <TouchableOpacity
+                    style={s.notifStepperBtn}
+                    onPress={() => updateNotificationSettings({
+                      departureLeadMinutes: clamp(notifSettings.departureLeadMinutes + 1, MIN_NOTIF_MINUTES, MAX_NOTIF_MINUTES),
+                    }).catch(() => {})}
+                  >
+                    <MaterialIcons name="add" size={18} color={colors.primaryDark} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      <Modal
+        visible={Boolean(notifDialog)}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setNotifDialog(null)}
+      >
+        <View style={s.alertOverlay}>
+          <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => setNotifDialog(null)} />
+          <View style={s.alertCard}>
+            <View style={s.alertHeader}>
+              <View
+                style={[
+                  s.alertIconWrap,
+                  notifDialog?.tone === 'success'
+                    ? s.alertSuccess
+                    : notifDialog?.tone === 'warning'
+                      ? s.alertWarning
+                      : s.alertInfo,
+                ]}
+              >
+                <MaterialIcons
+                  name={notifDialog?.tone === 'success' ? 'notifications-active' : notifDialog?.tone === 'warning' ? 'warning-amber' : 'info-outline'}
+                  size={18}
+                  color="#fff"
+                />
+              </View>
+              <Text style={s.alertTitle}>{notifDialog?.title}</Text>
+            </View>
+            <Text style={s.alertMessage}>{notifDialog?.message}</Text>
+            <TouchableOpacity style={s.alertBtn} onPress={() => setNotifDialog(null)} activeOpacity={0.85}>
+              <Text style={s.alertBtnTxt}>OK</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1233,9 +1731,38 @@ function makeStyles(c: ThemeColors) {
     filterBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: c.cardSecondary, justifyContent: 'center', alignItems: 'center', marginRight: 8 },
     filterBtnActive: { backgroundColor: c.primary, shadowColor: c.primary, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.35, shadowRadius: 6, elevation: 5 },
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' },
+    alertOverlay: { flex: 1, backgroundColor: 'rgba(2,6,23,0.55)', justifyContent: 'center', alignItems: 'center', padding: 24 },
+    alertCard: {
+      width: '100%',
+      maxWidth: 440,
+      borderRadius: 20,
+      padding: 18,
+      backgroundColor: c.card,
+      borderWidth: 1,
+      borderColor: c.glassBorder,
+    },
+    alertHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 10 },
+    alertIconWrap: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+    alertSuccess: { backgroundColor: '#16A34A' },
+    alertWarning: { backgroundColor: '#EA580C' },
+    alertInfo: { backgroundColor: c.primary },
+    alertTitle: { flex: 1, fontSize: 28, fontWeight: '900', color: c.text },
+    alertMessage: { fontSize: 17, lineHeight: 24, color: c.textSub, marginBottom: 16 },
+    alertBtn: { alignSelf: 'flex-end', paddingHorizontal: 18, paddingVertical: 10, borderRadius: 12, backgroundColor: c.primary },
+    alertBtnTxt: { color: '#fff', fontSize: 15, fontWeight: '800' },
     filterSheet: { backgroundColor: c.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 36 },
     filterSheetHandle: { width: 36, height: 4, borderRadius: 2, backgroundColor: c.border, alignSelf: 'center', marginBottom: 16 },
     filterSheetTitle: { fontSize: 16, fontWeight: '700', color: c.text, marginBottom: 16, textAlign: 'center' },
+    notifSheetSub: { fontSize: 13, color: c.textSub, textAlign: 'center', marginTop: -8, marginBottom: 16 },
+    notifRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 },
+    notifRowTextWrap: { flex: 1 },
+    notifRowTitle: { fontSize: 14, fontWeight: '700', color: c.text },
+    notifRowSub: { fontSize: 12, color: c.textSub, marginTop: 2 },
+    notifDivider: { height: 1, backgroundColor: c.border, marginVertical: 10 },
+    notifMinutesRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10 },
+    notifStepper: { flexDirection: 'row', alignItems: 'center', backgroundColor: c.bg, borderRadius: 10, padding: 4 },
+    notifStepperBtn: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: c.card },
+    notifStepperValue: { minWidth: 54, textAlign: 'center', fontSize: 14, fontWeight: '800', color: c.primaryDark },
     filterOption: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 14, marginBottom: 8, backgroundColor: c.bg },
     filterOptionActive: { backgroundColor: c.primaryLight, borderWidth: 1.5, borderColor: c.primaryLight },
     filterOptionText: { fontSize: 15, fontWeight: '600', color: c.text },
