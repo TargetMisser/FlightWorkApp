@@ -887,6 +887,11 @@ export default function CalendarScreen() {
                   {t('calPickName')} ({parsedSchedule.employees.length} trovati)
                 </Text>
                 <FlatList
+                  // Performance optimization: add windowing props to FlatList
+                  initialNumToRender={10}
+                  maxToRenderPerBatch={10}
+                  windowSize={5}
+                  removeClippedSubviews={Platform.OS === 'android'}
                   data={parsedSchedule.employees}
                   keyExtractor={(_, i) => String(i)}
                   style={{ maxHeight: 400 }}

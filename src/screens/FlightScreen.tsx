@@ -1546,6 +1546,11 @@ export default function FlightScreen({ openNotifSettingsSignal = 0 }: FlightScre
         </View>
       ) : (
         <FlatList
+          // Performance optimization: add windowing props to FlatList
+          initialNumToRender={10}
+          maxToRenderPerBatch={10}
+          windowSize={5}
+          removeClippedSubviews={Platform.OS === 'android'}
           data={currentData}
           keyExtractor={(item, i) => item.flight?.identification?.id || String(i)}
           renderItem={renderFlight}

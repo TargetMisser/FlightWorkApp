@@ -305,6 +305,11 @@ export default function PasswordScreen() {
 
       {/* List */}
       <FlatList
+        // Performance optimization: add windowing props to FlatList
+        initialNumToRender={15}
+        maxToRenderPerBatch={15}
+        windowSize={5}
+        removeClippedSubviews={true}
         data={entries}
         keyExtractor={item => item.id}
         renderItem={({ item }) => (
