@@ -34,15 +34,8 @@ export default function ShiftScreen() {
         const base64List = result.assets.map(a => `data:image/jpeg;base64,${a.base64}`);
         const base64Json = JSON.stringify(base64List).replace(/'/g, "\\'");
         
-        const jsCode = `
-          if (window.runTesseract) {
-            window.runTesseract('${base64Json}');
-          } else {
-            window.ReactNativeWebView.postMessage(JSON.stringify({ success: false, error: "Motore OCR non pronto." }));
-          }
-          true;
-        `;
-        webViewRef.current?.injectJavaScript(jsCode);
+        // Use postMessage pattern to avoid script-injection risks with injectJavaScript
+        webViewRef.current?.postMessage(base64Json);
       }
     } catch (e) {
       Alert.alert("Errore OCR", "Impossibile elaborare l'immagine.");
@@ -217,6 +210,17 @@ export default function ShiftScreen() {
     </head>
     <body style="background-color: transparent;">
       <script>
+        document.addEventListener("message", function(event) {
+          if (window.runTesseract && event.data) {
+            window.runTesseract(event.data);
+          }
+        });
+        window.addEventListener("message", function(event) {
+          if (window.runTesseract && event.data) {
+            window.runTesseract(event.data);
+          }
+        });
+
         window.runTesseract = async function(base64JsonStr) {
           try {
             const images = JSON.parse(base64JsonStr);
