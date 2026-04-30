@@ -84,7 +84,7 @@ export default function DrawerMenu({ visible, onClose, onSelect }: Props) {
       <View style={styles.root}>
         {/* Overlay */}
         <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
-          <TouchableOpacity style={StyleSheet.absoluteFill} onPress={onClose} activeOpacity={1} />
+          <TouchableOpacity style={StyleSheet.absoluteFill} onPress={onClose} activeOpacity={1} accessible={true} accessibilityRole="button" accessibilityLabel={t('close')} />
         </Animated.View>
 
         {/* Drawer */}
@@ -107,7 +107,7 @@ export default function DrawerMenu({ visible, onClose, onSelect }: Props) {
               style={styles.headerGradient}
             >
               <AeroStaffLogo variant="large" monochrome />
-              <TouchableOpacity onPress={onClose} style={styles.closeIconBtn}>
+              <TouchableOpacity onPress={onClose} style={styles.closeIconBtn} accessible={true} accessibilityRole="button" accessibilityLabel={t('close')}>
                 <MaterialIcons name="close" size={20} color="rgba(255,255,255,0.7)" />
               </TouchableOpacity>
             </LinearGradient>
