@@ -18,7 +18,7 @@ export type ThemeColors = {
   primary: string;
   primaryDark: string;
   primaryLight: string;
-  // Glass tokens (liquid glass aesthetic)
+  // Glass tokens
   glass: string;
   glassBorder: string;
   glassStrong: string;

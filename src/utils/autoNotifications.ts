@@ -11,6 +11,39 @@ import {
 
 const NOTIF_IDS_KEY = 'aerostaff_notif_ids_v1';
 const LAST_SCHEDULE_KEY = 'aerostaff_notif_last_schedule';
+const FLIGHT_FILTER_STORAGE_KEY = 'aerostaff_flight_filter_v1';
+
+function normalizeAirline(value: unknown): string {
+  return typeof value === 'string'
+    ? value.trim().toLowerCase().replace(/\s+/g, ' ')
+    : '';
+}
+
+function isFlightCoveredByProfile(item: any, selectedAirlines: string[]): boolean {
+  if (selectedAirlines.length === 0) {
+    return false;
+  }
+
+  const airlineName = normalizeAirline(item?.flight?.airline?.name);
+  if (!airlineName) {
+    return false;
+  }
+
+  return selectedAirlines.some(key => airlineName.includes(key));
+}
+
+function parseSelectedAirlines(raw: string | null): string[] {
+  if (!raw) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.map(normalizeAirline).filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
 
 async function cancelPrevious() {
   const raw = await AsyncStorage.getItem(NOTIF_IDS_KEY);
@@ -62,16 +95,25 @@ export async function autoScheduleNotifications(): Promise<number> {
     // Fetch departures and arrivals from FR24 using the selected airport
     const { departures: allDepartures, arrivals: allArrivals } = await fetchAirportScheduleRaw();
 
-    // Filter departures during shift
+    const selectedAirlinesRaw = await AsyncStorage.getItem(FLIGHT_FILTER_STORAGE_KEY);
+    const selectedAirlines = parseSelectedAirlines(selectedAirlinesRaw);
+
+    // Filter departures during shift + selected profile airlines
     const shiftDepartures = allDepartures.filter((item: any) => {
       const ts = item.flight?.time?.scheduled?.departure;
-      return ts && ts >= shiftStart && ts <= shiftEnd;
+      return ts
+        && ts >= shiftStart
+        && ts <= shiftEnd
+        && isFlightCoveredByProfile(item, selectedAirlines);
     });
 
-    // Filter arrivals during shift (inbound aircraft that become our departures)
+    // Filter arrivals during shift + selected profile airlines
     const shiftArrivals = allArrivals.filter((item: any) => {
       const ts = item.flight?.time?.scheduled?.arrival;
-      return ts && ts >= shiftStart && ts <= shiftEnd;
+      return ts
+        && ts >= shiftStart
+        && ts <= shiftEnd
+        && isFlightCoveredByProfile(item, selectedAirlines);
     });
 
     // ── Persistent ongoing shift notification ──────────────────────────────────
@@ -94,7 +136,7 @@ export async function autoScheduleNotifications(): Promise<number> {
         const fn    = next.flight?.identification?.number?.default ?? '';
         const dest  = next.flight?.airport?.destination?.code?.iata ?? '';
         const time  = new Date(depTs * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
-        flightInfo  = `Prossima: ${fn} ✈ ${dest} alle ${time} · ${shiftDepartures.length} voli oggi`;
+        flightInfo  = `Prossima: ${fn} per ${dest} alle ${time} · ${shiftDepartures.length} voli oggi`;
       } else {
         flightInfo = `${shiftDepartures.length} voli · Nessuna partenza imminente`;
       }
@@ -109,12 +151,12 @@ export async function autoScheduleNotifications(): Promise<number> {
     await cancelPrevious();
     const newIds: string[] = [];
 
-    // ── Arrival notifications: 15 min before landing ──
+    // ── Arrival notifications: 10 min before landing ──
     for (const item of shiftArrivals) {
       try {
         const arrTs: number | undefined = item.flight?.time?.scheduled?.arrival;
         if (!arrTs || isNaN(arrTs)) continue;
-        const secondsUntilNotify = arrTs - 15 * 60 - now;
+        const secondsUntilNotify = arrTs - 10 * 60 - now;
         if (secondsUntilNotify <= 0 || isNaN(secondsUntilNotify)) continue;
 
         const flightNumber = item.flight?.identification?.number?.default || 'N/A';
@@ -125,10 +167,10 @@ export async function autoScheduleNotifications(): Promise<number> {
 
         const id = await Notifications.scheduleNotificationAsync({
           content: {
-            title: `✈️ Arrivo tra 15 min — ${flightNumber}`,
+            title: `Atterraggio tra 10 min - ${flightNumber}`,
             body: `${airline} da ${origin} · arrivo alle ${arrivalTime}`,
             sound: true,
-            data: { flightNumber, arrTs, type: 'arrival_15min' },
+            data: { flightNumber, arrTs, type: 'arrival_10min' },
           },
           trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: Math.round(secondsUntilNotify), repeats: false },
         });
@@ -138,7 +180,7 @@ export async function autoScheduleNotifications(): Promise<number> {
       }
     }
 
-    // ── Departure notifications: check-in open + gate open ──
+    // ── Departure notifications: check-in/gate open-close warnings ──
     for (const item of shiftDepartures) {
       try {
         const depTs: number | undefined = item.flight?.time?.scheduled?.departure;
@@ -153,36 +195,72 @@ export async function autoScheduleNotifications(): Promise<number> {
         // Get airline-specific ops times
         const ops = getAirlineOps(airline);
 
-        // Notification at check-in open (e.g. 2h before departure)
+        // Check-in open/close timestamps
         const ciOpenTs = depTs - ops.checkInOpen * 60;
-        const secondsUntilCI = ciOpenTs - now;
-        if (secondsUntilCI > 0 && !isNaN(secondsUntilCI)) {
+        const ciCloseTs = depTs - ops.checkInClose * 60;
+        const gateOpenTs = depTs - ops.gateOpen * 60;
+        const gateCloseTs = depTs - ops.gateClose * 60;
+
+        // Notification 10 min before check-in open
+        const secondsUntilCIOpenWarn = ciOpenTs - 10 * 60 - now;
+        if (secondsUntilCIOpenWarn > 0 && !isNaN(secondsUntilCIOpenWarn)) {
           const ciTime = new Date(ciOpenTs * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
           const id = await Notifications.scheduleNotificationAsync({
             content: {
-              title: `📌 Check-in aperto — ${flightNumber}`,
-              body: `${airline} per ${destination} · partenza ${depTime} · CI dalle ${ciTime}`,
+              title: `Check-in apre tra 10 min - ${flightNumber}`,
+              body: `${airline} per ${destination} · CI apre alle ${ciTime} · partenza ${depTime}`,
               sound: true,
-              data: { flightNumber, depTs, type: 'checkin_open' },
+              data: { flightNumber, depTs, type: 'checkin_open_10min' },
             },
-            trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: Math.round(secondsUntilCI), repeats: false },
+            trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: Math.round(secondsUntilCIOpenWarn), repeats: false },
           });
           newIds.push(id);
         }
 
-        // Notification at gate open
-        const gateOpenTs = depTs - ops.gateOpen * 60;
-        const secondsUntilGate = gateOpenTs - now;
-        if (secondsUntilGate > 0 && !isNaN(secondsUntilGate)) {
+        // Notification 10 min before check-in close
+        const secondsUntilCICloseWarn = ciCloseTs - 10 * 60 - now;
+        if (secondsUntilCICloseWarn > 0 && !isNaN(secondsUntilCICloseWarn)) {
+          const ciCloseTime = new Date(ciCloseTs * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+          const id = await Notifications.scheduleNotificationAsync({
+            content: {
+              title: `Check-in chiude tra 10 min - ${flightNumber}`,
+              body: `${airline} per ${destination} · chiusura CI alle ${ciCloseTime} · partenza ${depTime}`,
+              sound: true,
+              data: { flightNumber, depTs, type: 'checkin_close_10min' },
+            },
+            trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: Math.round(secondsUntilCICloseWarn), repeats: false },
+          });
+          newIds.push(id);
+        }
+
+        // Notification 5 min before gate open
+        const secondsUntilGateOpenWarn = gateOpenTs - 5 * 60 - now;
+        if (secondsUntilGateOpenWarn > 0 && !isNaN(secondsUntilGateOpenWarn)) {
           const gateTime = new Date(gateOpenTs * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
           const id = await Notifications.scheduleNotificationAsync({
             content: {
-              title: `🚪 Gate aperto — ${flightNumber}`,
-              body: `${airline} per ${destination} · gate dalle ${gateTime} · partenza ${depTime}`,
+              title: `Gate apre tra 5 min - ${flightNumber}`,
+              body: `${airline} per ${destination} · gate apre alle ${gateTime} · partenza ${depTime}`,
               sound: true,
-              data: { flightNumber, depTs, type: 'gate_open' },
+              data: { flightNumber, depTs, type: 'gate_open_5min' },
             },
-            trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: Math.round(secondsUntilGate), repeats: false },
+            trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: Math.round(secondsUntilGateOpenWarn), repeats: false },
+          });
+          newIds.push(id);
+        }
+
+        // Notification 5 min before gate close
+        const secondsUntilGateCloseWarn = gateCloseTs - 5 * 60 - now;
+        if (secondsUntilGateCloseWarn > 0 && !isNaN(secondsUntilGateCloseWarn)) {
+          const gateCloseTime = new Date(gateCloseTs * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+          const id = await Notifications.scheduleNotificationAsync({
+            content: {
+              title: `Gate chiude tra 5 min - ${flightNumber}`,
+              body: `${airline} per ${destination} · gate chiude alle ${gateCloseTime} · partenza ${depTime}`,
+              sound: true,
+              data: { flightNumber, depTs, type: 'gate_close_5min' },
+            },
+            trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: Math.round(secondsUntilGateCloseWarn), repeats: false },
           });
           newIds.push(id);
         }

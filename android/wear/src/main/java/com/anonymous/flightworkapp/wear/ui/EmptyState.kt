@@ -3,6 +3,7 @@ package com.anonymous.flightworkapp.wear.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
@@ -20,7 +21,18 @@ fun EmptyState() {
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("✈️", fontSize = 36.sp)
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .background(WearColors.accentBg, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(12.dp)
+                        .background(WearColors.accentLight, CircleShape)
+                )
+            }
             Spacer(Modifier.height(8.dp))
             Text(
                 "Nessun volo",

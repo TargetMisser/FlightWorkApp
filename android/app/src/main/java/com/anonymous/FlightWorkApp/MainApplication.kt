@@ -15,9 +15,12 @@ import com.facebook.react.defaults.DefaultReactNativeHost
 
 import expo.modules.ApplicationLifecycleDispatcher
 import expo.modules.ReactNativeHostWrapper
+import com.anonymous.FlightWorkApp.runtime.RuntimeDiagnostics
+import com.anonymous.FlightWorkApp.runtime.RuntimeDiagnosticsPackage
 import com.anonymous.FlightWorkApp.wear.WearDataSenderPackage
 
 class MainApplication : Application(), ReactApplication {
+  private val startupState by lazy { RuntimeDiagnostics.prepareStartup(this) }
 
   override val reactNativeHost: ReactNativeHost = ReactNativeHostWrapper(
       this,
@@ -25,6 +28,7 @@ class MainApplication : Application(), ReactApplication {
         override fun getPackages(): List<ReactPackage> =
             PackageList(this).packages.apply {
             add(WearDataSenderPackage())
+            add(RuntimeDiagnosticsPackage())
               // Packages that cannot be autolinked yet can be added manually here, for example:
               // add(MyReactNativePackage())
             }
@@ -42,6 +46,7 @@ class MainApplication : Application(), ReactApplication {
 
   override fun onCreate() {
     super.onCreate()
+    startupState
     DefaultNewArchitectureEntryPoint.releaseLevel = try {
       ReleaseLevel.valueOf(BuildConfig.REACT_NATIVE_RELEASE_LEVEL.uppercase())
     } catch (e: IllegalArgumentException) {

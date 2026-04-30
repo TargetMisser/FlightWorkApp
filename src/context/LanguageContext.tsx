@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   translations, MONTHS, WEEKDAYS_SHORT, WEEKDAYS_LONG, LOCALE_MAP, LANGUAGES, WEATHER_MAP,
-  type Lang, type TranslationKey,
+  type Lang, type TranslationKey, type WeatherDescriptor,
 } from '../i18n/translations';
 
 const STORAGE_KEY = 'aerostaff_language_v1';
@@ -15,7 +15,7 @@ interface LanguageContextValue {
   weekDaysShort: string[];
   weekDaysLong: string[];
   locale: string;
-  weatherMap: Record<number, { text: string; icon: string }>;
+  weatherMap: Record<number, WeatherDescriptor>;
   languages: typeof LANGUAGES;
 }
 
