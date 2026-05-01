@@ -470,6 +470,15 @@ function FlightRowComponent({ item, activeTab, userShift, pinnedFlightId, onPin,
   const smFlight =
     smPool.find(sm => sm.flightNumber === normFn) ??
     smPool.find(sm => normalizeForMatching(sm.flightNumber) === normFnStripped);
+  const operational = item.flight?._operational ?? {};
+  const terminalGate = (terminal?: string, gate?: string) => {
+    if (terminal && gate) return `${terminal}/${gate}`;
+    return gate ?? terminal ?? '—';
+  };
+  const standLabel = smFlight?.stand ?? operational.stand ?? '—';
+  const checkinLabel = smFlight?.checkin ?? operational.checkin ?? '—';
+  const gateLabel = smFlight?.gate ?? terminalGate(operational.departureTerminal, operational.departureGate);
+  const beltLabel = smFlight?.belt ?? operational.belt ?? '—';
 
   const arrivalProgress = activeTab === 'arrivals' && ts ? (() => {
     const scheduledDep = item.flight?.time?.scheduled?.departure;
@@ -701,23 +710,23 @@ function FlightRowComponent({ item, activeTab, userShift, pinnedFlightId, onPin,
         <View style={s.smFooter}>
           <View style={s.smPill}>
             <MaterialIcons name="local-parking" size={11} color={colors.primary} />
-            <Text style={s.smPillText}>Stand {smFlight?.stand ?? '—'}</Text>
+            <Text style={s.smPillText}>Stand {standLabel}</Text>
           </View>
           {activeTab === 'departures' ? (
             <>
               <View style={s.smPill}>
                 <MaterialIcons name="desktop-windows" size={11} color={colors.primary} />
-                <Text style={s.smPillText}>{t('flightCheckin')} {smFlight?.checkin ?? '—'}</Text>
+                <Text style={s.smPillText}>{t('flightCheckin')} {checkinLabel}</Text>
               </View>
               <View style={s.smPill}>
                 <MaterialIcons name="meeting-room" size={11} color={colors.primary} />
-                <Text style={s.smPillText}>{t('flightGate')} {smFlight?.gate ?? '—'}</Text>
+                <Text style={s.smPillText}>{t('flightGate')} {gateLabel}</Text>
               </View>
             </>
           ) : (
             <View style={s.smPill}>
               <MaterialIcons name="luggage" size={11} color={colors.primary} />
-              <Text style={s.smPillText}>{t('flightBelt')} {smFlight?.belt ?? '—'}</Text>
+              <Text style={s.smPillText}>{t('flightBelt')} {beltLabel}</Text>
             </View>
           )}
         </View>

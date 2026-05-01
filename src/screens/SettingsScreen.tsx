@@ -23,6 +23,12 @@ import {
 } from '../utils/updateChecker';
 import UpdateModal from '../components/UpdateModal';
 import { exportBackup, importBackup } from '../utils/backupManager';
+import {
+  clearAirLabsApiKey,
+  getAirLabsApiKey,
+  getAirLabsKeyState,
+  saveAirLabsApiKey,
+} from '../utils/flightProviderSettings';
 
 // ─── Tema picker ──────────────────────────────────────────────────────────────
 type ThemeOption = {
@@ -192,6 +198,7 @@ export default function SettingsScreen({ onOpenFlightNotifications }: SettingsSc
   const { airport, airportCode, setAirportCode, isLoading: airportLoading } = useAirport();
   const { t, lang, setLang, languages } = useLanguage();
   const [airportModalOpen, setAirportModalOpen] = useState(false);
+  const [airLabsModalOpen, setAirLabsModalOpen] = useState(false);
   const [dialogState, setDialogState] = useState<DialogState | null>(null);
 
   const translatedOptions = THEME_OPTIONS.map(opt => ({
@@ -200,6 +207,9 @@ export default function SettingsScreen({ onOpenFlightNotifications }: SettingsSc
     sublabel: opt.id === 'light' ? t('themeLightSub') : opt.id === 'dark' ? t('themeDarkSub') : t('themeWeatherSub'),
   }));
   const [airportInput, setAirportInput] = useState(airportCode);
+  const [airLabsInput, setAirLabsInput] = useState('');
+  const [airLabsStatus, setAirLabsStatus] = useState(t('airLabsKeyNotConfigured'));
+  const [savingAirLabs, setSavingAirLabs] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
@@ -208,6 +218,21 @@ export default function SettingsScreen({ onOpenFlightNotifications }: SettingsSc
   useEffect(() => {
     getCachedUpdateInfo().then(setUpdateInfo);
   }, []);
+
+  const refreshAirLabsStatus = useCallback(async () => {
+    const state = await getAirLabsKeyState();
+    if (!state.configured) {
+      setAirLabsStatus(t('airLabsKeyNotConfigured'));
+      return;
+    }
+
+    const sourceLabel = state.source === 'device' ? t('airLabsKeyDevice') : t('airLabsKeyBuild');
+    setAirLabsStatus(`${sourceLabel}${state.masked ? ` · ${state.masked}` : ''}`);
+  }, [t]);
+
+  useEffect(() => {
+    refreshAirLabsStatus().catch(() => {});
+  }, [refreshAirLabsStatus]);
 
   const showDialog = useCallback((dialog: DialogState) => {
     setDialogState(dialog);
@@ -314,6 +339,55 @@ export default function SettingsScreen({ onOpenFlightNotifications }: SettingsSc
     setAirportInput(airportCode);
   };
 
+  const openAirLabsModal = async () => {
+    setAirLabsInput(await getAirLabsApiKey() ?? '');
+    setAirLabsModalOpen(true);
+  };
+
+  const closeAirLabsModal = () => {
+    setAirLabsModalOpen(false);
+    setAirLabsInput('');
+  };
+
+  const saveAirLabsKey = async () => {
+    setSavingAirLabs(true);
+    try {
+      await saveAirLabsApiKey(airLabsInput);
+      await refreshAirLabsStatus();
+      closeAirLabsModal();
+      showDialog({
+        title: t('airLabsKeySavedTitle'),
+        message: t('airLabsKeySavedMsg'),
+        tone: 'success',
+      });
+    } catch {
+      showDialog({
+        title: t('error'),
+        message: t('airLabsKeyErrorMsg'),
+        tone: 'error',
+      });
+    } finally {
+      setSavingAirLabs(false);
+    }
+  };
+
+  const removeAirLabsKey = async () => {
+    setSavingAirLabs(true);
+    try {
+      await clearAirLabsApiKey();
+      await refreshAirLabsStatus();
+      closeAirLabsModal();
+    } catch {
+      showDialog({
+        title: t('error'),
+        message: t('airLabsKeyErrorMsg'),
+        tone: 'error',
+      });
+    } finally {
+      setSavingAirLabs(false);
+    }
+  };
+
   const saveAirport = async () => {
     const normalized = normalizeAirportCode(airportInput);
     if (!isValidAirportCode(normalized)) {
@@ -417,6 +491,18 @@ export default function SettingsScreen({ onOpenFlightNotifications }: SettingsSc
         />
         <View style={[styles.divider, { backgroundColor: colors.border }]} />
         <SettingRow icon="airlines"        label={t('airportAirlines')} sublabel={t('airportAirlinesSub')}     type="arrow" disabled />
+      </View>
+
+      {/* ── Sezione Fonti voli ── */}
+      <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>{t('sectionFlightData')}</Text>
+      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }, colors.isDark && { elevation: 0, shadowOpacity: 0, borderWidth: 1 }]}>
+        <SettingRow
+          icon="travel-explore"
+          label={t('airLabsKey')}
+          sublabel={airLabsStatus}
+          type="arrow"
+          onPress={() => { openAirLabsModal().catch(() => {}); }}
+        />
       </View>
 
       {/* ── Sezione Notifiche ── */}
@@ -731,6 +817,59 @@ export default function SettingsScreen({ onOpenFlightNotifications }: SettingsSc
                 activeOpacity={0.85}
               >
                 <Text style={[styles.modalBtnTxt, { color: '#fff' }]}>{t('save')}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      <Modal
+        visible={airLabsModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={closeAirLabsModal}
+      >
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={closeAirLabsModal} />
+          <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[styles.modalTitle, { color: colors.primaryDark }]}>{t('airLabsModalTitle')}</Text>
+            <Text style={[styles.modalCopy, { color: colors.textMuted }]}>
+              {t('airLabsModalCopy')}
+            </Text>
+
+            <Text style={[styles.modalLabel, { color: colors.textMuted }]}>{t('airLabsModalLabel')}</Text>
+            <TextInput
+              value={airLabsInput}
+              onChangeText={setAirLabsInput}
+              placeholder="api_key"
+              placeholderTextColor={colors.textMuted}
+              autoCapitalize="none"
+              autoCorrect={false}
+              secureTextEntry
+              style={[styles.modalInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.bg }]}
+            />
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.modalBtn, { backgroundColor: '#DC2626' }, savingAirLabs && { opacity: 0.6 }]}
+                onPress={removeAirLabsKey}
+                disabled={savingAirLabs}
+                activeOpacity={0.85}
+              >
+                <Text style={[styles.modalBtnTxt, { color: '#fff' }]}>{t('remove')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalBtn, { backgroundColor: colors.primary }, savingAirLabs && { opacity: 0.6 }]}
+                onPress={saveAirLabsKey}
+                disabled={savingAirLabs}
+                activeOpacity={0.85}
+              >
+                {savingAirLabs
+                  ? <ActivityIndicator size={16} color="#fff" />
+                  : <Text style={[styles.modalBtnTxt, { color: '#fff' }]}>{t('save')}</Text>}
               </TouchableOpacity>
             </View>
           </View>

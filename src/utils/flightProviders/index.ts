@@ -1,3 +1,4 @@
+import { airLabsProvider } from './airLabsProvider';
 import { fr24Provider } from './fr24Provider';
 import { staffMonitorProvider } from './staffMonitorProvider';
 import type {
@@ -15,8 +16,9 @@ export type {
 } from './types';
 
 const DEFAULT_PROVIDERS: FlightScheduleProvider[] = [
-  fr24Provider,
+  airLabsProvider,
   staffMonitorProvider,
+  fr24Provider,
 ];
 
 function errorMessage(error: unknown): string {
@@ -36,7 +38,7 @@ export async function fetchFlightScheduleFromProviders(
         provider: provider.id,
         label: provider.label,
         status: 'skipped',
-        message: `Unsupported airport ${context.airportCode}`,
+        message: provider.unavailableMessage?.(context) ?? `Unsupported airport ${context.airportCode}`,
       });
       continue;
     }

@@ -13,6 +13,7 @@ import {
   type FlightScheduleProviderId,
   type FlightScheduleProviderStatus,
 } from './flightProviders';
+import { getAirLabsApiKey } from './flightProviderSettings';
 
 const FETCH_TIMEOUT = 10000; // 10 seconds
 const SCHEDULE_CACHE_KEY = 'aerostaff_schedule_provider_cache_v1';
@@ -98,9 +99,11 @@ async function fetchScheduleRawData(code?: string): Promise<FR24ScheduleRaw> {
 
   let payload: Awaited<ReturnType<typeof fetchFlightScheduleFromProviders>>;
   try {
+    const airLabsApiKey = await getAirLabsApiKey();
     payload = await fetchFlightScheduleFromProviders({
       airportCode,
       airport,
+      airLabsApiKey,
       signal: controller.signal,
     });
     await saveCachedSchedule({
@@ -156,7 +159,8 @@ async function fetchScheduleRawData(code?: string): Promise<FR24ScheduleRaw> {
 
 /**
  * Fetch airport schedule, filtered by allowed airlines.
- * Uses the provider layer under the hood: FlightRadar24 first, then airport-specific fallbacks.
+ * Uses the provider layer under the hood: configured external providers first,
+ * then airport-specific fallbacks and local cache.
  */
 export async function fetchAirportSchedule(code?: string): Promise<FR24Schedule> {
   const raw = await fetchScheduleRawData(code);
