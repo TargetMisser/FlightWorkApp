@@ -126,7 +126,9 @@ function mergeFlights(cached: any[], fresh: any[], tsField: string): any[] {
 function pruneExpiredFlights(items: any[], tsField: string, nowSeconds = Date.now() / 1000): any[] {
   const cutoff = nowSeconds - FLIGHTS_RETENTION_SECONDS;
   return items.filter(item => {
-    const ts = item.flight?.time?.scheduled?.[tsField];
+    const ts = item.flight?.time?.real?.[tsField]
+      || item.flight?.time?.estimated?.[tsField]
+      || item.flight?.time?.scheduled?.[tsField];
     if (!ts) return true;
     return ts >= cutoff;
   });
