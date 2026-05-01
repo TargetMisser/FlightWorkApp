@@ -12,7 +12,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../context/ThemeContext';
 import { useAirport } from '../context/AirportContext';
 import { getAirlineOps, getAirlineColor, AIRLINE_COLORS, AIRLINE_DISPLAY_NAMES } from '../utils/airlineOps';
-import { fetchAirportScheduleRaw } from '../utils/fr24api';
+import { fetchAirportScheduleRaw, type FlightScheduleProviderStatus } from '../utils/fr24api';
 import { fetchStaffMonitorData, normalizeFlightNumber, type StaffMonitorFlight } from '../utils/staffMonitor';
 import { formatAirportHeader, getAirportAirlines, getStoredAirportAirlines } from '../utils/airportSettings';
 import { requestWidgetUpdate } from 'react-native-android-widget';
@@ -36,6 +36,11 @@ const FLIGHTS_RETENTION_SECONDS = 60 * 60;
 const MIN_NOTIF_MINUTES = 1;
 const MAX_NOTIF_MINUTES = 90;
 type FlightAlertTone = 'success' | 'warning' | 'info';
+type FlightDataSourceState = {
+  sourceLabel: string;
+  fetchedAt: number;
+  diagnostics: FlightScheduleProviderStatus[];
+};
 
 type FlightNotificationSettings = {
   onlyTrackedAirlines: boolean;
@@ -56,6 +61,39 @@ const DEFAULT_NOTIFICATION_SETTINGS: FlightNotificationSettings = {
   arrivalLeadMinutes: 15,
   departureLeadMinutes: 10,
 };
+
+function formatFlightProviderDiagnostics(
+  source: FlightDataSourceState | null,
+  locale: string,
+): string {
+  if (!source) return '';
+
+  const fetchedLabel = new Date(source.fetchedAt).toLocaleTimeString(locale, {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  const isItalian = locale.startsWith('it');
+  const lines = [
+    `${isItalian ? 'Fonte attiva' : 'Active source'}: ${source.sourceLabel}`,
+    `${isItalian ? 'Aggiornato' : 'Updated'}: ${fetchedLabel}`,
+  ];
+
+  for (const item of source.diagnostics) {
+    const status = item.status === 'success'
+      ? 'OK'
+      : item.status === 'skipped'
+        ? (isItalian ? 'saltato' : 'skipped')
+        : (isItalian ? 'errore' : 'error');
+    const counts = item.status === 'success'
+      ? ` · A:${item.arrivals ?? 0} D:${item.departures ?? 0}`
+      : '';
+    const timing = typeof item.durationMs === 'number' ? ` · ${item.durationMs}ms` : '';
+    const message = item.message ? ` · ${item.message}` : '';
+    lines.push(`${item.label}: ${status}${counts}${timing}${message}`);
+  }
+
+  return lines.join('\n');
+}
 
 function normalizeAirlineKey(value: unknown): string {
   return typeof value === 'string'
@@ -915,6 +953,7 @@ export default function FlightScreen({ openNotifSettingsSignal = 0 }: FlightScre
   const [staffMonitorDeps, setStaffMonitorDeps] = useState<StaffMonitorFlight[]>([]);
   const [staffMonitorArrs, setStaffMonitorArrs] = useState<StaffMonitorFlight[]>([]);
   const [notifSettings, setNotifSettings] = useState<FlightNotificationSettings>(DEFAULT_NOTIFICATION_SETTINGS);
+  const [flightDataSource, setFlightDataSource] = useState<FlightDataSourceState | null>(null);
   const lastOpenNotifSettingsSignalRef = useRef(openNotifSettingsSignal);
   const applySelectedAirlines = useCallback((next: string[]) => {
     setSelectedAirlines(next);
@@ -963,6 +1002,13 @@ export default function FlightScreen({ openNotifSettingsSignal = 0 }: FlightScre
         if (cache.date === today) {
           setAllArrivalsFull(cache.arrivals ?? []);
           setAllDeparturesFull(cache.departures ?? []);
+          if (cache.sourceLabel && cache.fetchedAt) {
+            setFlightDataSource({
+              sourceLabel: cache.sourceLabel,
+              fetchedAt: cache.fetchedAt,
+              diagnostics: Array.isArray(cache.providerDiagnostics) ? cache.providerDiagnostics : [],
+            });
+          }
         }
       } catch {}
     });
@@ -1018,6 +1064,9 @@ export default function FlightScreen({ openNotifSettingsSignal = 0 }: FlightScre
         allDepartures,
         departures: fetchedDepartures,
         arrivals: fetchedArrivals,
+        sourceLabel,
+        providerDiagnostics,
+        fetchedAt,
       } = await fetchAirportScheduleRaw(airportCode);
       const nextAirportAirlines = getAirportAirlines(airportCode);
       setAirportAirlines(nextAirportAirlines);
@@ -1049,9 +1098,23 @@ export default function FlightScreen({ openNotifSettingsSignal = 0 }: FlightScre
       } catch {}
       const mergedArrs = pruneExpiredFlights(mergeFlights(cachedArrs, allArrivals, 'arrival'), 'arrival');
       const mergedDeps = pruneExpiredFlights(mergeFlights(cachedDeps, allDepartures, 'departure'), 'departure');
+      const sourceState: FlightDataSourceState = {
+        sourceLabel: sourceLabel ?? 'Sconosciuta',
+        fetchedAt: fetchedAt ?? Date.now(),
+        diagnostics: providerDiagnostics ?? [],
+      };
       setAllArrivalsFull(mergedArrs);
       setAllDeparturesFull(mergedDeps);
-      AsyncStorage.setItem(FLIGHTS_CACHE_KEY, JSON.stringify({ arrivals: mergedArrs, departures: mergedDeps })).catch(() => {});
+      setFlightDataSource(sourceState);
+      AsyncStorage.setItem(FLIGHTS_CACHE_KEY, JSON.stringify({
+        date: new Date().toISOString().split('T')[0],
+        airportCode,
+        arrivals: mergedArrs,
+        departures: mergedDeps,
+        sourceLabel: sourceState.sourceLabel,
+        fetchedAt: sourceState.fetchedAt,
+        providerDiagnostics: sourceState.diagnostics,
+      })).catch(() => {});
 
       // Build inbound arrival map: registration → best known arrival timestamp
       const inboundMap: Record<string, number> = {};
@@ -1542,6 +1605,24 @@ export default function FlightScreen({ openNotifSettingsSignal = 0 }: FlightScre
         </View>
       </View>
 
+      {flightDataSource && (
+        <TouchableOpacity
+          style={s.sourceBadge}
+          activeOpacity={0.78}
+          onPress={() => setNotifDialog({
+            title: t('flightProviderDiagnosticsTitle'),
+            message: formatFlightProviderDiagnostics(flightDataSource, locale),
+            tone: 'info',
+          })}
+        >
+          <MaterialIcons name="hub" size={14} color={colors.primary} />
+          <Text style={s.sourceBadgeText}>
+            {t('flightDataSource')}: {flightDataSource.sourceLabel}
+          </Text>
+          <MaterialIcons name="info-outline" size={14} color={colors.textSub} />
+        </TouchableOpacity>
+      )}
+
       {loading ? (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           <ActivityIndicator size="large" color={colors.primary} />
@@ -1842,6 +1923,8 @@ function makeStyles(c: ThemeColors) {
     pageTitle: { fontSize: 22, fontWeight: 'bold', color: c.primaryDark },
     pageSub: { fontSize: 13, color: c.textSub, marginTop: 2 },
     controlsRow: { flexDirection: 'row', gap: 8, padding: 12, backgroundColor: c.card, borderBottomWidth: 1, borderBottomColor: c.border },
+    sourceBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', marginTop: 10, marginHorizontal: 16, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 999, backgroundColor: c.primaryLight, borderWidth: 1, borderColor: c.glassBorder },
+    sourceBadgeText: { fontSize: 11, fontWeight: '800', color: c.primaryDark },
     segment: { flex: 1, flexDirection: 'row', backgroundColor: c.bg, borderRadius: 8, padding: 3 },
     segBtn: { flex: 1, paddingVertical: 7, alignItems: 'center', borderRadius: 6 },
     segBtnActive: { backgroundColor: c.card, borderWidth: 1, borderColor: c.primaryLight },
