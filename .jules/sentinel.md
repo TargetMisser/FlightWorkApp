@@ -1,0 +1,4 @@
+## 2024-05-18 - Cross-Site Scripting (XSS) via injectJavaScript in WebView
+**Vulnerability:** The application was vulnerable to Cross-Site Scripting (XSS) due to the use of `injectJavaScript` to pass data (base64 JSON strings) directly into the WebView execution context in `src/screens/HomeScreen.tsx` and `src/screens/ShiftScreen.tsx`.
+**Learning:** Using `injectJavaScript` with string interpolation can allow malicious scripts to be executed within the WebView context, especially when handling arbitrary data like images or large strings.
+**Prevention:** Avoid using `injectJavaScript` for passing data. Instead, establish a secure communication channel using `postMessage`. The WebView should listen for messages via `window.document.addEventListener('message', ...)` and `window.addEventListener('message', ...)`, and send a 'READY' message to the React Native app when it's initialized to prevent race conditions.

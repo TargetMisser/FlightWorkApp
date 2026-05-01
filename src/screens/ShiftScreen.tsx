@@ -16,6 +16,7 @@ export default function ShiftScreen() {
   const [ocrText, setOcrText] = useState<string>('');
   const [processing, setProcessing] = useState(false);
   const webViewRef = useRef<WebView>(null);
+  const [isEngineReady, setIsEngineReady] = useState(false);
 
   const pickImage = async () => {
     try {
@@ -34,15 +35,12 @@ export default function ShiftScreen() {
         const base64List = result.assets.map(a => `data:image/jpeg;base64,${a.base64}`);
         const base64Json = JSON.stringify(base64List).replace(/'/g, "\\'");
         
-        const jsCode = `
-          if (window.runTesseract) {
-            window.runTesseract('${base64Json}');
-          } else {
-            window.ReactNativeWebView.postMessage(JSON.stringify({ success: false, error: "Motore OCR non pronto." }));
-          }
-          true;
-        `;
-        webViewRef.current?.injectJavaScript(jsCode);
+        if (!isEngineReady) {
+          Alert.alert("Errore", "Motore OCR non pronto. Riprova.");
+          setProcessing(false);
+          return;
+        }
+        webViewRef.current?.postMessage(JSON.stringify({ type: 'OCR_REQUEST', payload: base64Json }));
       }
     } catch (e) {
       Alert.alert("Errore OCR", "Impossibile elaborare l'immagine.");
@@ -54,6 +52,10 @@ export default function ShiftScreen() {
     const rawData = event.nativeEvent.data;
     try {
       const result = JSON.parse(rawData);
+      if (result.type === 'READY') {
+        setIsEngineReady(true);
+        return;
+      }
       if (result.success) {
         setOcrText(result.text);
       } else {
@@ -230,6 +232,23 @@ export default function ShiftScreen() {
             window.ReactNativeWebView.postMessage(JSON.stringify({ success: false, error: e.message || e.toString() }));
           }
         };
+
+        const handleMsg = function(e) {
+          try {
+            const data = JSON.parse(e.data);
+            if(data.type === "OCR_REQUEST") {
+              if(window.runTesseract) {
+                window.runTesseract(data.payload);
+              } else {
+                window.ReactNativeWebView.postMessage(JSON.stringify({ success: false, error: "Motore OCR non pronto." }));
+              }
+            }
+          } catch(err) {}
+        };
+        window.document.addEventListener('message', handleMsg);
+        window.addEventListener('message', handleMsg);
+
+        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'READY' }));
       </script>
     </body>
     </html>
