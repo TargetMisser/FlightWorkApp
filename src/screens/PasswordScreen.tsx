@@ -323,6 +323,9 @@ export default function PasswordScreen() {
           </View>
         }
         showsVerticalScrollIndicator={false}
+        // Performance optimization: windowing props to reduce memory usage and rendering time for long lists
+        windowSize={5}
+
       />
 
       {/* Add / Edit modal */}

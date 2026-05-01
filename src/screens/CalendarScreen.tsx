@@ -900,6 +900,9 @@ export default function CalendarScreen() {
                       <MaterialIcons name="chevron-right" size={20} color={colors.textSub} />
                     </TouchableOpacity>
                   )}
+                  // Performance optimization: windowing props to reduce memory usage and rendering time for long lists
+                  windowSize={5}
+
                 />
               </>
             )}

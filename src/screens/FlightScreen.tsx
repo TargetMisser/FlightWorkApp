@@ -1553,6 +1553,9 @@ export default function FlightScreen({ openNotifSettingsSignal = 0 }: FlightScre
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchAll(); }} tintColor={colors.primary} />}
           ListEmptyComponent={<Text style={{ textAlign: 'center', marginTop: 40, color: '#9CA3AF', fontSize: 15 }}>{t('flightNoFlights')}</Text>}
           showsVerticalScrollIndicator={false}
+          // Performance optimization: windowing props to reduce memory usage and rendering time for long lists
+          windowSize={5}
+
         />
       )}
 
