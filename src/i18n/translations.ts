@@ -185,6 +185,8 @@ const it = {
   drawerManualsSub: 'Libreria documenti',
   drawerSettingsTitle: 'Impostazioni',
   drawerSettingsSub: 'Preferenze app',
+  drawerOverlayClose: 'Chiudi menu',
+  drawerCloseBtn: 'Chiudi menu',
   // ShiftTimeline
   shiftUnknown: 'Sconosciuta',
   // FlightScreen filter menu
@@ -384,6 +386,8 @@ const en: typeof it = {
   drawerManualsSub: 'Document library',
   drawerSettingsTitle: 'Settings',
   drawerSettingsSub: 'App preferences',
+  drawerOverlayClose: 'Close drawer',
+  drawerCloseBtn: 'Close drawer',
   // ShiftTimeline
   shiftUnknown: 'Unknown',
   // FlightScreen filter menu
