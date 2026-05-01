@@ -134,6 +134,28 @@ jobs:
           ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
           GRADLE_OPTS: "-Xmx4g -XX:MaxMetaspaceSize=512m"
 
+      - name: Validate APK release metadata
+        run: |
+          APK=$(find android/app/build/outputs/apk/release -name "*.apk" -type f | head -1)
+          BADGING=$("$ANDROID_HOME/build-tools/37.0.0/aapt" dump badging "$APK")
+          APK_VERSION_NAME=$(echo "$BADGING" | sed -n "s/.*versionName='\([^']*\)'.*/\1/p")
+          APK_VERSION_CODE=$(echo "$BADGING" | sed -n "s/.*versionCode='\([^']*\)'.*/\1/p")
+          EXPECTED_TAG="v${APK_VERSION_NAME}"
+
+          echo "APK versionName=$APK_VERSION_NAME"
+          echo "APK versionCode=$APK_VERSION_CODE"
+          echo "Release tag=${{ steps.meta.outputs.tag }}"
+
+          if [[ "${{ steps.meta.outputs.version }}" != "$APK_VERSION_NAME" ]]; then
+            echo "app.json version (${{ steps.meta.outputs.version }}) does not match APK versionName ($APK_VERSION_NAME)"
+            exit 1
+          fi
+
+          if [[ "${{ steps.meta.outputs.tag }}" != "$EXPECTED_TAG" ]]; then
+            echo "Release tag (${{ steps.meta.outputs.tag }}) does not match APK versionName ($APK_VERSION_NAME)"
+            exit 1
+          fi
+
       - name: Rename APK
         run: |
           APK=$(find android/app/build/outputs/apk/release -name "*.apk" -type f | head -1)
