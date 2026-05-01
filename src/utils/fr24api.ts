@@ -1,5 +1,5 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
-  buildFr24ScheduleUrl,
   getAirportAirlines,
   getAirportInfo,
   getStoredAirportCode,
@@ -8,23 +8,33 @@ import {
   storeDetectedAirportAirlines,
   type AirportInfo,
 } from './airportSettings';
+import {
+  fetchFlightScheduleFromProviders,
+  type FlightScheduleProviderId,
+  type FlightScheduleProviderStatus,
+} from './flightProviders';
+import { getAirLabsApiKey } from './flightProviderSettings';
 
 const FETCH_TIMEOUT = 10000; // 10 seconds
+const SCHEDULE_CACHE_KEY = 'aerostaff_schedule_provider_cache_v1';
+const SCHEDULE_CACHE_TTL_MS = 30 * 60 * 1000;
+
+export type { FlightScheduleProviderId, FlightScheduleProviderStatus };
 
 export type FR24Schedule = {
   arrivals: any[];
   departures: any[];
   airportCode: string;
   airport: AirportInfo;
+  source?: FlightScheduleProviderId;
+  sourceLabel?: string;
+  providerDiagnostics?: FlightScheduleProviderStatus[];
+  fetchedAt?: number;
 };
 
-export type FR24ScheduleRaw = {
+export type FR24ScheduleRaw = FR24Schedule & {
   allArrivals: any[];
   allDepartures: any[];
-  arrivals: any[];
-  departures: any[];
-  airportCode: string;
-  airport: AirportInfo;
 };
 
 function filterAirlines(data: any[], allowedList: string[]) {
@@ -42,70 +52,136 @@ async function resolveAirportCode(code?: string): Promise<string> {
   return isValidAirportCode(normalized) ? normalized : getStoredAirportCode();
 }
 
-/**
- * Fetch airport schedule from FlightRadar24, filtered by allowed airlines.
- * Includes a 10s timeout to prevent UI blocking.
- */
-export async function fetchAirportSchedule(code?: string): Promise<FR24Schedule> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
+type ScheduleCacheEntry = {
+  airportCode: string;
+  allArrivals: any[];
+  allDepartures: any[];
+  source?: FlightScheduleProviderId;
+  sourceLabel?: string;
+  providerDiagnostics?: FlightScheduleProviderStatus[];
+  fetchedAt: number;
+  savedAt: number;
+};
 
+function errorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) return error.message;
+  return String(error ?? 'unknown_error');
+}
+
+async function loadCachedSchedule(airportCode: string): Promise<ScheduleCacheEntry | null> {
   try {
-    const airportCode = await resolveAirportCode(code);
-    const res = await fetch(buildFr24ScheduleUrl(airportCode), {
-      headers: { 'User-Agent': 'Mozilla/5.0' },
-      signal: controller.signal,
-    });
-    const json = await res.json();
-
-    const allArrivals = json.result?.response?.airport?.pluginData?.schedule?.arrivals?.data || [];
-    const allDepartures = json.result?.response?.airport?.pluginData?.schedule?.departures?.data || [];
-
-    await storeDetectedAirportAirlines(airportCode, allArrivals, allDepartures);
-    const airlines = getAirportAirlines(airportCode);
-    return {
-      arrivals: filterAirlines(allArrivals, airlines),
-      departures: filterAirlines(allDepartures, airlines),
-      airportCode,
-      airport: getAirportInfo(airportCode),
-    };
-  } finally {
-    clearTimeout(timer);
+    const raw = await AsyncStorage.getItem(SCHEDULE_CACHE_KEY);
+    if (!raw) return null;
+    const cache = JSON.parse(raw);
+    const entry = cache?.[airportCode] as ScheduleCacheEntry | undefined;
+    if (!entry || Date.now() - entry.savedAt > SCHEDULE_CACHE_TTL_MS) return null;
+    if (!Array.isArray(entry.allArrivals) || !Array.isArray(entry.allDepartures)) return null;
+    return entry;
+  } catch {
+    return null;
   }
 }
 
-/**
- * Fetch raw (unfiltered) schedule — needed when callers also use non-allowed airline data
- * (e.g. inbound arrival map by registration).
- */
-export async function fetchAirportScheduleRaw(code?: string): Promise<FR24ScheduleRaw> {
+async function saveCachedSchedule(entry: ScheduleCacheEntry): Promise<void> {
+  try {
+    const raw = await AsyncStorage.getItem(SCHEDULE_CACHE_KEY);
+    const cache = raw ? JSON.parse(raw) : {};
+    cache[entry.airportCode] = entry;
+    await AsyncStorage.setItem(SCHEDULE_CACHE_KEY, JSON.stringify(cache));
+  } catch {}
+}
+
+async function fetchScheduleRawData(code?: string): Promise<FR24ScheduleRaw> {
+  const airportCode = await resolveAirportCode(code);
+  const airport = getAirportInfo(airportCode);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
 
+  let payload: Awaited<ReturnType<typeof fetchFlightScheduleFromProviders>>;
   try {
-    const airportCode = await resolveAirportCode(code);
-    const res = await fetch(buildFr24ScheduleUrl(airportCode), {
-      headers: { 'User-Agent': 'Mozilla/5.0' },
+    const airLabsApiKey = await getAirLabsApiKey();
+    payload = await fetchFlightScheduleFromProviders({
+      airportCode,
+      airport,
+      airLabsApiKey,
       signal: controller.signal,
     });
-    const json = await res.json();
-
-    const allArrivals = json.result?.response?.airport?.pluginData?.schedule?.arrivals?.data || [];
-    const allDepartures = json.result?.response?.airport?.pluginData?.schedule?.departures?.data || [];
-
-    await storeDetectedAirportAirlines(airportCode, allArrivals, allDepartures);
-    const airlines = getAirportAirlines(airportCode);
-    return {
-      allArrivals,
-      allDepartures,
-      arrivals: filterAirlines(allArrivals, airlines),
-      departures: filterAirlines(allDepartures, airlines),
+    await saveCachedSchedule({
       airportCode,
-      airport: getAirportInfo(airportCode),
+      allArrivals: payload.allArrivals,
+      allDepartures: payload.allDepartures,
+      source: payload.source,
+      sourceLabel: payload.sourceLabel,
+      providerDiagnostics: payload.diagnostics,
+      fetchedAt: payload.fetchedAt,
+      savedAt: Date.now(),
+    });
+  } catch (error) {
+    const cached = await loadCachedSchedule(airportCode);
+    if (!cached) throw error;
+
+    payload = {
+      allArrivals: cached.allArrivals,
+      allDepartures: cached.allDepartures,
+      source: cached.source ?? 'cache',
+      sourceLabel: `${cached.sourceLabel ?? 'Cache voli'} (cache)`,
+      fetchedAt: cached.fetchedAt,
+      diagnostics: [
+        ...(cached.providerDiagnostics ?? []),
+        {
+          provider: 'cache',
+          label: 'Cache voli',
+          status: 'success',
+          message: `Fallback cache: ${errorMessage(error)}`,
+        },
+      ],
     };
   } finally {
     clearTimeout(timer);
   }
+
+  const { allArrivals, allDepartures } = payload;
+  await storeDetectedAirportAirlines(airportCode, allArrivals, allDepartures);
+  const airlines = getAirportAirlines(airportCode);
+  return {
+    allArrivals,
+    allDepartures,
+    arrivals: filterAirlines(allArrivals, airlines),
+    departures: filterAirlines(allDepartures, airlines),
+    airportCode,
+    airport,
+    source: payload.source,
+    sourceLabel: payload.sourceLabel,
+    providerDiagnostics: payload.diagnostics,
+    fetchedAt: payload.fetchedAt,
+  };
+}
+
+/**
+ * Fetch airport schedule, filtered by allowed airlines.
+ * Uses the provider layer under the hood: configured external providers first,
+ * then airport-specific fallbacks and local cache.
+ */
+export async function fetchAirportSchedule(code?: string): Promise<FR24Schedule> {
+  const raw = await fetchScheduleRawData(code);
+  return {
+    arrivals: raw.arrivals,
+    departures: raw.departures,
+    airportCode: raw.airportCode,
+    airport: raw.airport,
+    source: raw.source,
+    sourceLabel: raw.sourceLabel,
+    providerDiagnostics: raw.providerDiagnostics,
+    fetchedAt: raw.fetchedAt,
+  };
+}
+
+/**
+ * Fetch raw (unfiltered) schedule - needed when callers also use non-allowed airline data
+ * (e.g. inbound arrival map by registration).
+ */
+export async function fetchAirportScheduleRaw(code?: string): Promise<FR24ScheduleRaw> {
+  return fetchScheduleRawData(code);
 }
 
 // Legacy aliases kept to avoid breaking older imports.

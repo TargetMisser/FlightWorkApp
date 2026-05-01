@@ -2,6 +2,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export type StaffMonitorFlight = {
   flightNumber: string;
+  aircraftType?: string;
+  trafficType?: string;
+  registration?: string;
+  route?: string;
+  scheduledTime?: string;
+  estimatedTime?: string;
+  status?: string;
   stand?: string;
   checkin?: string;
   gate?: string;
@@ -56,6 +63,13 @@ function isPhoneOrJunk(val: string): boolean {
 
 type ColMap = {
   flight: number;
+  aircraftType?: number;
+  trafficType?: number;
+  registration?: number;
+  route?: number;
+  scheduled?: number;
+  estimated?: number;
+  status?: number;
   stand?: number;
   checkin?: number;
   gate?: number;
@@ -85,6 +99,13 @@ function detectColumns(headerRow: RawCell[]): ColMap | null {
   // For "VOLO / FLIGHT" with colspan=2, logo is first sub-col, flight # is last.
   const flightCol = flightH.start + flightH.span - 1;
 
+  const aircraftTypeH = findPos(n => n.includes('ac type') || n.includes('a/c type') || n.includes('aircraft'));
+  const trafficTypeH  = findPos(n => n.includes('tr.type') || n.includes('traffic'));
+  const registrationH = findPos(n => n === 'reg' || n.includes('registr'));
+  const routeH        = findPos(n => n.includes('dest') || n.includes('from') || n.includes('to') || n === 'da');
+  const scheduledH    = findPos(n => n === 'sched' || n.includes('schedul') || n.includes('programm'));
+  const estimatedH    = findPos(n => n === 'exp' || n.includes('estim') || n.includes('previst'));
+  const statusH       = findPos(n => n === 'status' || n.includes('stato'));
   // Use word-boundary checks: 'stand' as a whole word to avoid matching "addetto stand" / "standby"
   const standH   = findPos(n => n === 'stand' || /\bstand\b/.test(n) || n.includes('parch') || n.includes('posiz') || n.includes('piazzola') || n === 'park');
   const checkinH = findPos(n => n.includes('check') || n === 'c/i' || n === 'ci' || n === 'banco' || n.includes('desk') || n.includes('bancone'));
@@ -93,6 +114,13 @@ function detectColumns(headerRow: RawCell[]): ColMap | null {
   const beltH    = findPos(n => n.includes('belt') || n.includes('nastro') || n.includes('tapis') || n.includes('baggage') || n.includes('reclam') || n.includes('bggl'));
 
   const map: ColMap = { flight: flightCol };
+  if (aircraftTypeH) map.aircraftType = aircraftTypeH.start;
+  if (trafficTypeH)  map.trafficType  = trafficTypeH.start;
+  if (registrationH) map.registration = registrationH.start;
+  if (routeH)        map.route        = routeH.start;
+  if (scheduledH)    map.scheduled    = scheduledH.start;
+  if (estimatedH)    map.estimated    = estimatedH.start;
+  if (statusH)       map.status       = statusH.start;
   if (standH)   map.stand   = standH.start;
   if (checkinH) map.checkin = checkinH.start;
   if (gateH)    map.gate    = gateH.start;
@@ -118,6 +146,25 @@ function cell(cells: string[], idx: number | undefined): string | undefined {
   // Reject pure-letter tokens of 3+ chars — handler abbreviations like "ana", "FEDE", "MARCO"
   if (/^[A-Za-z]{3,}$/.test(code)) return undefined;
   return code;
+}
+
+function textCell(cells: string[], idx: number | undefined): string | undefined {
+  if (idx === undefined) return undefined;
+  const raw = cells[idx]?.trim();
+  if (!raw || raw === '/' || raw === '-' || raw === '--') return undefined;
+  return raw
+    .replace(/\s*\|\s*/g, ' / ')
+    .replace(/\s*\/\s*$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim() || undefined;
+}
+
+function timeCell(cells: string[], idx: number | undefined): string | undefined {
+  const raw = textCell(cells, idx);
+  const match = raw?.match(/\b(\d{1,2})[:.](\d{2})\b/);
+  if (!match) return undefined;
+  const hour = match[1].padStart(2, '0');
+  return `${hour}:${match[2]}`;
 }
 
 /** Extract flight number from a cell that may contain "FR03747 B738" — take first token only. */
@@ -153,6 +200,13 @@ function parseSection(sectionHTML: string): StaffMonitorFlight[] {
 
     results.push({
       flightNumber,
+      aircraftType:  textCell(cells, colMap.aircraftType),
+      trafficType:   textCell(cells, colMap.trafficType),
+      registration:  textCell(cells, colMap.registration),
+      route:         textCell(cells, colMap.route),
+      scheduledTime: timeCell(cells, colMap.scheduled),
+      estimatedTime: timeCell(cells, colMap.estimated),
+      status:        textCell(cells, colMap.status),
       stand:   cell(cells, colMap.stand),
       checkin: cell(cells, colMap.checkin),
       gate:    cell(cells, colMap.gate),
@@ -373,7 +427,7 @@ export async function fetchStaffMonitorData(nature: 'D' | 'A'): Promise<StaffMon
 
     const summary = results.length === 0
       ? 'nessun volo parsato'
-      : results.slice(0, 5).map(f => `${f.flightNumber} S=${f.stand ?? '-'} CI=${f.checkin ?? '-'} G=${f.gate ?? '-'} B=${f.belt ?? '-'}`).join('\n');
+      : results.slice(0, 5).map(f => `${f.flightNumber} ${f.scheduledTime ?? '--:--'}>${f.estimatedTime ?? '--:--'} ${f.route ?? '-'} S=${f.stand ?? '-'} CI=${f.checkin ?? '-'} G=${f.gate ?? '-'} B=${f.belt ?? '-'}`).join('\n');
     if (nature === 'D') _lastDebugFlightsD = summary;
     else _lastDebugFlightsA = summary;
 
