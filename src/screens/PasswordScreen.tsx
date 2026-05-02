@@ -157,6 +157,14 @@ function PasswordRowComponent({ item, onEdit, onDelete }: { item: PasswordEntry;
 // Performance optimization: memoize flatlist item to prevent unnecessary re-renders
 const PasswordRow = React.memo(PasswordRowComponent);
 
+
+
+const PasswordRowWrapper = React.memo(({ item, openEdit, deleteEntry }: { item: PasswordEntry; openEdit: (item: PasswordEntry) => void; deleteEntry: (id: string) => void }) => {
+  const handleEdit = useCallback(() => openEdit(item), [item, openEdit]);
+  const handleDelete = useCallback(() => deleteEntry(item.id), [item, deleteEntry]);
+  return <PasswordRow item={item} onEdit={handleEdit} onDelete={handleDelete} />;
+});
+
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function PasswordScreen() {
   const { colors } = useAppTheme();
@@ -307,13 +315,13 @@ export default function PasswordScreen() {
       <FlatList
         data={entries}
         keyExtractor={item => item.id}
-        renderItem={({ item }) => (
-          <PasswordRow
+        renderItem={useCallback(({ item }: { item: PasswordEntry }) => (
+          <PasswordRowWrapper
             item={item}
-            onEdit={() => openEdit(item)}
-            onDelete={() => deleteEntry(item.id)}
+            openEdit={openEdit}
+            deleteEntry={deleteEntry}
           />
-        )}
+        ), [openEdit, deleteEntry])}
         contentContainerStyle={{ padding: 16, paddingBottom: 96 }}
         ListEmptyComponent={
           <View style={s.empty}>
