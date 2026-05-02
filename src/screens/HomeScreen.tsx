@@ -48,6 +48,16 @@ window.runTesseract = async function(base64JsonStr) {
     window.ReactNativeWebView.postMessage(JSON.stringify({ success: false, error: e.message || e.toString() }));
   }
 };
+const messageHandler = function(event) {
+  if (window.runTesseract) {
+    window.runTesseract(event.data);
+  } else {
+    window.ReactNativeWebView.postMessage(JSON.stringify({ success: false, error: 'OCR non pronto' }));
+  }
+};
+window.addEventListener('message', messageHandler);
+document.addEventListener('message', messageHandler);
+window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'READY' }));
 </script></body></html>`;
 
 function PinnedFlightCardComponent({ item, colors }: { item: any; colors: any }) {
@@ -164,6 +174,7 @@ export default function HomeScreen({ isFocused }: { isFocused?: boolean }) {
   const [newStartM, setNewStartM] = useState('00');
   const [newEndH, setNewEndH] = useState('16');
   const [newEndM, setNewEndM] = useState('00');
+  const [ocrReady, setOcrReady] = useState(false);
   const [uploadMode, setUploadMode] = useState<'image' | 'manual' | null>(null);
   const [pinnedFlight, setPinnedFlight] = useState<any>(null);
 
@@ -283,15 +294,12 @@ export default function HomeScreen({ isFocused }: { isFocused?: boolean }) {
         setProcessing(true); setOcrText('');
         const base64List = result.assets.map(a => `data:image/jpeg;base64,${a.base64}`);
         const base64Json = JSON.stringify(base64List);
-        // Use postMessage pattern to avoid script-injection risks with injectJavaScript
-        webViewRef.current?.injectJavaScript(`
-          if(window.runTesseract){
-            window.runTesseract(${JSON.stringify(base64Json)});
-          } else {
-            window.ReactNativeWebView.postMessage(JSON.stringify({success:false,error:'OCR non pronto'}));
-          }
-          true;
-        `);
+        if (ocrReady) {
+          webViewRef.current?.postMessage(base64Json);
+        } else {
+          Alert.alert('Errore', 'Motore OCR non ancora pronto. Riprova tra poco.');
+          setProcessing(false);
+        }
       }
     } catch (e) { if (__DEV__) console.error('[imagePicker]', e); setProcessing(false); }
   };
@@ -299,9 +307,17 @@ export default function HomeScreen({ isFocused }: { isFocused?: boolean }) {
   const handleWebViewMessage = (event: any) => {
     try {
       const r = JSON.parse(event.nativeEvent.data);
+      if (r.type === 'READY') {
+        setOcrReady(true);
+        return;
+      }
       if (r.success) setOcrText(r.text);
       else Alert.alert('Errore riconoscimento testo', r.error || 'Prova con un\'immagine più nitida o meglio illuminata.');
-    } catch (e) { if (__DEV__) console.error('[ocrMessage]', e); } finally { setProcessing(false); }
+      setProcessing(false);
+    } catch (e) {
+      if (__DEV__) console.error('[ocrMessage]', e);
+      setProcessing(false);
+    }
   };
 
   const parseAndSave = async () => {

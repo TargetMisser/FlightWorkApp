@@ -15,6 +15,7 @@ export default function ShiftScreen() {
   const [imageList, setImageList] = useState<string[]>([]);
   const [ocrText, setOcrText] = useState<string>('');
   const [processing, setProcessing] = useState(false);
+  const [ocrReady, setOcrReady] = useState(false);
   const webViewRef = useRef<WebView>(null);
 
   const pickImage = async () => {
@@ -32,17 +33,14 @@ export default function ShiftScreen() {
         setOcrText('');
         
         const base64List = result.assets.map(a => `data:image/jpeg;base64,${a.base64}`);
-        const base64Json = JSON.stringify(base64List).replace(/'/g, "\\'");
+        const base64Json = JSON.stringify(base64List);
         
-        const jsCode = `
-          if (window.runTesseract) {
-            window.runTesseract('${base64Json}');
-          } else {
-            window.ReactNativeWebView.postMessage(JSON.stringify({ success: false, error: "Motore OCR non pronto." }));
-          }
-          true;
-        `;
-        webViewRef.current?.injectJavaScript(jsCode);
+        if (ocrReady) {
+          webViewRef.current?.postMessage(base64Json);
+        } else {
+          Alert.alert('Errore', 'Motore OCR non ancora pronto. Riprova tra poco.');
+          setProcessing(false);
+        }
       }
     } catch (e) {
       Alert.alert("Errore OCR", "Impossibile elaborare l'immagine.");
@@ -54,14 +52,18 @@ export default function ShiftScreen() {
     const rawData = event.nativeEvent.data;
     try {
       const result = JSON.parse(rawData);
+      if (result.type === 'READY') {
+        setOcrReady(true);
+        return;
+      }
       if (result.success) {
         setOcrText(result.text);
       } else {
         Alert.alert("Errore", "Impossibile analizzare il documento: " + result.error);
       }
+      setProcessing(false);
     } catch(e) {
       console.error(e);
-    } finally {
       setProcessing(false);
     }
   };
@@ -230,6 +232,16 @@ export default function ShiftScreen() {
             window.ReactNativeWebView.postMessage(JSON.stringify({ success: false, error: e.message || e.toString() }));
           }
         };
+        const messageHandler = function(event) {
+          if (window.runTesseract) {
+            window.runTesseract(event.data);
+          } else {
+            window.ReactNativeWebView.postMessage(JSON.stringify({ success: false, error: 'OCR non pronto' }));
+          }
+        };
+        window.addEventListener('message', messageHandler);
+        document.addEventListener('message', messageHandler);
+        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'READY' }));
       </script>
     </body>
     </html>
