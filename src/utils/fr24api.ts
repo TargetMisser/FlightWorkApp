@@ -64,6 +64,16 @@ type ScheduleCacheEntry = {
   savedAt: number;
 };
 
+export type FlightProviderDiagnosticsSnapshot = {
+  airportCode: string;
+  sourceLabel: string;
+  fetchedAt: number;
+  savedAt: number;
+  diagnostics: FlightScheduleProviderStatus[];
+  arrivals: number;
+  departures: number;
+};
+
 function errorMessage(error: unknown): string {
   if (error instanceof Error && error.message) return error.message;
   return String(error ?? 'unknown_error');
@@ -78,6 +88,30 @@ async function loadCachedSchedule(airportCode: string): Promise<ScheduleCacheEnt
     if (!entry || Date.now() - entry.savedAt > SCHEDULE_CACHE_TTL_MS) return null;
     if (!Array.isArray(entry.allArrivals) || !Array.isArray(entry.allDepartures)) return null;
     return entry;
+  } catch {
+    return null;
+  }
+}
+
+export async function getCachedFlightProviderDiagnostics(code?: string): Promise<FlightProviderDiagnosticsSnapshot | null> {
+  try {
+    const airportCode = await resolveAirportCode(code);
+    const raw = await AsyncStorage.getItem(SCHEDULE_CACHE_KEY);
+    if (!raw) return null;
+
+    const cache = JSON.parse(raw);
+    const entry = cache?.[airportCode] as ScheduleCacheEntry | undefined;
+    if (!entry) return null;
+
+    return {
+      airportCode,
+      sourceLabel: entry.sourceLabel ?? 'Sconosciuta',
+      fetchedAt: entry.fetchedAt,
+      savedAt: entry.savedAt,
+      diagnostics: Array.isArray(entry.providerDiagnostics) ? entry.providerDiagnostics : [],
+      arrivals: Array.isArray(entry.allArrivals) ? entry.allArrivals.length : 0,
+      departures: Array.isArray(entry.allDepartures) ? entry.allDepartures.length : 0,
+    };
   } catch {
     return null;
   }

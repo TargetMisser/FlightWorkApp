@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, ActivityIndicator,
-  Modal, KeyboardAvoidingView, Platform, TextInput,
+  Modal, KeyboardAvoidingView, Platform, TextInput, Linking,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -32,6 +32,21 @@ import {
   type AirLabsKeyState,
   type FlightProviderPreference,
 } from '../utils/flightProviderSettings';
+import {
+  getCachedFlightProviderDiagnostics,
+  type FlightProviderDiagnosticsSnapshot,
+} from '../utils/fr24api';
+import {
+  getStaffMonitorDebugColumns,
+  getStaffMonitorDebugFlights,
+  getStaffMonitorDebugStatus,
+} from '../utils/staffMonitor';
+
+const STAFF_MONITOR_LINKS = {
+  main: 'https://servizi.pisa-airport.com/staffMonitor/staffMonitor.html',
+  departures: 'https://servizi.pisa-airport.com/staffMonitor/staffMonitor?trans=true&nature=D',
+  arrivals: 'https://servizi.pisa-airport.com/staffMonitor/staffMonitor?trans=true&nature=A',
+};
 
 // ─── Tema picker ──────────────────────────────────────────────────────────────
 type ThemeOption = {
@@ -215,6 +230,8 @@ export default function SettingsScreen({ onOpenFlightNotifications }: SettingsSc
   const [airLabsConfigured, setAirLabsConfigured] = useState(false);
   const [airLabsStatus, setAirLabsStatus] = useState(t('airLabsKeyNotConfigured'));
   const [providerSummary, setProviderSummary] = useState(t('flightProviderAuto'));
+  const [providerDebug, setProviderDebug] = useState<FlightProviderDiagnosticsSnapshot | null>(null);
+  const [staffMonitorDebug, setStaffMonitorDebug] = useState('');
   const [savingAirLabs, setSavingAirLabs] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
@@ -257,9 +274,20 @@ export default function SettingsScreen({ onOpenFlightNotifications }: SettingsSc
     setProviderSummary(`${providerPreferenceLabel(state.preference)} · ${airLabsLabel}`);
   }, [formatAirLabsStatus, providerPreferenceLabel]);
 
+  const refreshProviderDebug = useCallback(async () => {
+    const snapshot = await getCachedFlightProviderDiagnostics(airportCode);
+    setProviderDebug(snapshot);
+    setStaffMonitorDebug([
+      getStaffMonitorDebugStatus(),
+      getStaffMonitorDebugColumns(),
+      getStaffMonitorDebugFlights(),
+    ].filter(Boolean).join('\n'));
+  }, [airportCode]);
+
   useEffect(() => {
     refreshProviderSettings().catch(() => {});
-  }, [refreshProviderSettings]);
+    refreshProviderDebug().catch(() => {});
+  }, [refreshProviderDebug, refreshProviderSettings]);
 
   const showDialog = useCallback((dialog: DialogState) => {
     setDialogState(dialog);
@@ -367,7 +395,10 @@ export default function SettingsScreen({ onOpenFlightNotifications }: SettingsSc
   };
 
   const openProviderModal = async () => {
-    await refreshProviderSettings();
+    await Promise.all([
+      refreshProviderSettings(),
+      refreshProviderDebug(),
+    ]);
     setAirLabsInput(await getAirLabsApiKey() ?? '');
     setProviderModalOpen(true);
   };
@@ -382,6 +413,16 @@ export default function SettingsScreen({ onOpenFlightNotifications }: SettingsSc
     await saveFlightProviderPreference(preference);
     await refreshProviderSettings();
   };
+
+  const openExternalLink = useCallback((url: string) => {
+    Linking.openURL(url).catch(() => {
+      showDialog({
+        title: t('error'),
+        message: t('flightDebugOpenLinkError'),
+        tone: 'error',
+      });
+    });
+  }, [showDialog, t]);
 
   const saveAirLabsKey = async () => {
     setSavingAirLabs(true);
@@ -1007,6 +1048,138 @@ export default function SettingsScreen({ onOpenFlightNotifications }: SettingsSc
                 </TouchableOpacity>
               </View>
             </View>
+
+            <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>
+              {t('flightDebugLinksTitle')}
+            </Text>
+            <View style={[styles.providerKeyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={styles.providerKeyTop}>
+                <View style={[styles.providerOptionIcon, { backgroundColor: colors.primaryLight }]}>
+                  <MaterialIcons name="link" size={20} color={colors.primary} />
+                </View>
+                <View style={styles.providerOptionText}>
+                  <Text style={[styles.providerOptionTitle, { color: colors.text }]}>
+                    {t('flightDebugStaffMonitorTitle')}
+                  </Text>
+                  <Text style={[styles.providerOptionSub, { color: colors.textMuted }]}>
+                    {t('flightDebugStaffMonitorSub')}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.providerLinkGrid}>
+                <TouchableOpacity
+                  style={[styles.providerLinkBtn, { backgroundColor: colors.primaryLight, borderColor: colors.border }]}
+                  onPress={() => openExternalLink(STAFF_MONITOR_LINKS.main)}
+                  activeOpacity={0.85}
+                >
+                  <MaterialIcons name="open-in-new" size={15} color={colors.primary} />
+                  <Text style={[styles.providerLinkText, { color: colors.primaryDark }]}>{t('flightDebugStaffMonitorMain')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.providerLinkBtn, { backgroundColor: colors.primaryLight, borderColor: colors.border }]}
+                  onPress={() => openExternalLink(STAFF_MONITOR_LINKS.departures)}
+                  activeOpacity={0.85}
+                >
+                  <MaterialIcons name="flight-takeoff" size={15} color={colors.primary} />
+                  <Text style={[styles.providerLinkText, { color: colors.primaryDark }]}>{t('flightDepartures')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.providerLinkBtn, { backgroundColor: colors.primaryLight, borderColor: colors.border }]}
+                  onPress={() => openExternalLink(STAFF_MONITOR_LINKS.arrivals)}
+                  activeOpacity={0.85}
+                >
+                  <MaterialIcons name="flight-land" size={15} color={colors.primary} />
+                  <Text style={[styles.providerLinkText, { color: colors.primaryDark }]}>{t('flightArrivals')}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>
+              {t('flightDebugTitle')}
+            </Text>
+            <View style={[styles.providerKeyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={styles.providerKeyTop}>
+                <View style={[styles.providerOptionIcon, { backgroundColor: colors.primaryLight }]}>
+                  <MaterialIcons name="bug-report" size={20} color={colors.primary} />
+                </View>
+                <View style={styles.providerOptionText}>
+                  <Text style={[styles.providerOptionTitle, { color: colors.text }]}>
+                    {t('flightDebugLastFetch')}
+                  </Text>
+                  <Text style={[styles.providerOptionSub, { color: colors.textMuted }]}>
+                    {providerDebug
+                      ? `${providerDebug.sourceLabel} · ${new Date(providerDebug.fetchedAt).toLocaleTimeString(lang, { hour: '2-digit', minute: '2-digit' })}`
+                      : t('flightDebugNoData')}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={[styles.providerRefreshBtn, { backgroundColor: colors.cardSecondary, borderColor: colors.border }]}
+                  onPress={() => { refreshProviderDebug().catch(() => {}); }}
+                  activeOpacity={0.85}
+                >
+                  <MaterialIcons name="refresh" size={18} color={colors.primary} />
+                </TouchableOpacity>
+              </View>
+
+              {providerDebug ? (
+                <>
+                  <View style={styles.debugMetaGrid}>
+                    <View style={[styles.debugMetaPill, { backgroundColor: colors.cardSecondary }]}>
+                      <Text style={[styles.debugMetaLabel, { color: colors.textMuted }]}>{t('airportBase')}</Text>
+                      <Text style={[styles.debugMetaValue, { color: colors.text }]}>{providerDebug.airportCode}</Text>
+                    </View>
+                    <View style={[styles.debugMetaPill, { backgroundColor: colors.cardSecondary }]}>
+                      <Text style={[styles.debugMetaLabel, { color: colors.textMuted }]}>{t('flightArrivals')}</Text>
+                      <Text style={[styles.debugMetaValue, { color: colors.text }]}>{providerDebug.arrivals}</Text>
+                    </View>
+                    <View style={[styles.debugMetaPill, { backgroundColor: colors.cardSecondary }]}>
+                      <Text style={[styles.debugMetaLabel, { color: colors.textMuted }]}>{t('flightDepartures')}</Text>
+                      <Text style={[styles.debugMetaValue, { color: colors.text }]}>{providerDebug.departures}</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.debugProviderList}>
+                    {providerDebug.diagnostics.length > 0 ? providerDebug.diagnostics.map((item, index) => {
+                      const statusColor = item.status === 'success'
+                        ? '#10B981'
+                        : item.status === 'skipped'
+                          ? '#94A3B8'
+                          : '#EF4444';
+                      const counts = item.status === 'success'
+                        ? `A:${item.arrivals ?? 0} D:${item.departures ?? 0}`
+                        : item.message ?? item.status;
+                      return (
+                        <View
+                          key={`${item.provider}_${index}`}
+                          style={[styles.debugProviderRow, { borderColor: colors.border, backgroundColor: colors.cardSecondary }]}
+                        >
+                          <View style={[styles.debugStatusDot, { backgroundColor: statusColor }]} />
+                          <View style={styles.providerOptionText}>
+                            <Text style={[styles.debugProviderName, { color: colors.text }]}>{item.label}</Text>
+                            <Text style={[styles.debugProviderSub, { color: colors.textMuted }]}>
+                              {counts}{typeof item.durationMs === 'number' ? ` · ${item.durationMs}ms` : ''}
+                            </Text>
+                          </View>
+                        </View>
+                      );
+                    }) : (
+                      <Text style={[styles.providerOptionSub, { color: colors.textMuted }]}>{t('flightDebugNoProviderDetails')}</Text>
+                    )}
+                  </View>
+                </>
+              ) : (
+                <Text style={[styles.providerOptionSub, { color: colors.textMuted }]}>
+                  {t('flightDebugNoDataSub')}
+                </Text>
+              )}
+
+              <Text style={[styles.modalLabel, { color: colors.textMuted, marginTop: 16 }]}>
+                {t('flightDebugStaffMonitorParser')}
+              </Text>
+              <Text style={[styles.debugMono, { color: colors.textMuted, backgroundColor: colors.bg, borderColor: colors.border }]}>
+                {staffMonitorDebug || t('flightDebugNoStaffMonitorDebug')}
+              </Text>
+            </View>
           </ScrollView>
         </KeyboardAvoidingView>
       </Modal>
@@ -1145,6 +1318,48 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   providerKeyTop: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14 },
+  providerLinkGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  providerLinkBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: 13,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  providerLinkText: { fontSize: 12, fontWeight: '800' },
+  providerRefreshBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 13,
+    borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  debugMetaGrid: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  debugMetaPill: { flex: 1, borderRadius: 13, paddingHorizontal: 10, paddingVertical: 9 },
+  debugMetaLabel: { fontSize: 10, fontWeight: '800', textTransform: 'uppercase' },
+  debugMetaValue: { fontSize: 15, fontWeight: '900', marginTop: 2 },
+  debugProviderList: { gap: 8 },
+  debugProviderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 10,
+  },
+  debugStatusDot: { width: 10, height: 10, borderRadius: 5 },
+  debugProviderName: { fontSize: 13, fontWeight: '800' },
+  debugProviderSub: { fontSize: 11, marginTop: 2 },
+  debugMono: {
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 12,
+    fontSize: 11,
+    lineHeight: 16,
+  },
   statusModalCard: {
     borderRadius: 22,
     padding: 22,
