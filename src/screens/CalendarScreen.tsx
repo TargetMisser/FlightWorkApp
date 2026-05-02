@@ -757,7 +757,7 @@ export default function CalendarScreen() {
             {/* Header fisso */}
             <View style={[s.modalHeader, { paddingHorizontal: 24, paddingTop: 24 }]}>
               <Text style={[s.modalTitle, { color: colors.text }]}>{t('calAddShiftTitle')}</Text>
-              <TouchableOpacity onPress={() => setManualModalOpen(false)}>
+              <TouchableOpacity onPress={() => setManualModalOpen(false)} accessibilityLabel={t('close')} accessibilityRole="button">
                 <MaterialIcons name="close" size={24} color={colors.textSub} />
               </TouchableOpacity>
             </View>
