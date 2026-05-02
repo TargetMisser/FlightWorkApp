@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import {
   View, Text, StyleSheet, ActivityIndicator, Modal, ScrollView,
   FlatList, TouchableOpacity, RefreshControl, Image,
-  Animated, PanResponder, NativeModules, Platform, Switch,
+  Animated, PanResponder, NativeModules, Platform, Switch, Linking,
 } from 'react-native';
 import { Easing } from 'react-native';
 import * as Calendar from 'expo-calendar';
@@ -99,6 +99,18 @@ function normalizeAirlineKey(value: unknown): string {
   return typeof value === 'string'
     ? value.trim().toLowerCase().replace(/\s+/g, ' ')
     : '';
+}
+
+function buildFlightradar24FlightUrl(flightNumber: string): string | null {
+  const normalized = normalizeFlightNumber(flightNumber).replace(/[^A-Z0-9]/g, '').toLowerCase();
+  if (!normalized || normalized === 'na') return null;
+  return `https://www.flightradar24.com/data/flights/${normalized}`;
+}
+
+async function openFlightradar24Flight(flightNumber: string): Promise<void> {
+  const url = buildFlightradar24FlightUrl(flightNumber);
+  if (!url) return;
+  await Linking.openURL(url);
 }
 
 function sanitizeNotificationSettings(value: unknown): FlightNotificationSettings {
@@ -569,7 +581,13 @@ function FlightRowComponent({ item, activeTab, userShift, pinnedFlightId, onPin,
       isPinned={isPinned}
       onToggle={() => isPinned ? onUnpin() : onPin(item)}
     >
-      <View style={[s.card, isPinned && s.cardPinned, { marginBottom: 0 }]}>
+      <TouchableOpacity
+        style={[s.card, isPinned && s.cardPinned, { marginBottom: 0 }]}
+        activeOpacity={0.88}
+        onPress={() => { openFlightradar24Flight(flightNumber).catch(() => {}); }}
+        accessibilityRole="link"
+        accessibilityLabel={`Apri ${flightNumber} su Flightradar24`}
+      >
         {isPinned && <View style={s.pinBanner}><Text style={s.pinBannerText}>{t('flightPinned')}</Text></View>}
         {/* Header */}
         <View style={[s.cardHeader, { backgroundColor: color }]}>
@@ -730,7 +748,7 @@ function FlightRowComponent({ item, activeTab, userShift, pinnedFlightId, onPin,
             </View>
           )}
         </View>
-      </View>
+      </TouchableOpacity>
     </SwipeableFlightCard>
   );
 }
