@@ -26,8 +26,11 @@ import { exportBackup, importBackup } from '../utils/backupManager';
 import {
   clearAirLabsApiKey,
   getAirLabsApiKey,
-  getAirLabsKeyState,
+  getFlightProviderSettingsState,
+  saveFlightProviderPreference,
   saveAirLabsApiKey,
+  type AirLabsKeyState,
+  type FlightProviderPreference,
 } from '../utils/flightProviderSettings';
 
 // ─── Tema picker ──────────────────────────────────────────────────────────────
@@ -198,7 +201,7 @@ export default function SettingsScreen({ onOpenFlightNotifications }: SettingsSc
   const { airport, airportCode, setAirportCode, isLoading: airportLoading } = useAirport();
   const { t, lang, setLang, languages } = useLanguage();
   const [airportModalOpen, setAirportModalOpen] = useState(false);
-  const [airLabsModalOpen, setAirLabsModalOpen] = useState(false);
+  const [providerModalOpen, setProviderModalOpen] = useState(false);
   const [dialogState, setDialogState] = useState<DialogState | null>(null);
 
   const translatedOptions = THEME_OPTIONS.map(opt => ({
@@ -208,7 +211,10 @@ export default function SettingsScreen({ onOpenFlightNotifications }: SettingsSc
   }));
   const [airportInput, setAirportInput] = useState(airportCode);
   const [airLabsInput, setAirLabsInput] = useState('');
+  const [providerPreference, setProviderPreference] = useState<FlightProviderPreference>('auto');
+  const [airLabsConfigured, setAirLabsConfigured] = useState(false);
   const [airLabsStatus, setAirLabsStatus] = useState(t('airLabsKeyNotConfigured'));
+  const [providerSummary, setProviderSummary] = useState(t('flightProviderAuto'));
   const [savingAirLabs, setSavingAirLabs] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
@@ -219,20 +225,41 @@ export default function SettingsScreen({ onOpenFlightNotifications }: SettingsSc
     getCachedUpdateInfo().then(setUpdateInfo);
   }, []);
 
-  const refreshAirLabsStatus = useCallback(async () => {
-    const state = await getAirLabsKeyState();
+  const providerPreferenceLabel = useCallback((preference: FlightProviderPreference) => {
+    switch (preference) {
+      case 'airlabs':
+        return t('flightProviderAirLabs');
+      case 'staffMonitor':
+        return t('flightProviderStaffMonitor');
+      case 'fr24':
+        return t('flightProviderFr24');
+      case 'auto':
+      default:
+        return t('flightProviderAuto');
+    }
+  }, [t]);
+
+  const formatAirLabsStatus = useCallback((state: AirLabsKeyState) => {
     if (!state.configured) {
-      setAirLabsStatus(t('airLabsKeyNotConfigured'));
-      return;
+      return t('airLabsKeyNotConfigured');
     }
 
     const sourceLabel = state.source === 'device' ? t('airLabsKeyDevice') : t('airLabsKeyBuild');
-    setAirLabsStatus(`${sourceLabel}${state.masked ? ` · ${state.masked}` : ''}`);
+    return `${sourceLabel}${state.masked ? ` · ${state.masked}` : ''}`;
   }, [t]);
 
+  const refreshProviderSettings = useCallback(async () => {
+    const state = await getFlightProviderSettingsState();
+    const airLabsLabel = formatAirLabsStatus(state.airLabs);
+    setProviderPreference(state.preference);
+    setAirLabsConfigured(state.airLabs.configured);
+    setAirLabsStatus(airLabsLabel);
+    setProviderSummary(`${providerPreferenceLabel(state.preference)} · ${airLabsLabel}`);
+  }, [formatAirLabsStatus, providerPreferenceLabel]);
+
   useEffect(() => {
-    refreshAirLabsStatus().catch(() => {});
-  }, [refreshAirLabsStatus]);
+    refreshProviderSettings().catch(() => {});
+  }, [refreshProviderSettings]);
 
   const showDialog = useCallback((dialog: DialogState) => {
     setDialogState(dialog);
@@ -339,27 +366,29 @@ export default function SettingsScreen({ onOpenFlightNotifications }: SettingsSc
     setAirportInput(airportCode);
   };
 
-  const openAirLabsModal = async () => {
+  const openProviderModal = async () => {
+    await refreshProviderSettings();
     setAirLabsInput(await getAirLabsApiKey() ?? '');
-    setAirLabsModalOpen(true);
+    setProviderModalOpen(true);
   };
 
-  const closeAirLabsModal = () => {
-    setAirLabsModalOpen(false);
+  const closeProviderModal = () => {
+    setProviderModalOpen(false);
     setAirLabsInput('');
+  };
+
+  const chooseProviderPreference = async (preference: FlightProviderPreference) => {
+    setProviderPreference(preference);
+    await saveFlightProviderPreference(preference);
+    await refreshProviderSettings();
   };
 
   const saveAirLabsKey = async () => {
     setSavingAirLabs(true);
     try {
       await saveAirLabsApiKey(airLabsInput);
-      await refreshAirLabsStatus();
-      closeAirLabsModal();
-      showDialog({
-        title: t('airLabsKeySavedTitle'),
-        message: t('airLabsKeySavedMsg'),
-        tone: 'success',
-      });
+      await refreshProviderSettings();
+      setAirLabsInput(await getAirLabsApiKey() ?? '');
     } catch {
       showDialog({
         title: t('error'),
@@ -375,8 +404,8 @@ export default function SettingsScreen({ onOpenFlightNotifications }: SettingsSc
     setSavingAirLabs(true);
     try {
       await clearAirLabsApiKey();
-      await refreshAirLabsStatus();
-      closeAirLabsModal();
+      await refreshProviderSettings();
+      setAirLabsInput('');
     } catch {
       showDialog({
         title: t('error'),
@@ -498,10 +527,10 @@ export default function SettingsScreen({ onOpenFlightNotifications }: SettingsSc
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }, colors.isDark && { elevation: 0, shadowOpacity: 0, borderWidth: 1 }]}>
         <SettingRow
           icon="travel-explore"
-          label={t('airLabsKey')}
-          sublabel={airLabsStatus}
+          label={t('flightProviderSettingsTitle')}
+          sublabel={providerSummary}
           type="arrow"
-          onPress={() => { openAirLabsModal().catch(() => {}); }}
+          onPress={() => { openProviderModal().catch(() => {}); }}
         />
       </View>
 
@@ -824,55 +853,161 @@ export default function SettingsScreen({ onOpenFlightNotifications }: SettingsSc
       </Modal>
 
       <Modal
-        visible={airLabsModalOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={closeAirLabsModal}
+        visible={providerModalOpen}
+        animationType="slide"
+        onRequestClose={closeProviderModal}
       >
         <KeyboardAvoidingView
-          style={styles.modalOverlay}
+          style={[styles.providerRoot, { backgroundColor: colors.bg }]}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
-          <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={closeAirLabsModal} />
-          <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.modalTitle, { color: colors.primaryDark }]}>{t('airLabsModalTitle')}</Text>
-            <Text style={[styles.modalCopy, { color: colors.textMuted }]}>
-              {t('airLabsModalCopy')}
-            </Text>
-
-            <Text style={[styles.modalLabel, { color: colors.textMuted }]}>{t('airLabsModalLabel')}</Text>
-            <TextInput
-              value={airLabsInput}
-              onChangeText={setAirLabsInput}
-              placeholder="api_key"
-              placeholderTextColor={colors.textMuted}
-              autoCapitalize="none"
-              autoCorrect={false}
-              secureTextEntry
-              style={[styles.modalInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.bg }]}
-            />
-
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={[styles.modalBtn, { backgroundColor: '#DC2626' }, savingAirLabs && { opacity: 0.6 }]}
-                onPress={removeAirLabsKey}
-                disabled={savingAirLabs}
-                activeOpacity={0.85}
-              >
-                <Text style={[styles.modalBtnTxt, { color: '#fff' }]}>{t('remove')}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalBtn, { backgroundColor: colors.primary }, savingAirLabs && { opacity: 0.6 }]}
-                onPress={saveAirLabsKey}
-                disabled={savingAirLabs}
-                activeOpacity={0.85}
-              >
-                {savingAirLabs
-                  ? <ActivityIndicator size={16} color="#fff" />
-                  : <Text style={[styles.modalBtnTxt, { color: '#fff' }]}>{t('save')}</Text>}
-              </TouchableOpacity>
+          <View style={[styles.providerHeader, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <TouchableOpacity
+              style={[styles.providerCloseBtn, { backgroundColor: colors.cardSecondary }]}
+              onPress={closeProviderModal}
+              activeOpacity={0.85}
+            >
+              <MaterialIcons name="close" size={22} color={colors.text} />
+            </TouchableOpacity>
+            <View style={styles.providerHeaderText}>
+              <Text style={[styles.providerTitle, { color: colors.primaryDark }]}>
+                {t('flightProviderSettingsTitle')}
+              </Text>
+              <Text style={[styles.providerSubtitle, { color: colors.textMuted }]}>
+                {t('flightProviderSettingsSub')}
+              </Text>
             </View>
           </View>
+
+          <ScrollView
+            contentContainerStyle={styles.providerContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>
+              {t('flightProviderPreferredTitle')}
+            </Text>
+            <View style={styles.providerOptions}>
+              {([
+                {
+                  id: 'auto',
+                  icon: 'auto-awesome',
+                  title: t('flightProviderAuto'),
+                  sub: t('flightProviderAutoSub'),
+                },
+                {
+                  id: 'staffMonitor',
+                  icon: 'flight-takeoff',
+                  title: t('flightProviderStaffMonitor'),
+                  sub: t('flightProviderStaffMonitorSub'),
+                },
+                {
+                  id: 'airlabs',
+                  icon: 'travel-explore',
+                  title: t('flightProviderAirLabs'),
+                  sub: airLabsConfigured ? t('flightProviderAirLabsSub') : t('flightProviderAirLabsNeedsKey'),
+                },
+                {
+                  id: 'fr24',
+                  icon: 'public',
+                  title: t('flightProviderFr24'),
+                  sub: t('flightProviderFr24Sub'),
+                },
+              ] as Array<{
+                id: FlightProviderPreference;
+                icon: keyof typeof MaterialIcons.glyphMap;
+                title: string;
+                sub: string;
+              }>).map(option => {
+                const selected = providerPreference === option.id;
+                const warn = option.id === 'airlabs' && !airLabsConfigured;
+                return (
+                  <TouchableOpacity
+                    key={option.id}
+                    style={[
+                      styles.providerOption,
+                      {
+                        backgroundColor: selected ? colors.primaryLight : colors.card,
+                        borderColor: selected ? colors.primary : colors.border,
+                      },
+                    ]}
+                    onPress={() => { chooseProviderPreference(option.id).catch(() => {}); }}
+                    activeOpacity={0.85}
+                  >
+                    <View style={[styles.providerOptionIcon, { backgroundColor: selected ? colors.primary : colors.primaryLight }]}>
+                      <MaterialIcons name={option.icon} size={20} color={selected ? '#fff' : colors.primary} />
+                    </View>
+                    <View style={styles.providerOptionText}>
+                      <Text style={[styles.providerOptionTitle, { color: selected ? colors.primaryDark : colors.text }]}>
+                        {option.title}
+                      </Text>
+                      <Text style={[styles.providerOptionSub, { color: warn ? '#D97706' : colors.textMuted }]}>
+                        {option.sub}
+                      </Text>
+                    </View>
+                    {selected && <MaterialIcons name="check-circle" size={22} color={colors.primary} />}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>
+              {t('flightProviderKeysTitle')}
+            </Text>
+            <View style={[styles.providerKeyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={styles.providerKeyTop}>
+                <View style={[styles.providerOptionIcon, { backgroundColor: colors.primaryLight }]}>
+                  <MaterialIcons name="key" size={20} color={colors.primary} />
+                </View>
+                <View style={styles.providerOptionText}>
+                  <Text style={[styles.providerOptionTitle, { color: colors.text }]}>
+                    {t('airLabsKey')}
+                  </Text>
+                  <Text style={[styles.providerOptionSub, { color: colors.textMuted }]}>
+                    {airLabsStatus}
+                  </Text>
+                </View>
+              </View>
+
+              <Text style={[styles.modalCopy, { color: colors.textMuted }]}>
+                {t('airLabsModalCopy')}
+              </Text>
+              <Text style={[styles.modalLabel, { color: colors.textMuted }]}>
+                {t('airLabsModalLabel')}
+              </Text>
+              <TextInput
+                value={airLabsInput}
+                onChangeText={setAirLabsInput}
+                placeholder="api_key"
+                placeholderTextColor={colors.textMuted}
+                autoCapitalize="none"
+                autoCorrect={false}
+                secureTextEntry
+                style={[styles.modalInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.bg }]}
+              />
+
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  style={[styles.modalBtn, { backgroundColor: '#DC2626' }, savingAirLabs && { opacity: 0.6 }]}
+                  onPress={removeAirLabsKey}
+                  disabled={savingAirLabs}
+                  activeOpacity={0.85}
+                >
+                  <Text style={[styles.modalBtnTxt, { color: '#fff' }]}>{t('remove')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalBtn, { backgroundColor: colors.primary }, savingAirLabs && { opacity: 0.6 }]}
+                  onPress={saveAirLabsKey}
+                  disabled={savingAirLabs}
+                  activeOpacity={0.85}
+                >
+                  {savingAirLabs
+                    ? <ActivityIndicator size={16} color="#fff" />
+                    : <Text style={[styles.modalBtnTxt, { color: '#fff' }]}>{t('save')}</Text>}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </ScrollView>
         </KeyboardAvoidingView>
       </Modal>
     </>
@@ -963,6 +1098,53 @@ const styles = StyleSheet.create({
   modalActions: { flexDirection: 'row', gap: 10 },
   modalBtn: { flex: 1, borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
   modalBtnTxt: { fontSize: 14, fontWeight: '700' },
+  providerRoot: { flex: 1 },
+  providerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingHorizontal: 18,
+    paddingTop: Platform.OS === 'android' ? 26 : 54,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+  },
+  providerCloseBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  providerHeaderText: { flex: 1 },
+  providerTitle: { fontSize: 22, fontWeight: '900' },
+  providerSubtitle: { fontSize: 13, lineHeight: 18, marginTop: 2 },
+  providerContent: { padding: 16, paddingBottom: 42 },
+  providerOptions: { gap: 10, marginBottom: 22 },
+  providerOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 14,
+  },
+  providerOptionIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 13,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  providerOptionText: { flex: 1 },
+  providerOptionTitle: { fontSize: 15, fontWeight: '800' },
+  providerOptionSub: { fontSize: 12, lineHeight: 17, marginTop: 2 },
+  providerKeyCard: {
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 16,
+    marginBottom: 20,
+  },
+  providerKeyTop: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14 },
   statusModalCard: {
     borderRadius: 22,
     padding: 22,

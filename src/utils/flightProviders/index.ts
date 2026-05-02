@@ -1,6 +1,7 @@
 import { airLabsProvider } from './airLabsProvider';
 import { fr24Provider } from './fr24Provider';
 import { staffMonitorProvider } from './staffMonitorProvider';
+import type { FlightProviderPreference } from '../flightProviderSettings';
 import type {
   FlightSchedulePayload,
   FlightScheduleProvider,
@@ -20,6 +21,26 @@ const DEFAULT_PROVIDERS: FlightScheduleProvider[] = [
   staffMonitorProvider,
   fr24Provider,
 ];
+
+const PROVIDERS_BY_ID = {
+  airlabs: airLabsProvider,
+  staffMonitor: staffMonitorProvider,
+  fr24: fr24Provider,
+} satisfies Record<Exclude<FlightProviderPreference, 'auto'>, FlightScheduleProvider>;
+
+export function getFlightScheduleProviders(
+  preference: FlightProviderPreference = 'auto',
+): FlightScheduleProvider[] {
+  if (preference === 'auto') {
+    return DEFAULT_PROVIDERS;
+  }
+
+  const preferred = PROVIDERS_BY_ID[preference];
+  return [
+    preferred,
+    ...DEFAULT_PROVIDERS.filter(provider => provider.id !== preferred.id),
+  ];
+}
 
 function errorMessage(error: unknown): string {
   if (error instanceof Error && error.message) return error.message;

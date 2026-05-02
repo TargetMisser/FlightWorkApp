@@ -10,10 +10,11 @@ import {
 } from './airportSettings';
 import {
   fetchFlightScheduleFromProviders,
+  getFlightScheduleProviders,
   type FlightScheduleProviderId,
   type FlightScheduleProviderStatus,
 } from './flightProviders';
-import { getAirLabsApiKey } from './flightProviderSettings';
+import { getAirLabsApiKey, getFlightProviderPreference } from './flightProviderSettings';
 
 const FETCH_TIMEOUT = 10000; // 10 seconds
 const SCHEDULE_CACHE_KEY = 'aerostaff_schedule_provider_cache_v1';
@@ -100,12 +101,13 @@ async function fetchScheduleRawData(code?: string): Promise<FR24ScheduleRaw> {
   let payload: Awaited<ReturnType<typeof fetchFlightScheduleFromProviders>>;
   try {
     const airLabsApiKey = await getAirLabsApiKey();
+    const providerPreference = await getFlightProviderPreference();
     payload = await fetchFlightScheduleFromProviders({
       airportCode,
       airport,
       airLabsApiKey,
       signal: controller.signal,
-    });
+    }, getFlightScheduleProviders(providerPreference));
     await saveCachedSchedule({
       airportCode,
       allArrivals: payload.allArrivals,

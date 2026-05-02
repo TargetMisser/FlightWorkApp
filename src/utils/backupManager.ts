@@ -20,6 +20,7 @@ const SAFE_BACKUP_KEYS = [
   'aerostaff_language_v1',
   'aerostaff_theme_mode',
   'aerostaff_flight_filter_v1',
+  'aerostaff_flight_provider_preference_v1',
   'manuals_data_v2',
   '@shift_import_name',
   'aerostaff_notif_enabled',
