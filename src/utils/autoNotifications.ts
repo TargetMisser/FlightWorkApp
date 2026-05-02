@@ -8,9 +8,15 @@ import {
   dismissShiftOngoingNotification,
   syncShiftOngoingExpiry,
 } from './shiftOngoingNotification';
+import {
+  appendNotificationDebugEvent,
+  buildNotificationData,
+  cancelAeroStaffScheduledNotifications,
+  LAST_SCHEDULE_KEY,
+  NOTIF_ENABLED_KEY,
+  NOTIF_IDS_KEY,
+} from './notificationDiagnostics';
 
-const NOTIF_IDS_KEY = 'aerostaff_notif_ids_v1';
-const LAST_SCHEDULE_KEY = 'aerostaff_notif_last_schedule';
 const FLIGHT_FILTER_STORAGE_KEY = 'aerostaff_flight_filter_v1';
 
 function normalizeAirline(value: unknown): string {
@@ -45,14 +51,6 @@ function parseSelectedAirlines(raw: string | null): string[] {
   }
 }
 
-async function cancelPrevious() {
-  const raw = await AsyncStorage.getItem(NOTIF_IDS_KEY);
-  if (!raw) return;
-  const ids: string[] = JSON.parse(raw);
-  await Promise.all(ids.map(id => Notifications.cancelScheduledNotificationAsync(id).catch(() => {})));
-  await AsyncStorage.removeItem(NOTIF_IDS_KEY);
-}
-
 /**
  * Auto-schedule notifications for today's shift departures.
  * For each departure during the shift, notifies at check-in open time.
@@ -63,22 +61,63 @@ export async function autoScheduleNotifications(): Promise<number> {
     // Dismiss ongoing shift notification if shift has ended
     await syncShiftOngoingExpiry();
 
+    const notificationsEnabled = (await AsyncStorage.getItem(NOTIF_ENABLED_KEY)) === 'true';
+    if (!notificationsEnabled) {
+      await appendNotificationDebugEvent({
+        source: 'auto',
+        type: 'skip_disabled',
+        message: 'Startup scheduler skipped because flight notifications are disabled.',
+      });
+      return 0;
+    }
+
     // Skip if already scheduled today
     const todayKey = new Date().toISOString().split('T')[0];
     const lastSchedule = await AsyncStorage.getItem(LAST_SCHEDULE_KEY);
-    if (lastSchedule === todayKey) return 0;
+    if (lastSchedule === todayKey) {
+      await appendNotificationDebugEvent({
+        source: 'auto',
+        type: 'skip_already_scheduled',
+        message: 'Startup scheduler skipped because today was already scheduled.',
+        meta: { todayKey },
+      });
+      return 0;
+    }
 
     // Request notification permission
     const { status } = await Notifications.requestPermissionsAsync();
-    if (status !== 'granted') return 0;
+    if (status !== 'granted') {
+      await appendNotificationDebugEvent({
+        source: 'auto',
+        type: 'skip_permission',
+        message: 'Startup scheduler skipped because notification permission is missing.',
+        meta: { status },
+      });
+      return 0;
+    }
 
     // Get calendar and find today's work shift
     const { status: calStatus } = await Calendar.requestCalendarPermissionsAsync();
-    if (calStatus !== 'granted') return 0;
+    if (calStatus !== 'granted') {
+      await appendNotificationDebugEvent({
+        source: 'auto',
+        type: 'skip_calendar_permission',
+        message: 'Startup scheduler skipped because calendar permission is missing.',
+        meta: { status: calStatus },
+      });
+      return 0;
+    }
 
     const cals = await Calendar.getCalendarsAsync(Calendar.EntityTypes.EVENT);
     const cal = cals.find(c => c.allowsModifications && c.isPrimary) || cals.find(c => c.allowsModifications);
-    if (!cal) return 0;
+    if (!cal) {
+      await appendNotificationDebugEvent({
+        source: 'auto',
+        type: 'skip_calendar_missing',
+        message: 'Startup scheduler skipped because no writable calendar was found.',
+      });
+      return 0;
+    }
 
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const endOfDay = new Date(today); endOfDay.setHours(23, 59, 59, 999);
@@ -86,6 +125,11 @@ export async function autoScheduleNotifications(): Promise<number> {
     const shiftEvent = events.find(e => e.title.includes('Lavoro'));
     if (!shiftEvent) {
       await dismissShiftOngoingNotification();
+      await appendNotificationDebugEvent({
+        source: 'auto',
+        type: 'skip_no_shift',
+        message: 'Startup scheduler skipped because no work shift was found today.',
+      });
       return 0;
     }
 
@@ -148,7 +192,12 @@ export async function autoScheduleNotifications(): Promise<number> {
 
 
     // Cancel old and schedule new
-    await cancelPrevious();
+    await cancelAeroStaffScheduledNotifications({
+      includeShift: true,
+      includePinned: false,
+      reason: 'auto startup reschedule',
+      source: 'auto',
+    });
     const newIds: string[] = [];
 
     // ── Arrival notifications: 10 min before landing ──
@@ -170,7 +219,13 @@ export async function autoScheduleNotifications(): Promise<number> {
             title: `Atterraggio tra 10 min - ${flightNumber}`,
             body: `${airline} da ${origin} · arrivo alle ${arrivalTime}`,
             sound: true,
-            data: { flightNumber, arrTs, type: 'arrival_10min' },
+            data: buildNotificationData({
+              scheduler: 'auto',
+              type: 'arrival_10min',
+              flightNumber,
+              ts: arrTs,
+              extra: { arrTs },
+            }),
           },
           trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: Math.round(secondsUntilNotify), repeats: false },
         });
@@ -210,7 +265,13 @@ export async function autoScheduleNotifications(): Promise<number> {
               title: `Check-in apre tra 10 min - ${flightNumber}`,
               body: `${airline} per ${destination} · CI apre alle ${ciTime} · partenza ${depTime}`,
               sound: true,
-              data: { flightNumber, depTs, type: 'checkin_open_10min' },
+              data: buildNotificationData({
+                scheduler: 'auto',
+                type: 'checkin_open_10min',
+                flightNumber,
+                ts: depTs,
+                extra: { depTs },
+              }),
             },
             trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: Math.round(secondsUntilCIOpenWarn), repeats: false },
           });
@@ -226,7 +287,13 @@ export async function autoScheduleNotifications(): Promise<number> {
               title: `Check-in chiude tra 10 min - ${flightNumber}`,
               body: `${airline} per ${destination} · chiusura CI alle ${ciCloseTime} · partenza ${depTime}`,
               sound: true,
-              data: { flightNumber, depTs, type: 'checkin_close_10min' },
+              data: buildNotificationData({
+                scheduler: 'auto',
+                type: 'checkin_close_10min',
+                flightNumber,
+                ts: depTs,
+                extra: { depTs },
+              }),
             },
             trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: Math.round(secondsUntilCICloseWarn), repeats: false },
           });
@@ -242,7 +309,13 @@ export async function autoScheduleNotifications(): Promise<number> {
               title: `Gate apre tra 5 min - ${flightNumber}`,
               body: `${airline} per ${destination} · gate apre alle ${gateTime} · partenza ${depTime}`,
               sound: true,
-              data: { flightNumber, depTs, type: 'gate_open_5min' },
+              data: buildNotificationData({
+                scheduler: 'auto',
+                type: 'gate_open_5min',
+                flightNumber,
+                ts: depTs,
+                extra: { depTs },
+              }),
             },
             trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: Math.round(secondsUntilGateOpenWarn), repeats: false },
           });
@@ -258,7 +331,13 @@ export async function autoScheduleNotifications(): Promise<number> {
               title: `Gate chiude tra 5 min - ${flightNumber}`,
               body: `${airline} per ${destination} · gate chiude alle ${gateCloseTime} · partenza ${depTime}`,
               sound: true,
-              data: { flightNumber, depTs, type: 'gate_close_5min' },
+              data: buildNotificationData({
+                scheduler: 'auto',
+                type: 'gate_close_5min',
+                flightNumber,
+                ts: depTs,
+                extra: { depTs },
+              }),
             },
             trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: Math.round(secondsUntilGateCloseWarn), repeats: false },
           });
@@ -278,7 +357,11 @@ export async function autoScheduleNotifications(): Promise<number> {
           title: 'Turno terminato',
           body: `Buon lavoro! Il tuo turno delle ${endTime} è concluso.`,
           sound: true,
-          data: { type: 'shift_end' },
+          data: buildNotificationData({
+            scheduler: 'auto',
+            type: 'shift_end',
+            ts: shiftEnd,
+          }),
         },
         trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: Math.round(secondsUntilEnd), repeats: false },
       });
@@ -287,8 +370,25 @@ export async function autoScheduleNotifications(): Promise<number> {
 
     await AsyncStorage.setItem(NOTIF_IDS_KEY, JSON.stringify(newIds));
     await AsyncStorage.setItem(LAST_SCHEDULE_KEY, todayKey);
+    await appendNotificationDebugEvent({
+      source: 'auto',
+      type: 'schedule',
+      message: 'Startup scheduler completed.',
+      scheduled: newIds.length,
+      meta: {
+        arrivals: shiftArrivals.length,
+        departures: shiftDepartures.length,
+        todayKey,
+      },
+    });
     return newIds.length;
   } catch (e) {
+    await appendNotificationDebugEvent({
+      source: 'auto',
+      type: 'error',
+      message: 'Startup scheduler failed.',
+      meta: { error: e instanceof Error ? e.message : String(e) },
+    });
     if (__DEV__) console.error('autoScheduleNotifications error:', e);
     return 0;
   }

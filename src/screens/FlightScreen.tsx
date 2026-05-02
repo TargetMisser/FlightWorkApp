@@ -22,14 +22,19 @@ import { ShiftWidget } from '../widgets/ShiftWidget';
 import { useLanguage } from '../context/LanguageContext';
 import type { TranslationKey } from '../i18n/translations';
 import { dismissPinnedFlightNotification, showOrUpdatePinnedFlightNotification } from '../utils/pinnedFlightOngoingNotification';
+import {
+  appendNotificationDebugEvent,
+  buildNotificationData,
+  cancelAeroStaffScheduledNotifications,
+  NOTIF_ENABLED_KEY,
+  NOTIF_IDS_KEY,
+  NOTIF_SETTINGS_KEY,
+  PINNED_NOTIF_IDS_KEY,
+} from '../utils/notificationDiagnostics';
 
 const WearDataSender = Platform.OS === 'android' ? NativeModules.WearDataSender : null;
 
-const NOTIF_IDS_KEY = 'aerostaff_notif_ids_v1';
-const NOTIF_ENABLED_KEY = 'aerostaff_notif_enabled';
-const NOTIF_SETTINGS_KEY = 'aerostaff_notif_settings_v1';
 const PINNED_FLIGHT_KEY = 'pinned_flight_v1';
-const PINNED_NOTIF_IDS_KEY = 'pinned_notif_ids_v1';
 const FLIGHT_FILTER_KEY = 'aerostaff_flight_filter_v1';
 const FLIGHTS_CACHE_KEY = 'aerostaff_flights_cache_v2';
 const FLIGHTS_RETENTION_SECONDS = 60 * 60;
@@ -722,12 +727,14 @@ function FlightRowComponent({ item, activeTab, userShift, pinnedFlightId, onPin,
 const FlightRow = React.memo(FlightRowComponent);
 
 // ─── Helpers notifiche ─────────────────────────────────────────────────────────
-async function cancelPreviousNotifications() {
-  const raw = await AsyncStorage.getItem(NOTIF_IDS_KEY);
-  if (!raw) return;
-  const ids: string[] = JSON.parse(raw);
-  await Promise.all(ids.map(id => Notifications.cancelScheduledNotificationAsync(id).catch(() => {})));
-  await AsyncStorage.removeItem(NOTIF_IDS_KEY);
+async function cancelPreviousNotifications(reason = 'flight shift reschedule', logEmpty = false) {
+  return cancelAeroStaffScheduledNotifications({
+    includeShift: true,
+    includePinned: false,
+    reason,
+    source: 'flights',
+    logEmpty,
+  });
 }
 
 async function scheduleShiftNotifications(
@@ -738,7 +745,7 @@ async function scheduleShiftNotifications(
   settings: FlightNotificationSettings,
   selectedAirlines: string[],
 ): Promise<number> {
-  await cancelPreviousNotifications();
+  await cancelPreviousNotifications('flight shift reschedule', false);
   const now = Date.now() / 1000;
   const newIds: string[] = [];
   const canNotify = (item: any) => shouldNotifyAirline(item, settings, selectedAirlines);
@@ -765,7 +772,12 @@ async function scheduleShiftNotifications(
           sound: true,
           sticky: settings.sticky,
           autoDismiss: !settings.sticky,
-          data: { flightNumber, ts, type: 'arrival_shift' },
+          data: buildNotificationData({
+            scheduler: 'flights',
+            type: 'arrival_shift',
+            flightNumber,
+            ts,
+          }),
         },
         trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: Math.round(secondsUntilNotify), repeats: false },
       });
@@ -795,7 +807,12 @@ async function scheduleShiftNotifications(
           sound: true,
           sticky: settings.sticky,
           autoDismiss: !settings.sticky,
-          data: { flightNumber, ts, type: 'departure_shift' },
+          data: buildNotificationData({
+            scheduler: 'flights',
+            type: 'departure_shift',
+            flightNumber,
+            ts,
+          }),
         },
         trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: Math.round(secondsUntilNotify), repeats: false },
       });
@@ -814,7 +831,11 @@ async function scheduleShiftNotifications(
           sound: true,
           sticky: settings.sticky,
           autoDismiss: !settings.sticky,
-          data: { type: 'shift_end' },
+          data: buildNotificationData({
+            scheduler: 'flights',
+            type: 'shift_end',
+            ts: shiftEnd,
+          }),
         },
         trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: Math.round(secondsUntilEnd), repeats: false },
       });
@@ -823,15 +844,29 @@ async function scheduleShiftNotifications(
   }
 
   await AsyncStorage.setItem(NOTIF_IDS_KEY, JSON.stringify(newIds));
+  await appendNotificationDebugEvent({
+    source: 'flights',
+    type: 'schedule',
+    message: 'Flight tab scheduled shift notifications.',
+    scheduled: newIds.length,
+    meta: {
+      arrivals: shiftArrivals.length,
+      departures: shiftDepartures.length,
+      selectedAirlines: selectedAirlines.length,
+      settings,
+    },
+  });
   return newIds.length;
 }
 
-async function cancelPinnedNotifications() {
-  const raw = await AsyncStorage.getItem(PINNED_NOTIF_IDS_KEY);
-  if (!raw) return;
-  const ids: string[] = JSON.parse(raw);
-  await Promise.all(ids.map(id => Notifications.cancelScheduledNotificationAsync(id).catch(() => {})));
-  await AsyncStorage.removeItem(PINNED_NOTIF_IDS_KEY);
+async function cancelPinnedNotifications(reason = 'pinned flight reschedule', logEmpty = false) {
+  return cancelAeroStaffScheduledNotifications({
+    includeShift: false,
+    includePinned: true,
+    reason,
+    source: 'pinned',
+    logEmpty,
+  });
 }
 
 async function schedulePinnedNotifications(
@@ -840,7 +875,7 @@ async function schedulePinnedNotifications(
   locale: string,
   settings: FlightNotificationSettings,
 ): Promise<void> {
-  await cancelPinnedNotifications();
+  await cancelPinnedNotifications('pinned flight reschedule', false);
   const now = Date.now() / 1000;
   const ids: string[] = [];
 
@@ -861,7 +896,13 @@ async function schedulePinnedNotifications(
           sound: true,
           sticky: settings.sticky,
           autoDismiss: !settings.sticky,
-          data: { flightNumber, ts, pinned: true },
+          data: buildNotificationData({
+            scheduler: 'flights_pinned',
+            type: 'pinned_arrival',
+            flightNumber,
+            ts,
+            pinned: true,
+          }),
         },
         trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: Math.round(secsUntil), repeats: false },
       });
@@ -874,12 +915,13 @@ async function schedulePinnedNotifications(
     const depTime = new Date(ts * 1000).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
     const ops = getAirlineOps(airline);
 
-    const phases: Array<{ offset: number; title: string; body: string }> = [
-      { offset: ops.checkInOpen, title: `Check-in aperto - ${flightNumber}`, body: `Check-in aperto per il volo delle ${depTime} → ${dest}` },
-      { offset: ops.gateOpen, title: `Gate aperto - ${flightNumber}`, body: `Gate aperto per il volo delle ${depTime} → ${dest}` },
-      { offset: ops.gateClose, title: `Chiusura gate - ${flightNumber}`, body: `Gate in chiusura per il volo delle ${depTime} → ${dest}` },
+    const phases: Array<{ offset: number; type: string; title: string; body: string }> = [
+      { offset: ops.checkInOpen, type: 'pinned_checkin_open', title: `Check-in aperto - ${flightNumber}`, body: `Check-in aperto per il volo delle ${depTime} → ${dest}` },
+      { offset: ops.gateOpen, type: 'pinned_gate_open', title: `Gate aperto - ${flightNumber}`, body: `Gate aperto per il volo delle ${depTime} → ${dest}` },
+      { offset: ops.gateClose, type: 'pinned_gate_close', title: `Chiusura gate - ${flightNumber}`, body: `Gate in chiusura per il volo delle ${depTime} → ${dest}` },
       {
         offset: settings.departureLeadMinutes,
+        type: 'pinned_departure',
         title: `Partenza tra ${settings.departureLeadMinutes} min - ${flightNumber}`,
         body: `${airline} → ${dest} · partenza alle ${depTime}`,
       },
@@ -895,7 +937,13 @@ async function schedulePinnedNotifications(
           sound: true,
           sticky: settings.sticky,
           autoDismiss: !settings.sticky,
-          data: { flightNumber, ts, pinned: true },
+          data: buildNotificationData({
+            scheduler: 'flights_pinned',
+            type: phase.type,
+            flightNumber,
+            ts,
+            pinned: true,
+          }),
         },
         trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: Math.round(secsUntil), repeats: false },
       });
@@ -906,14 +954,17 @@ async function schedulePinnedNotifications(
   if (ids.length > 0) {
     await AsyncStorage.setItem(PINNED_NOTIF_IDS_KEY, JSON.stringify(ids));
   }
+  await appendNotificationDebugEvent({
+    source: 'pinned',
+    type: 'schedule',
+    message: 'Flight tab scheduled pinned-flight notifications.',
+    scheduled: ids.length,
+    meta: { flightNumber, tab, sticky: settings.sticky },
+  });
 }
 
 // ─── Screen ────────────────────────────────────────────────────────────────────
-type FlightScreenProps = {
-  openNotifSettingsSignal?: number;
-};
-
-export default function FlightScreen({ openNotifSettingsSignal = 0 }: FlightScreenProps) {
+export default function FlightScreen() {
   const { colors } = useAppTheme();
   const { t, locale } = useLanguage();
   const {
@@ -947,7 +998,6 @@ export default function FlightScreen({ openNotifSettingsSignal = 0 }: FlightScre
   const [staffMonitorArrs, setStaffMonitorArrs] = useState<StaffMonitorFlight[]>([]);
   const [notifSettings, setNotifSettings] = useState<FlightNotificationSettings>(DEFAULT_NOTIFICATION_SETTINGS);
   const [flightDataSource, setFlightDataSource] = useState<FlightDataSourceState | null>(null);
-  const lastOpenNotifSettingsSignalRef = useRef(openNotifSettingsSignal);
   const applySelectedAirlines = useCallback((next: string[]) => {
     setSelectedAirlines(next);
     persistSelectedAirlines(next).catch(() => {});
@@ -968,14 +1018,6 @@ export default function FlightScreen({ openNotifSettingsSignal = 0 }: FlightScre
   useEffect(() => {
     notifSettingsRef.current = notifSettings;
   }, [notifSettings]);
-
-  useEffect(() => {
-    if (openNotifSettingsSignal === lastOpenNotifSettingsSignalRef.current) {
-      return;
-    }
-    lastOpenNotifSettingsSignalRef.current = openNotifSettingsSignal;
-    setNotifSettingsVisible(true);
-  }, [openNotifSettingsSignal]);
 
   useEffect(() => {
     AsyncStorage.getItem(NOTIF_ENABLED_KEY).then(v => setNotifsEnabled(v === 'true'));
@@ -1135,7 +1177,7 @@ export default function FlightScreen({ openNotifSettingsSignal = 0 }: FlightScre
           const stillPresent = !!pinId && pool.some(item => item.flight?.identification?.number?.default === pinId);
           if ((pinTs && pinTs < Date.now() / 1000) || !stillPresent) {
             await AsyncStorage.removeItem(PINNED_FLIGHT_KEY);
-            await cancelPinnedNotifications();
+            await cancelPinnedNotifications('pinned flight expired or missing', false);
             await dismissPinnedFlightNotification();
             setPinnedFlightId(null);
           } else if (stillPresent && pinId && notificationsEnabledNow) {
@@ -1144,7 +1186,7 @@ export default function FlightScreen({ openNotifSettingsSignal = 0 }: FlightScre
               await showOrUpdatePinnedFlightNotification(updated, pinTab, notifSettingsRef.current.sticky);
             }
           } else if (!notificationsEnabledNow) {
-            await cancelPinnedNotifications();
+            await cancelPinnedNotifications('flight refresh notifications disabled', false);
             await dismissPinnedFlightNotification();
           }
         } catch {}
@@ -1278,7 +1320,7 @@ export default function FlightScreen({ openNotifSettingsSignal = 0 }: FlightScre
         );
         setScheduledCount(count);
       } else {
-        await cancelPreviousNotifications();
+        await cancelPreviousNotifications('flight refresh inactive', false);
         setScheduledCount(0);
       }
     } catch (e) { if (__DEV__) console.error('[fetchAll]', e); } finally { setLoading(false); setRefreshing(false); }
@@ -1338,7 +1380,12 @@ export default function FlightScreen({ openNotifSettingsSignal = 0 }: FlightScre
     settings: FlightNotificationSettings = notifSettingsRef.current,
   ): Promise<number> => {
     if (!shifts.today) {
-      await cancelPreviousNotifications();
+      await cancelPreviousNotifications('no current shift', false);
+      await appendNotificationDebugEvent({
+        source: 'flights',
+        type: 'skip_no_shift',
+        message: 'Flight tab skipped scheduling because there is no current shift.',
+      });
       setScheduledCount(0);
       return 0;
     }
@@ -1367,15 +1414,26 @@ export default function FlightScreen({ openNotifSettingsSignal = 0 }: FlightScre
     if (!next) {
       setNotifsEnabled(false);
       await AsyncStorage.setItem(NOTIF_ENABLED_KEY, 'false');
-      await cancelPreviousNotifications();
-      await cancelPinnedNotifications();
+      await cancelPreviousNotifications('user disabled notifications', true);
+      await cancelPinnedNotifications('user disabled notifications', true);
       await dismissPinnedFlightNotification();
+      await appendNotificationDebugEvent({
+        source: 'settings',
+        type: 'disabled',
+        message: 'Flight notifications disabled by user.',
+      });
       setScheduledCount(0);
       return;
     }
 
     const { status } = await Notifications.requestPermissionsAsync();
     if (status !== 'granted') {
+      await appendNotificationDebugEvent({
+        source: 'settings',
+        type: 'permission_denied',
+        message: 'Notification permission denied while enabling flight notifications.',
+        meta: { status },
+      });
       showNotifDialog(t('flightNotifPermDenied'), t('flightNotifPermMsg'), 'warning');
       return;
     }
@@ -1384,7 +1442,12 @@ export default function FlightScreen({ openNotifSettingsSignal = 0 }: FlightScre
       showNotifDialog(t('flightNoShift'), t('flightNoShiftMsg'), 'info');
       setNotifsEnabled(false);
       await AsyncStorage.setItem(NOTIF_ENABLED_KEY, 'false');
-      await cancelPreviousNotifications();
+      await cancelPreviousNotifications('enable requested without shift', true);
+      await appendNotificationDebugEvent({
+        source: 'settings',
+        type: 'enable_without_shift',
+        message: 'User tried to enable notifications but no current shift was available.',
+      });
       setScheduledCount(0);
       return;
     }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, ActivityIndicator,
   Modal, KeyboardAvoidingView, Platform, TextInput, Linking,
@@ -9,10 +9,7 @@ import { useAppTheme, ThemeMode } from '../context/ThemeContext';
 import { useAirport } from '../context/AirportContext';
 import { useLanguage } from '../context/LanguageContext';
 import {
-  AIRPORT_PRESETS,
   formatAirportSettingLabel,
-  normalizeAirportCode,
-  isValidAirportCode,
 } from '../utils/airportSettings';
 import {
   APP_VERSION,
@@ -22,6 +19,7 @@ import {
   type UpdateInfo,
 } from '../utils/updateChecker';
 import UpdateModal from '../components/UpdateModal';
+import ProfileSwitcherModal from '../components/ProfileSwitcherModal';
 import { exportBackup, importBackup } from '../utils/backupManager';
 import {
   clearAirLabsApiKey,
@@ -41,12 +39,25 @@ import {
   getStaffMonitorDebugFlights,
   getStaffMonitorDebugStatus,
 } from '../utils/staffMonitor';
+import {
+  cancelAeroStaffScheduledNotifications,
+  getNotificationDebugSnapshot,
+  type NotificationDebugEvent,
+  type NotificationDebugSnapshot,
+} from '../utils/notificationDiagnostics';
 
 const STAFF_MONITOR_LINKS = {
   main: 'https://servizi.pisa-airport.com/staffMonitor/staffMonitor.html',
   departures: 'https://servizi.pisa-airport.com/staffMonitor/staffMonitor?trans=true&nature=D',
   arrivals: 'https://servizi.pisa-airport.com/staffMonitor/staffMonitor?trans=true&nature=A',
 };
+
+function notificationEventTone(event: NotificationDebugEvent): string {
+  if (event.type.includes('error') || event.type.includes('denied')) return '#EF4444';
+  if (event.type.includes('skip') || event.type.includes('cancel')) return '#F59E0B';
+  if (event.type.includes('schedule') || event.type.includes('enabled')) return '#10B981';
+  return '#94A3B8';
+}
 
 // ─── Tema picker ──────────────────────────────────────────────────────────────
 type ThemeOption = {
@@ -206,16 +217,16 @@ type DialogState = {
   scrollable?: boolean;
 };
 
-type SettingsScreenProps = {
-  onOpenFlightNotifications?: () => void;
-};
-
 // ─── Main ─────────────────────────────────────────────────────────────────────
-export default function SettingsScreen({ onOpenFlightNotifications }: SettingsScreenProps) {
+export default function SettingsScreen() {
   const { colors, mode, setMode, isLoading } = useAppTheme();
-  const { airport, airportCode, setAirportCode, isLoading: airportLoading } = useAirport();
+  const {
+    airportCode,
+    isLoading: airportLoading,
+    activeProfile,
+  } = useAirport();
   const { t, lang, setLang, languages } = useLanguage();
-  const [airportModalOpen, setAirportModalOpen] = useState(false);
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [providerModalOpen, setProviderModalOpen] = useState(false);
   const [dialogState, setDialogState] = useState<DialogState | null>(null);
 
@@ -224,7 +235,6 @@ export default function SettingsScreen({ onOpenFlightNotifications }: SettingsSc
     label: opt.id === 'light' ? t('themeLight') : opt.id === 'dark' ? t('themeDark') : t('themeWeather'),
     sublabel: opt.id === 'light' ? t('themeLightSub') : opt.id === 'dark' ? t('themeDarkSub') : t('themeWeatherSub'),
   }));
-  const [airportInput, setAirportInput] = useState(airportCode);
   const [airLabsInput, setAirLabsInput] = useState('');
   const [providerPreference, setProviderPreference] = useState<FlightProviderPreference>('auto');
   const [airLabsConfigured, setAirLabsConfigured] = useState(false);
@@ -232,6 +242,8 @@ export default function SettingsScreen({ onOpenFlightNotifications }: SettingsSc
   const [providerSummary, setProviderSummary] = useState(t('flightProviderAuto'));
   const [providerDebug, setProviderDebug] = useState<FlightProviderDiagnosticsSnapshot | null>(null);
   const [staffMonitorDebug, setStaffMonitorDebug] = useState('');
+  const [notificationDebug, setNotificationDebug] = useState<NotificationDebugSnapshot | null>(null);
+  const [clearingNotifications, setClearingNotifications] = useState(false);
   const [savingAirLabs, setSavingAirLabs] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
@@ -241,6 +253,21 @@ export default function SettingsScreen({ onOpenFlightNotifications }: SettingsSc
   useEffect(() => {
     getCachedUpdateInfo().then(setUpdateInfo);
   }, []);
+
+  const profileSummary = useMemo(() => {
+    if (airportLoading) {
+      return t('profileSettingsLoading');
+    }
+
+    if (!activeProfile) {
+      return t('profileSettingsEmpty');
+    }
+
+    return t('profileSettingsSummary')
+      .replace('{name}', activeProfile.name)
+      .replace('{airport}', formatAirportSettingLabel(activeProfile.airportCode))
+      .replace('{count}', String(activeProfile.airlines.length));
+  }, [activeProfile, airportLoading, t]);
 
   const providerPreferenceLabel = useCallback((preference: FlightProviderPreference) => {
     switch (preference) {
@@ -284,10 +311,16 @@ export default function SettingsScreen({ onOpenFlightNotifications }: SettingsSc
     ].filter(Boolean).join('\n'));
   }, [airportCode]);
 
+  const refreshNotificationDebug = useCallback(async () => {
+    const snapshot = await getNotificationDebugSnapshot();
+    setNotificationDebug(snapshot);
+  }, []);
+
   useEffect(() => {
     refreshProviderSettings().catch(() => {});
     refreshProviderDebug().catch(() => {});
-  }, [refreshProviderDebug, refreshProviderSettings]);
+    refreshNotificationDebug().catch(() => {});
+  }, [refreshNotificationDebug, refreshProviderDebug, refreshProviderSettings]);
 
   const showDialog = useCallback((dialog: DialogState) => {
     setDialogState(dialog);
@@ -384,20 +417,11 @@ export default function SettingsScreen({ onOpenFlightNotifications }: SettingsSc
     });
   }, [showDialog, t]);
 
-  const openAirportModal = () => {
-    setAirportInput(airportCode);
-    setAirportModalOpen(true);
-  };
-
-  const closeAirportModal = () => {
-    setAirportModalOpen(false);
-    setAirportInput(airportCode);
-  };
-
   const openProviderModal = async () => {
     await Promise.all([
       refreshProviderSettings(),
       refreshProviderDebug(),
+      refreshNotificationDebug(),
     ]);
     setAirLabsInput(await getAirLabsApiKey() ?? '');
     setProviderModalOpen(true);
@@ -423,6 +447,27 @@ export default function SettingsScreen({ onOpenFlightNotifications }: SettingsSc
       });
     });
   }, [showDialog, t]);
+
+  const clearScheduledNotifications = useCallback(async () => {
+    setClearingNotifications(true);
+    try {
+      const cancelled = await cancelAeroStaffScheduledNotifications({
+        includeShift: true,
+        includePinned: true,
+        reason: 'settings debug clear',
+        source: 'settings',
+        logEmpty: true,
+      });
+      await refreshNotificationDebug();
+      showDialog({
+        title: t('notificationDebugClearedTitle'),
+        message: t('notificationDebugClearedMsg').replace('{count}', String(cancelled)),
+        tone: 'success',
+      });
+    } finally {
+      setClearingNotifications(false);
+    }
+  }, [refreshNotificationDebug, showDialog, t]);
 
   const saveAirLabsKey = async () => {
     setSavingAirLabs(true);
@@ -457,46 +502,6 @@ export default function SettingsScreen({ onOpenFlightNotifications }: SettingsSc
       setSavingAirLabs(false);
     }
   };
-
-  const saveAirport = async () => {
-    const normalized = normalizeAirportCode(airportInput);
-    if (!isValidAirportCode(normalized)) {
-      showDialog({
-        title: t('airportAlertInvalidTitle'),
-        message: t('airportAlertInvalidMsg'),
-        tone: 'error',
-      });
-      return;
-    }
-
-    try {
-      await setAirportCode(normalized);
-      setAirportModalOpen(false);
-      showDialog({
-        title: t('airportAlertUpdatedTitle'),
-        message: t('airportAlertUpdatedMsg'),
-        tone: 'success',
-      });
-    } catch {
-      showDialog({
-        title: t('airportAlertErrorTitle'),
-        message: t('airportAlertErrorMsg'),
-        tone: 'error',
-      });
-    }
-  };
-
-  const handleOpenFlightNotifications = useCallback(() => {
-    if (onOpenFlightNotifications) {
-      onOpenFlightNotifications();
-      return;
-    }
-    showDialog({
-      title: t('notifFlights'),
-      message: t('notifFlightsSub'),
-      tone: 'info',
-    });
-  }, [onOpenFlightNotifications, showDialog, t]);
 
   return (
     <>
@@ -543,24 +548,14 @@ export default function SettingsScreen({ onOpenFlightNotifications }: SettingsSc
       {/* ── Sezione Account ── */}
       <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>{t('sectionAccount')}</Text>
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }, colors.isDark && { elevation: 0, shadowOpacity: 0, borderWidth: 1 }]}>
-        <SettingRow icon="person-outline"  label={t('accountProfile')} sublabel={t('accountProfileSub')}   type="arrow" disabled />
-        <View style={[styles.divider, { backgroundColor: colors.border }]} />
-        <SettingRow icon="badge"           label={t('accountId')} sublabel={t('accountIdSub')}          type="arrow" disabled />
-      </View>
-
-      {/* ── Sezione Aeroporto ── */}
-      <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>{t('sectionAirport')}</Text>
-      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }, colors.isDark && { elevation: 0, shadowOpacity: 0, borderWidth: 1 }]}>
         <SettingRow
-          icon="flight-land"
-          label={t('airportBase')}
-          sublabel={airportLoading ? t('airportLoading') : formatAirportSettingLabel(airport.code)}
+          icon="badge"
+          label={t('profileTitle')}
+          sublabel={profileSummary}
           type="arrow"
-          onPress={airportLoading ? undefined : openAirportModal}
+          onPress={() => setProfileModalOpen(true)}
           disabled={airportLoading}
         />
-        <View style={[styles.divider, { backgroundColor: colors.border }]} />
-        <SettingRow icon="airlines"        label={t('airportAirlines')} sublabel={t('airportAirlinesSub')}     type="arrow" disabled />
       </View>
 
       {/* ── Sezione Fonti voli ── */}
@@ -573,20 +568,6 @@ export default function SettingsScreen({ onOpenFlightNotifications }: SettingsSc
           type="arrow"
           onPress={() => { openProviderModal().catch(() => {}); }}
         />
-      </View>
-
-      {/* ── Sezione Notifiche ── */}
-      <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>{t('sectionNotifications')}</Text>
-      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }, colors.isDark && { elevation: 0, shadowOpacity: 0, borderWidth: 1 }]}>
-        <SettingRow
-          icon="notifications"
-          label={t('notifFlights')}
-          sublabel={t('notifFlightsSub')}
-          type="arrow"
-          onPress={handleOpenFlightNotifications}
-        />
-        <View style={[styles.divider, { backgroundColor: colors.border }]} />
-        <SettingRow icon="alarm"           label={t('notifReminder')} sublabel={t('notifReminderSub')}            type="toggle" disabled />
       </View>
 
       {/* ── Info app ── */}
@@ -815,83 +796,10 @@ export default function SettingsScreen({ onOpenFlightNotifications }: SettingsSc
         </Modal>
       )}
 
-      <Modal
-        visible={airportModalOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={closeAirportModal}
-      >
-        <KeyboardAvoidingView
-          style={styles.modalOverlay}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        >
-          <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={closeAirportModal} />
-          <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.modalTitle, { color: colors.primaryDark }]}>{t('airportModalTitle')}</Text>
-            <Text style={[styles.modalCopy, { color: colors.textMuted }]}>
-
-              {t('airportModalCopy')}
-            </Text>
-
-            <Text style={[styles.modalLabel, { color: colors.textMuted }]}>{t('airportModalLabel')}</Text>
-            <TextInput
-              value={airportInput}
-              onChangeText={text => setAirportInput(normalizeAirportCode(text))}
-              placeholder="PSA"
-              placeholderTextColor={colors.textMuted}
-              autoCapitalize="characters"
-              autoCorrect={false}
-              maxLength={3}
-              style={[styles.modalInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.bg }]}
-            />
-
-            <Text style={[styles.modalLabel, { color: colors.textMuted }]}>{t('airportModalQuickPick')}</Text>
-            <View style={styles.airportChipWrap}>
-              {AIRPORT_PRESETS.map(item => {
-                const selected = airportInput === item.code;
-                return (
-                  <TouchableOpacity
-                    key={item.code}
-                    style={[
-                      styles.airportChip,
-                      {
-                        backgroundColor: selected ? colors.primary : colors.cardSecondary,
-                        borderColor: selected ? colors.primary : colors.border,
-                      },
-                    ]}
-                    onPress={() => setAirportInput(item.code)}
-                    activeOpacity={0.85}
-                  >
-                    <Text style={[styles.airportChipCode, { color: selected ? '#fff' : colors.text }]}>
-                      {item.code}
-                    </Text>
-                    <Text style={[styles.airportChipName, { color: selected ? 'rgba(255,255,255,0.82)' : colors.textMuted }]}>
-                      {item.city}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={[styles.modalBtn, { backgroundColor: colors.cardSecondary, borderColor: colors.border, borderWidth: 1 }]}
-                onPress={closeAirportModal}
-                activeOpacity={0.85}
-              >
-                <Text style={[styles.modalBtnTxt, { color: colors.text }]}>{t('cancel')}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalBtn, { backgroundColor: colors.primary }]}
-                onPress={saveAirport}
-                activeOpacity={0.85}
-              >
-                <Text style={[styles.modalBtnTxt, { color: '#fff' }]}>{t('save')}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+      <ProfileSwitcherModal
+        visible={profileModalOpen}
+        onClose={() => setProfileModalOpen(false)}
+      />
 
       <Modal
         visible={providerModalOpen}
@@ -1180,6 +1088,128 @@ export default function SettingsScreen({ onOpenFlightNotifications }: SettingsSc
                 {staffMonitorDebug || t('flightDebugNoStaffMonitorDebug')}
               </Text>
             </View>
+
+            <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>
+              {t('notificationDebugTitle')}
+            </Text>
+            <View style={[styles.providerKeyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={styles.providerKeyTop}>
+                <View style={[styles.providerOptionIcon, { backgroundColor: colors.primaryLight }]}>
+                  <MaterialIcons name="notifications-active" size={20} color={colors.primary} />
+                </View>
+                <View style={styles.providerOptionText}>
+                  <Text style={[styles.providerOptionTitle, { color: colors.text }]}>
+                    {t('notificationDebugTitle')}
+                  </Text>
+                  <Text style={[styles.providerOptionSub, { color: colors.textMuted }]}>
+                    {notificationDebug
+                      ? t('notificationDebugSubtitle')
+                        .replace('{pending}', String(notificationDebug.pendingAeroStaff))
+                        .replace('{duplicates}', String(notificationDebug.possibleDuplicates.length))
+                      : t('notificationDebugNoData')}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={[styles.providerRefreshBtn, { backgroundColor: colors.cardSecondary, borderColor: colors.border }]}
+                  onPress={() => { refreshNotificationDebug().catch(() => {}); }}
+                  activeOpacity={0.85}
+                >
+                  <MaterialIcons name="refresh" size={18} color={colors.primary} />
+                </TouchableOpacity>
+              </View>
+
+              {notificationDebug ? (
+                <>
+                  <View style={styles.debugMetaWrap}>
+                    <View style={[styles.debugMetaPillSmall, { backgroundColor: colors.cardSecondary }]}>
+                      <Text style={[styles.debugMetaLabel, { color: colors.textMuted }]}>{t('notificationDebugEnabled')}</Text>
+                      <Text style={[styles.debugMetaValue, { color: notificationDebug.enabled ? '#10B981' : colors.text }]}>
+                        {notificationDebug.enabled ? t('yes') : t('no')}
+                      </Text>
+                    </View>
+                    <View style={[styles.debugMetaPillSmall, { backgroundColor: colors.cardSecondary }]}>
+                      <Text style={[styles.debugMetaLabel, { color: colors.textMuted }]}>{t('notificationDebugPending')}</Text>
+                      <Text style={[styles.debugMetaValue, { color: colors.text }]}>{notificationDebug.pendingAeroStaff}</Text>
+                    </View>
+                    <View style={[styles.debugMetaPillSmall, { backgroundColor: colors.cardSecondary }]}>
+                      <Text style={[styles.debugMetaLabel, { color: colors.textMuted }]}>{t('notificationDebugSavedShift')}</Text>
+                      <Text style={[styles.debugMetaValue, { color: colors.text }]}>{notificationDebug.savedShiftIds}</Text>
+                    </View>
+                    <View style={[styles.debugMetaPillSmall, { backgroundColor: colors.cardSecondary }]}>
+                      <Text style={[styles.debugMetaLabel, { color: colors.textMuted }]}>{t('notificationDebugSavedPinned')}</Text>
+                      <Text style={[styles.debugMetaValue, { color: colors.text }]}>{notificationDebug.savedPinnedIds}</Text>
+                    </View>
+                    <View style={[styles.debugMetaPillSmall, { backgroundColor: colors.cardSecondary }]}>
+                      <Text style={[styles.debugMetaLabel, { color: colors.textMuted }]}>{t('notificationDebugDuplicates')}</Text>
+                      <Text style={[styles.debugMetaValue, { color: notificationDebug.possibleDuplicates.length > 0 ? '#EF4444' : colors.text }]}>
+                        {notificationDebug.possibleDuplicates.length}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.notificationDebugActions}>
+                    <TouchableOpacity
+                      style={[styles.notificationClearBtn, { backgroundColor: '#DC262622', borderColor: '#DC262655' }, clearingNotifications && { opacity: 0.6 }]}
+                      onPress={() => { clearScheduledNotifications().catch(() => {}); }}
+                      disabled={clearingNotifications}
+                      activeOpacity={0.85}
+                    >
+                      {clearingNotifications
+                        ? <ActivityIndicator size={15} color="#DC2626" />
+                        : <MaterialIcons name="delete-sweep" size={16} color="#DC2626" />}
+                      <Text style={styles.notificationClearText}>{t('notificationDebugClear')}</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <Text style={[styles.modalLabel, { color: colors.textMuted }]}>
+                    {t('notificationDebugDuplicateList')}
+                  </Text>
+                  <Text style={[styles.debugMono, { color: colors.textMuted, backgroundColor: colors.bg, borderColor: colors.border }]}>
+                    {notificationDebug.possibleDuplicates.length > 0
+                      ? notificationDebug.possibleDuplicates
+                        .slice(0, 5)
+                        .map(item => `${item.count}x ${item.key}${item.titles.length > 0 ? `\n${item.titles.join(', ')}` : ''}`)
+                        .join('\n\n')
+                      : t('notificationDebugNoDuplicates')}
+                  </Text>
+
+                  <Text style={[styles.modalLabel, { color: colors.textMuted, marginTop: 16 }]}>
+                    {t('notificationDebugLastEvents')}
+                  </Text>
+                  <View style={styles.debugProviderList}>
+                    {notificationDebug.lastEvents.length > 0 ? notificationDebug.lastEvents.slice(0, 6).map((event, index) => {
+                      const meta = [
+                        typeof event.scheduled === 'number' ? `${t('notificationDebugScheduledShort')}:${event.scheduled}` : null,
+                        typeof event.cancelled === 'number' ? `${t('notificationDebugCancelledShort')}:${event.cancelled}` : null,
+                        typeof event.pending === 'number' ? `${t('notificationDebugPendingShort')}:${event.pending}` : null,
+                      ].filter(Boolean).join(' · ');
+                      return (
+                        <View
+                          key={`${event.at}_${index}`}
+                          style={[styles.debugProviderRow, { borderColor: colors.border, backgroundColor: colors.cardSecondary }]}
+                        >
+                          <View style={[styles.debugStatusDot, { backgroundColor: notificationEventTone(event) }]} />
+                          <View style={styles.providerOptionText}>
+                            <Text style={[styles.debugProviderName, { color: colors.text }]}>
+                              {event.source} · {event.type} · {new Date(event.at).toLocaleTimeString(lang, { hour: '2-digit', minute: '2-digit' })}
+                            </Text>
+                            <Text style={[styles.debugProviderSub, { color: colors.textMuted }]}>
+                              {event.message}{meta ? ` · ${meta}` : ''}
+                            </Text>
+                          </View>
+                        </View>
+                      );
+                    }) : (
+                      <Text style={[styles.providerOptionSub, { color: colors.textMuted }]}>{t('notificationDebugNoEvents')}</Text>
+                    )}
+                  </View>
+                </>
+              ) : (
+                <Text style={[styles.providerOptionSub, { color: colors.textMuted }]}>
+                  {t('notificationDebugNoDataSub')}
+                </Text>
+              )}
+            </View>
           </ScrollView>
         </KeyboardAvoidingView>
       </Modal>
@@ -1237,16 +1267,6 @@ const styles = StyleSheet.create({
   rowLabel:{ fontSize: 14, fontWeight: '600' },
   rowSub:  { fontSize: 12, marginTop: 1 },
   modalOverlay: { flex: 1, justifyContent: 'center', padding: 20, backgroundColor: 'rgba(15,23,42,0.48)' },
-  modalCard: {
-    borderRadius: 20,
-    padding: 20,
-    borderWidth: 1,
-    shadowColor: '#000',
-    shadowOpacity: 0.16,
-    shadowRadius: 16,
-    elevation: 12,
-  },
-  modalTitle: { fontSize: 18, fontWeight: '800', marginBottom: 8 },
   modalCopy: { fontSize: 13, lineHeight: 20, marginBottom: 16 },
   modalLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, marginBottom: 8 },
   modalInput: {
@@ -1258,16 +1278,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginBottom: 16,
   },
-  airportChipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 18 },
-  airportChip: {
-    minWidth: 88,
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderWidth: 1,
-  },
-  airportChipCode: { fontSize: 14, fontWeight: '800' },
-  airportChipName: { fontSize: 11, marginTop: 2 },
   modalActions: { flexDirection: 'row', gap: 10 },
   modalBtn: { flex: 1, borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
   modalBtnTxt: { fontSize: 14, fontWeight: '700' },
@@ -1338,7 +1348,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   debugMetaGrid: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  debugMetaWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
   debugMetaPill: { flex: 1, borderRadius: 13, paddingHorizontal: 10, paddingVertical: 9 },
+  debugMetaPillSmall: { minWidth: 92, flexGrow: 1, borderRadius: 13, paddingHorizontal: 10, paddingVertical: 9 },
   debugMetaLabel: { fontSize: 10, fontWeight: '800', textTransform: 'uppercase' },
   debugMetaValue: { fontSize: 15, fontWeight: '900', marginTop: 2 },
   debugProviderList: { gap: 8 },
@@ -1360,6 +1372,17 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 16,
   },
+  notificationDebugActions: { flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 14 },
+  notificationClearBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 13,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  notificationClearText: { color: '#DC2626', fontSize: 12, fontWeight: '900' },
   statusModalCard: {
     borderRadius: 22,
     padding: 22,
