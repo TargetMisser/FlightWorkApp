@@ -3,10 +3,12 @@ import {
   View, Text, StyleSheet, ActivityIndicator, Modal, ScrollView,
   FlatList, TouchableOpacity, RefreshControl, Image,
   Animated, PanResponder, NativeModules, Platform, Switch,
+  type ViewProps, type AccessibilityActionEvent,
 } from 'react-native';
 import { Easing } from 'react-native';
 import * as Calendar from 'expo-calendar';
 import * as Notifications from 'expo-notifications';
+import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../context/ThemeContext';
@@ -342,13 +344,15 @@ const SWIPE_MAX_TRANSLATE = 96;
 const SWIPE_DRAG_RESISTANCE = 0.82;
 
 function SwipeableFlightCardComponent({
-  children, isPinned, onToggle,
+  children, isPinned, onToggle, ...rest
 }: {
   children: React.ReactNode;
   isPinned: boolean;
   onToggle: () => void;
-}) {
+} & ViewProps) {
+  const { t } = useLanguage();
   const translateX = useRef(new Animated.Value(0)).current;
+  const hasTriggeredHaptic = useRef(false);
   const onToggleRef = useRef(onToggle);
   onToggleRef.current = onToggle;
   const dragScale = useMemo(() => translateX.interpolate({
@@ -376,9 +380,17 @@ function SwipeableFlightCardComponent({
         ? Math.max(g.dx * SWIPE_DRAG_RESISTANCE, -SWIPE_MAX_TRANSLATE)
         : g.dx * 0.08;
       translateX.setValue(nextTranslate);
+
+      if (g.dx < -SWIPE_THRESHOLD && !hasTriggeredHaptic.current) {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+        hasTriggeredHaptic.current = true;
+      } else if (g.dx >= -SWIPE_THRESHOLD && hasTriggeredHaptic.current) {
+        hasTriggeredHaptic.current = false;
+      }
     },
     onPanResponderRelease: (_, g) => {
       if (g.dx < -SWIPE_THRESHOLD || g.vx < -SWIPE_TRIGGER_VELOCITY) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
         Animated.timing(translateX, {
           toValue: -SWIPE_MAX_TRANSLATE,
           duration: 170,
@@ -391,15 +403,38 @@ function SwipeableFlightCardComponent({
       } else {
         animateBack(g.vx);
       }
+      hasTriggeredHaptic.current = false;
     },
     onPanResponderTerminate: () => {
       animateBack();
     },
   }), [animateBack, translateX]);
 
+  const accessibilityActions = useMemo(() => [
+    {
+      name: isPinned ? 'unpin' : 'pin',
+      label: isPinned ? t('flightAccessibilityUnpin') : t('flightAccessibilityPin'),
+    },
+  ], [isPinned, t]);
+
+  const onAccessibilityAction = useCallback((event: AccessibilityActionEvent) => {
+    if (event.nativeEvent.actionName === 'pin' || event.nativeEvent.actionName === 'unpin') {
+      onToggleRef.current();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    }
+  }, []);
+
   return (
     <View style={{ marginBottom: 10 }}>
-      <Animated.View style={{ transform: [{ translateX }, { scale: dragScale }] }} {...panResponder.panHandlers}>
+      <Animated.View
+        style={{ transform: [{ translateX }, { scale: dragScale }] }}
+        {...panResponder.panHandlers}
+        {...rest}
+        accessible
+        accessibilityActions={accessibilityActions}
+        onAccessibilityAction={onAccessibilityAction}
+        accessibilityHint={isPinned ? t('flightAccessibilityUnpinHint') : t('flightAccessibilityPinHint')}
+      >
         {children}
       </Animated.View>
     </View>
@@ -564,12 +599,28 @@ function FlightRowComponent({ item, activeTab, userShift, pinnedFlightId, onPin,
     return () => clearInterval(interval);
   }, []);
 
+  const accessibilityLabel = useMemo(() => {
+    const parts = [];
+    if (isPinned) parts.push(t('flightPinnedLabel'));
+    parts.push(flightNumber);
+    parts.push(airline);
+    parts.push(activeTab === 'arrivals' ? t('homeArrival') : t('homeDeparture'));
+    parts.push(`${activeTab === 'arrivals' ? t('flightFrom') : t('flightTo')} ${originDest}`);
+    parts.push(time);
+    parts.push(statusText);
+    return parts.join(', ');
+  }, [isPinned, flightNumber, airline, activeTab, originDest, time, statusText, t]);
+
   return (
     <SwipeableFlightCard
       isPinned={isPinned}
       onToggle={() => isPinned ? onUnpin() : onPin(item)}
+      accessibilityLabel={accessibilityLabel}
     >
-      <View style={[s.card, isPinned && s.cardPinned, { marginBottom: 0 }]}>
+      <View
+        style={[s.card, isPinned && s.cardPinned, { marginBottom: 0 }]}
+        importantForAccessibility="no-hide-descendants"
+      >
         {isPinned && <View style={s.pinBanner}><Text style={s.pinBannerText}>{t('flightPinned')}</Text></View>}
         {/* Header */}
         <View style={[s.cardHeader, { backgroundColor: color }]}>
@@ -642,7 +693,7 @@ function FlightRowComponent({ item, activeTab, userShift, pinnedFlightId, onPin,
               </View>
             );
           })() : (
-            <Text style={s.bodyInfo}>{`Da: ${originDest}`}</Text>
+            <Text style={s.bodyInfo}>{`${activeTab === 'arrivals' ? t('flightFrom') : t('flightTo')}: ${originDest}`}</Text>
           )}
           {arrivalProgress && (
             <View style={s.arrivalProgressSection}>
