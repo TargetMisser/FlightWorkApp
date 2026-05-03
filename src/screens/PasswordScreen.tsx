@@ -126,6 +126,7 @@ function PinOverlay({ onUnlock, onCancel, title }: { onUnlock: (pin: string) => 
 // ─── Password Row ─────────────────────────────────────────────────────────────
 function PasswordRowComponent({ item, onEdit, onDelete }: { item: PasswordEntry; onEdit: () => void; onDelete: () => void }) {
   const { colors } = useAppTheme();
+  const { t } = useLanguage();
   const s = useMemo(() => makeRowStyles(colors), [colors]);
   const [revealed, setRevealed] = useState(false);
 
@@ -136,17 +137,35 @@ function PasswordRowComponent({ item, onEdit, onDelete }: { item: PasswordEntry;
         {item.username ? <Text style={s.username}>{item.username}</Text> : null}
         <View style={s.pwRow}>
           <Text style={s.pw}>{revealed ? item.password : '••••••••'}</Text>
-          <TouchableOpacity onPress={() => setRevealed(r => !r)} style={s.eyeBtn}>
+          <TouchableOpacity
+            onPress={() => setRevealed(r => !r)}
+            style={s.eyeBtn}
+            accessibilityLabel={revealed ? t('passwordHide') : t('passwordShow')}
+            accessibilityRole="button"
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
             <MaterialIcons name={revealed ? 'visibility-off' : 'visibility'} size={16} color={colors.textSub} />
           </TouchableOpacity>
         </View>
         {item.notes ? <Text style={s.notes}>{item.notes}</Text> : null}
       </View>
       <View style={s.actions}>
-        <TouchableOpacity style={s.editBtn} onPress={onEdit}>
+        <TouchableOpacity
+          style={s.editBtn}
+          onPress={onEdit}
+          accessibilityLabel={t('passwordEdit')}
+          accessibilityRole="button"
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
           <MaterialIcons name="edit" size={17} color={colors.primary} />
         </TouchableOpacity>
-        <TouchableOpacity style={s.delBtn} onPress={onDelete}>
+        <TouchableOpacity
+          style={s.delBtn}
+          onPress={onDelete}
+          accessibilityLabel={t('passwordDeleteTitleBtn')}
+          accessibilityRole="button"
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
           <MaterialIcons name="delete-outline" size={17} color="#EF4444" />
         </TouchableOpacity>
       </View>
