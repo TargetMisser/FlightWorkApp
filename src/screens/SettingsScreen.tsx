@@ -4,6 +4,7 @@ import {
   Modal, KeyboardAvoidingView, Platform, TextInput, Linking,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as Haptics from 'expo-haptics';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAppTheme, ThemeMode } from '../context/ThemeContext';
 import { useAirport } from '../context/AirportContext';
@@ -112,8 +113,13 @@ function ThemeCard({ option, selected, onSelect, activeLabel }: {
         { backgroundColor: colors.card, borderColor: selected ? colors.primary : colors.border },
         selected && styles.themeCardSelected,
       ]}
-      onPress={onSelect}
+      onPress={() => {
+        Haptics.selectionAsync();
+        onSelect();
+      }}
       activeOpacity={0.8}
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
     >
       {/* Anteprima miniatura */}
       {option.previewGradient ? (
@@ -184,13 +190,32 @@ function SettingRow({
         {sublabel && <Text style={[styles.rowSub, { color: colors.textMuted }]}>{sublabel}</Text>}
       </View>
       {type === 'arrow' && <MaterialIcons name="chevron-right" size={20} color={colors.border} />}
-      {type === 'toggle' && <Switch value={value ?? false} onValueChange={onToggle} disabled={disabled} trackColor={{ true: colors.primary }} thumbColor="#fff" />}
+      {type === 'toggle' && (
+        <Switch
+          value={value ?? false}
+          onValueChange={(v) => {
+            Haptics.selectionAsync();
+            onToggle?.(v);
+          }}
+          disabled={disabled}
+          trackColor={{ true: colors.primary }}
+          thumbColor="#fff"
+        />
+      )}
     </>
   );
 
   if (isPressable) {
     return (
-      <TouchableOpacity style={styles.row} onPress={onPress} activeOpacity={0.8}>
+      <TouchableOpacity
+        style={styles.row}
+        onPress={() => {
+          Haptics.selectionAsync();
+          onPress?.();
+        }}
+        activeOpacity={0.8}
+        accessibilityRole="button"
+      >
         {content}
       </TouchableOpacity>
     );
@@ -636,9 +661,13 @@ export default function SettingsScreen() {
         {/* Esporta */}
         <TouchableOpacity
           style={[styles.backupTile, { backgroundColor: colors.card, borderColor: colors.border }, colors.isDark && { borderWidth: 1 }, exportingBackup && { opacity: 0.6 }]}
-          onPress={handleExport}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            handleExport();
+          }}
           disabled={exportingBackup}
           activeOpacity={0.8}
+          accessibilityRole="button"
         >
           <View style={[styles.backupTileIcon, { backgroundColor: '#10B98122' }]}>
             {exportingBackup
@@ -651,9 +680,13 @@ export default function SettingsScreen() {
         {/* Importa */}
         <TouchableOpacity
           style={[styles.backupTile, { backgroundColor: colors.card, borderColor: colors.border }, colors.isDark && { borderWidth: 1 }, importingBackup && { opacity: 0.6 }]}
-          onPress={handleImport}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            handleImport();
+          }}
           disabled={importingBackup}
           activeOpacity={0.8}
+          accessibilityRole="button"
         >
           <View style={[styles.backupTileIcon, { backgroundColor: '#3B82F622' }]}>
             {importingBackup
@@ -673,8 +706,13 @@ export default function SettingsScreen() {
             {idx > 0 && <View style={[styles.divider, { backgroundColor: colors.border }]} />}
             <TouchableOpacity
               style={[styles.row, lang === langOpt.code && { backgroundColor: colors.primaryLight }]}
-              onPress={() => setLang(langOpt.code)}
+              onPress={() => {
+                Haptics.selectionAsync();
+                setLang(langOpt.code);
+              }}
               activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityState={{ selected: lang === langOpt.code }}
             >
               <View style={[styles.iconWrap, { backgroundColor: colors.primaryLight }]}>
                 <MaterialIcons name="language" size={18} color={colors.primary} />

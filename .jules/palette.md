@@ -1,0 +1,3 @@
+## 2025-05-14 - Enhance Settings accessibility and micro-UX
+**Learning:** Adding haptic feedback to common interactions like theme switching and setting toggles significantly improves the "feel" of the app, providing tactile confirmation of actions. Pairing this with proper accessibility roles (like `accessibilityRole="button"`) ensures that the app is both delightful for sighted users and usable for those using screen readers.
+**Action:** Always include haptic feedback on discrete user actions (toggles, selections) and ensure `accessibilityRole` and `accessibilityState` are correctly applied to custom interactive components like `ThemeCard`.
