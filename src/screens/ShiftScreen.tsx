@@ -34,15 +34,13 @@ export default function ShiftScreen() {
         const base64List = result.assets.map(a => `data:image/jpeg;base64,${a.base64}`);
         const base64Json = JSON.stringify(base64List).replace(/'/g, "\\'");
         
-        const jsCode = `
-          if (window.runTesseract) {
-            window.runTesseract('${base64Json}');
-          } else {
-            window.ReactNativeWebView.postMessage(JSON.stringify({ success: false, error: "Motore OCR non pronto." }));
-          }
+        // Pass data securely via document.dispatchEvent
+        webViewRef.current?.injectJavaScript(`
+          document.dispatchEvent(new MessageEvent('message', {
+            data: ${JSON.stringify({ type: 'RUN_OCR', payload: base64Json })}
+          }));
           true;
-        `;
-        webViewRef.current?.injectJavaScript(jsCode);
+        `);
       }
     } catch (e) {
       Alert.alert("Errore OCR", "Impossibile elaborare l'immagine.");
@@ -54,6 +52,9 @@ export default function ShiftScreen() {
     const rawData = event.nativeEvent.data;
     try {
       const result = JSON.parse(rawData);
+      if (result.type === 'READY') {
+        return; // Ignore READY handshake
+      }
       if (result.success) {
         setOcrText(result.text);
       } else {
@@ -217,23 +218,41 @@ export default function ShiftScreen() {
     </head>
     <body style="background-color: transparent;">
       <script>
-        window.runTesseract = async function(base64JsonStr) {
-          try {
-            const images = JSON.parse(base64JsonStr);
-            let combinedText = '';
-            for (let i = 0; i < images.length; i++) {
-              const ret = await Tesseract.recognize(images[i], 'ita+eng');
-              combinedText += ret.data.text + '\\n\\n';
+        if (!window.Engine) {
+          window.Engine = { ready: true };
+
+          document.addEventListener("message", function(event) {
+            try {
+              const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+              if (data.type === 'RUN_OCR') {
+                if (window.runTesseract) {
+                  window.runTesseract(data.payload);
+                } else {
+                  if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(JSON.stringify({ success: false, error: 'OCR non pronto' }));
+                }
+              }
+            } catch(e) {}
+          });
+
+          window.runTesseract = async function(base64JsonStr) {
+            try {
+              const images = typeof base64JsonStr === 'string' ? JSON.parse(base64JsonStr) : base64JsonStr;
+              let combinedText = '';
+              for (let i = 0; i < images.length; i++) {
+                const ret = await Tesseract.recognize(images[i], 'ita+eng');
+                combinedText += ret.data.text + '\\n\\n';
+              }
+              if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(JSON.stringify({ success: true, text: combinedText }));
+            } catch (e) {
+              if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(JSON.stringify({ success: false, error: e.message || e.toString() }));
             }
-            window.ReactNativeWebView.postMessage(JSON.stringify({ success: true, text: combinedText }));
-          } catch (e) {
-            window.ReactNativeWebView.postMessage(JSON.stringify({ success: false, error: e.message || e.toString() }));
-          }
-        };
+          };
+
+          if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'READY' }));
+        }
       </script>
     </body>
-    </html>
-  `;
+    </html>`;
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: BG }} contentContainerStyle={styles.container}>

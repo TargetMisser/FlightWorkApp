@@ -32,23 +32,50 @@ const HOME_REST_TIMING = { startHour: 12, startMinute: 0, endHour: 14, endMinute
 
 // months comes from useLanguage() context
 
-const engineHtml = `<!DOCTYPE html><html lang="it"><head>
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script></head>
-<body style="background-color:transparent;"><script>
-window.runTesseract = async function(base64JsonStr) {
-  try {
-    const images = JSON.parse(base64JsonStr);
-    let combinedText = '';
-    for (let i = 0; i < images.length; i++) {
-      const ret = await Tesseract.recognize(images[i], 'ita+eng');
-      combinedText += ret.data.text + '\\n\\n';
-    }
-    window.ReactNativeWebView.postMessage(JSON.stringify({ success: true, text: combinedText }));
-  } catch (e) {
-    window.ReactNativeWebView.postMessage(JSON.stringify({ success: false, error: e.message || e.toString() }));
-  }
-};
-</script></body></html>`;
+const engineHtml = `
+    <!DOCTYPE html>
+    <html lang="it">
+    <head>
+      <!-- Tesseract.js (Foto OCR) -->
+      <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    </head>
+    <body style="background-color: transparent;">
+      <script>
+        if (!window.Engine) {
+          window.Engine = { ready: true };
+
+          document.addEventListener("message", function(event) {
+            try {
+              const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+              if (data.type === 'RUN_OCR') {
+                if (window.runTesseract) {
+                  window.runTesseract(data.payload);
+                } else {
+                  if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(JSON.stringify({ success: false, error: 'OCR non pronto' }));
+                }
+              }
+            } catch(e) {}
+          });
+
+          window.runTesseract = async function(base64JsonStr) {
+            try {
+              const images = typeof base64JsonStr === 'string' ? JSON.parse(base64JsonStr) : base64JsonStr;
+              let combinedText = '';
+              for (let i = 0; i < images.length; i++) {
+                const ret = await Tesseract.recognize(images[i], 'ita+eng');
+                combinedText += ret.data.text + '\\n\\n';
+              }
+              if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(JSON.stringify({ success: true, text: combinedText }));
+            } catch (e) {
+              if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(JSON.stringify({ success: false, error: e.message || e.toString() }));
+            }
+          };
+
+          if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'READY' }));
+        }
+      </script>
+    </body>
+    </html>`;
 
 function PinnedFlightCardComponent({ item, colors }: { item: any; colors: any }) {
   const { t, locale } = useLanguage();
@@ -299,6 +326,9 @@ export default function HomeScreen({ isFocused }: { isFocused?: boolean }) {
   const handleWebViewMessage = (event: any) => {
     try {
       const r = JSON.parse(event.nativeEvent.data);
+      if (r.type === 'READY') {
+        return; // Ignore READY handshake
+      }
       if (r.success) setOcrText(r.text);
       else Alert.alert('Errore riconoscimento testo', r.error || 'Prova con un\'immagine più nitida o meglio illuminata.');
     } catch (e) { if (__DEV__) console.error('[ocrMessage]', e); } finally { setProcessing(false); }
