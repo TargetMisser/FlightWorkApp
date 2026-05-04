@@ -100,7 +100,7 @@ const it = {
   // Notepad
   notepadTitle: 'Blocco Note', notepadSave: 'Salva', notepadSaved: 'Salvato',
   notepadUnsaved: 'Modifiche non salvate', notepadChars: 'caratteri',
-  notepadClearTitle: 'Cancella note',
+  notepadClearTitle: 'Cancella note', notepadClearA11y: 'Cancella tutte le note',
   notepadClearMsg: 'Sei sicuro di voler cancellare tutte le note?',
   notepadClearConfirm: 'Cancella', notepadPlaceholder: 'Inizia a scrivere...',
   // TravelDoc
@@ -189,7 +189,7 @@ const it = {
   // Phonebook
   phonebookTitle: 'Rubrica', contactAdd: 'Aggiungi',
   contactSearch: 'Cerca nome o numero...', contactAll: 'Tutti',
-  contactModalNew: 'Nuovo contatto', contactModalEdit: 'Modifica contatto',
+  contactModalNew: 'Nuovo contatto', contactModalEdit: 'Modifica contatto', contactEditA11y: 'Modifica contatto', contactCallA11y: 'Chiama contatto',
   contactNameLabel: 'Nome *', contactNamePh: 'es. OPS Malpensa',
   contactNumberLabel: 'Numero *', contactNumberPh: '+39 02 1234567',
   contactCatLabel: 'Categoria', contactNoteLabel: 'Nota (opzionale)',
@@ -201,7 +201,7 @@ const it = {
   contactNoResults: 'Nessun risultato',
   // Password
   passwordTitle: 'Password', passwordAdd: 'Aggiungi',
-  passwordModalNew: 'Nuova voce', passwordModalEdit: 'Modifica voce',
+  passwordModalNew: 'Nuova voce', passwordModalEdit: 'Modifica voce', passwordShowA11y: 'Mostra password', passwordHideA11y: 'Nascondi password',
   passwordNameLabel: 'Nome *', passwordNamePh: 'es. Portale HR EasyJet',
   passwordUsernameLabel: 'Username / Email', passwordUsernamePh: 'es. mario.rossi@easyjet.com',
   passwordPwLabel: 'Password *', passwordNotesLabel: 'Note',
@@ -342,7 +342,7 @@ const en: typeof it = {
   // Notepad
   notepadTitle: 'Notepad', notepadSave: 'Save', notepadSaved: 'Saved',
   notepadUnsaved: 'Unsaved changes', notepadChars: 'characters',
-  notepadClearTitle: 'Clear notes',
+  notepadClearTitle: 'Clear notes', notepadClearA11y: 'Clear all notes',
   notepadClearMsg: 'Are you sure you want to clear all notes?',
   notepadClearConfirm: 'Clear', notepadPlaceholder: 'Start writing...',
   // TravelDoc
@@ -431,7 +431,7 @@ const en: typeof it = {
   // Phonebook
   phonebookTitle: 'Phonebook', contactAdd: 'Add',
   contactSearch: 'Search name or number...', contactAll: 'All',
-  contactModalNew: 'New contact', contactModalEdit: 'Edit contact',
+  contactModalNew: 'New contact', contactModalEdit: 'Edit contact', contactEditA11y: 'Edit contact', contactCallA11y: 'Call contact',
   contactNameLabel: 'Name *', contactNamePh: 'e.g. OPS Malpensa',
   contactNumberLabel: 'Number *', contactNumberPh: '+39 02 1234567',
   contactCatLabel: 'Category', contactNoteLabel: 'Note (optional)',
@@ -443,7 +443,7 @@ const en: typeof it = {
   contactNoResults: 'No results',
   // Password
   passwordTitle: 'Password', passwordAdd: 'Add',
-  passwordModalNew: 'New entry', passwordModalEdit: 'Edit entry',
+  passwordModalNew: 'New entry', passwordModalEdit: 'Edit entry', passwordShowA11y: 'Show password', passwordHideA11y: 'Hide password',
   passwordNameLabel: 'Name *', passwordNamePh: 'e.g. EasyJet HR Portal',
   passwordUsernameLabel: 'Username / Email', passwordUsernamePh: 'e.g. mario.rossi@easyjet.com',
   passwordPwLabel: 'Password *', passwordNotesLabel: 'Notes',
