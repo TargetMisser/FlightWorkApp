@@ -37,7 +37,7 @@ const engineHtml = `<!DOCTYPE html><html lang="it"><head>
 <body style="background-color:transparent;"><script>
 window.runTesseract = async function(base64JsonStr) {
   try {
-    const images = JSON.parse(base64JsonStr);
+    const images = typeof base64JsonStr === 'string' ? JSON.parse(base64JsonStr) : base64JsonStr;
     let combinedText = '';
     for (let i = 0; i < images.length; i++) {
       const ret = await Tesseract.recognize(images[i], 'ita+eng');
@@ -48,6 +48,11 @@ window.runTesseract = async function(base64JsonStr) {
     window.ReactNativeWebView.postMessage(JSON.stringify({ success: false, error: e.message || e.toString() }));
   }
 };
+document.addEventListener('message', function(event) {
+  if (event.data && event.data.type === 'OCR_REQUEST') {
+    window.runTesseract(event.data.payload);
+  }
+});
 </script></body></html>`;
 
 function PinnedFlightCardComponent({ item, colors }: { item: any; colors: any }) {
@@ -282,11 +287,11 @@ export default function HomeScreen({ isFocused }: { isFocused?: boolean }) {
         setImageList(result.assets.map(a => a.uri));
         setProcessing(true); setOcrText('');
         const base64List = result.assets.map(a => `data:image/jpeg;base64,${a.base64}`);
-        const base64Json = JSON.stringify(base64List);
-        // Use postMessage pattern to avoid script-injection risks with injectJavaScript
+        const payload = { type: 'OCR_REQUEST', payload: base64List };
+        // Use document.dispatchEvent pattern to avoid script-injection risks with injectJavaScript
         webViewRef.current?.injectJavaScript(`
           if(window.runTesseract){
-            window.runTesseract(${JSON.stringify(base64Json)});
+            document.dispatchEvent(new MessageEvent('message', { data: ${JSON.stringify(payload)} }));
           } else {
             window.ReactNativeWebView.postMessage(JSON.stringify({success:false,error:'OCR non pronto'}));
           }

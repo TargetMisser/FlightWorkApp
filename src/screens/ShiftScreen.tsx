@@ -32,11 +32,11 @@ export default function ShiftScreen() {
         setOcrText('');
         
         const base64List = result.assets.map(a => `data:image/jpeg;base64,${a.base64}`);
-        const base64Json = JSON.stringify(base64List).replace(/'/g, "\\'");
+        const payload = { type: 'OCR_REQUEST', payload: base64List };
         
         const jsCode = `
           if (window.runTesseract) {
-            window.runTesseract('${base64Json}');
+            document.dispatchEvent(new MessageEvent('message', { data: ${JSON.stringify(payload)} }));
           } else {
             window.ReactNativeWebView.postMessage(JSON.stringify({ success: false, error: "Motore OCR non pronto." }));
           }
@@ -218,8 +218,8 @@ export default function ShiftScreen() {
     <body style="background-color: transparent;">
       <script>
         window.runTesseract = async function(base64JsonStr) {
-          try {
-            const images = JSON.parse(base64JsonStr);
+  try {
+    const images = typeof base64JsonStr === 'string' ? JSON.parse(base64JsonStr) : base64JsonStr;
             let combinedText = '';
             for (let i = 0; i < images.length; i++) {
               const ret = await Tesseract.recognize(images[i], 'ita+eng');
@@ -230,6 +230,11 @@ export default function ShiftScreen() {
             window.ReactNativeWebView.postMessage(JSON.stringify({ success: false, error: e.message || e.toString() }));
           }
         };
+        document.addEventListener('message', function(event) {
+          if (event.data && event.data.type === 'OCR_REQUEST') {
+            window.runTesseract(event.data.payload);
+          }
+        });
       </script>
     </body>
     </html>

@@ -1,0 +1,4 @@
+## 2026-05-03 - [Fix hybrid storage logic to avoid 2048-byte limit]
+**Vulnerability:** The app was saving an entire array of passwords directly into a single `SecureStore` item, which fails completely if the JSON size exceeds 2048 bytes (Android `SecureStore` limit), leading to a DoS (loss of capability to save further passwords). Additionally, it wasn't following the hybrid storage pattern specified in the repository memory.
+**Learning:** React Native's `expo-secure-store` has hard limits per key (2048 bytes on Android). Serializing large lists into a single secure key will break the app when the data grows.
+**Prevention:** Always use a hybrid pattern for lists containing secrets: store the non-sensitive metadata list in `AsyncStorage` and use row-specific dynamic keys (e.g., `aerostaff_pwd_${id}`) to securely store individual secrets in `SecureStore`.

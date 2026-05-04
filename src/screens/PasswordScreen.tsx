@@ -26,27 +26,45 @@ async function deleteSecurePin(): Promise<void> {
   await AsyncStorage.removeItem(PIN_KEY).catch(() => {});
 }
 
-// Passwords are stored encrypted in SecureStore.
-// On first access we migrate any legacy plaintext AsyncStorage data.
+// Passwords use hybrid storage: metadata in AsyncStorage, secrets in SecureStore.
 async function loadPasswords(): Promise<PasswordEntry[]> {
+  let entries: PasswordEntry[] = [];
   try {
     const secure = await SecureStore.getItemAsync(PASSWORDS_KEY);
-    if (secure) return JSON.parse(secure);
-  } catch {}
-  // Migration: if data exists only in AsyncStorage, move it to SecureStore
-  try {
-    const legacy = await AsyncStorage.getItem(PASSWORDS_KEY);
-    if (legacy) {
-      const parsed: PasswordEntry[] = JSON.parse(legacy);
-      await SecureStore.setItemAsync(PASSWORDS_KEY, legacy);
-      await AsyncStorage.removeItem(PASSWORDS_KEY);
-      return parsed;
+    if (secure) {
+      entries = JSON.parse(secure);
+    } else {
+      const raw = await AsyncStorage.getItem(PASSWORDS_KEY);
+      if (raw) entries = JSON.parse(raw);
     }
+    if (!entries.length) return [];
+
+    let needsMasking = false;
+    const migrated = await Promise.all(entries.map(async (e) => {
+      if (e.password === '***') {
+        const sec = await SecureStore.getItemAsync(`aerostaff_pwd_${e.id}`);
+        return { ...e, password: sec || '' };
+      }
+      needsMasking = true;
+      if (e.password) await SecureStore.setItemAsync(`aerostaff_pwd_${e.id}`, e.password);
+      return e;
+    }));
+
+    if (needsMasking || secure) {
+      const masked = migrated.map(e => ({ ...e, password: '***' }));
+      await AsyncStorage.setItem(PASSWORDS_KEY, JSON.stringify(masked));
+      if (secure) {
+        await SecureStore.deleteItemAsync(PASSWORDS_KEY).catch(() => {});
+      }
+    }
+    return migrated;
   } catch {}
   return [];
 }
 async function savePasswords(entries: PasswordEntry[]): Promise<void> {
-  await SecureStore.setItemAsync(PASSWORDS_KEY, JSON.stringify(entries));
+  const masked = entries.map(e => ({ ...e, password: '***' }));
+  await AsyncStorage.setItem(PASSWORDS_KEY, JSON.stringify(masked));
+  await Promise.all(entries.map(e => SecureStore.setItemAsync(`aerostaff_pwd_${e.id}`, e.password)));
 }
 
 type PasswordEntry = {
