@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useAppTheme, ThemeMode } from '../context/ThemeContext';
 import { useAirport } from '../context/AirportContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -112,8 +113,13 @@ function ThemeCard({ option, selected, onSelect, activeLabel }: {
         { backgroundColor: colors.card, borderColor: selected ? colors.primary : colors.border },
         selected && styles.themeCardSelected,
       ]}
-      onPress={onSelect}
+      onPress={() => {
+        Haptics.selectionAsync();
+        onSelect();
+      }}
       activeOpacity={0.8}
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
     >
       {/* Anteprima miniatura */}
       {option.previewGradient ? (
@@ -184,7 +190,18 @@ function SettingRow({
         {sublabel && <Text style={[styles.rowSub, { color: colors.textMuted }]}>{sublabel}</Text>}
       </View>
       {type === 'arrow' && <MaterialIcons name="chevron-right" size={20} color={colors.border} />}
-      {type === 'toggle' && <Switch value={value ?? false} onValueChange={onToggle} disabled={disabled} trackColor={{ true: colors.primary }} thumbColor="#fff" />}
+      {type === 'toggle' && (
+        <Switch
+          value={value ?? false}
+          onValueChange={(v) => {
+            Haptics.selectionAsync();
+            onToggle?.(v);
+          }}
+          disabled={disabled}
+          trackColor={{ true: colors.primary }}
+          thumbColor="#fff"
+        />
+      )}
     </>
   );
 
