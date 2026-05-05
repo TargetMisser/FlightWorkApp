@@ -1,5 +1,5 @@
 /**
- * Parses a shift-schedule PDF (base64) inside a WebView using pdf.js,
+ * Parses shift-schedule PDFs (base64) inside a WebView using pdf.js,
  * returns structured data: dates[], employees[{name, shifts[]}].
  *
  * The HTML/JS is injected into a hidden WebView by the caller.
@@ -9,9 +9,10 @@ export type ParsedShift = { date: string; type: 'work' | 'rest'; start?: string;
 export type ParsedEmployee = { name: string; shifts: ParsedShift[] };
 export type ParsedSchedule = { dates: string[]; employees: ParsedEmployee[] };
 
-type Cell = { text: string; x: number; y: number; page: number };
+export type PdfTextCell = { text: string; x: number; y: number; page: number };
+export type PdfExtractedFile = { cells: PdfTextCell[] };
 
-export function parseShiftCells(cells: Cell[]): ParsedSchedule {
+export function parseShiftCells(cells: PdfTextCell[]): ParsedSchedule {
   // 1. Find dates (format dd/mm/yyyy) and build dynamic column ranges
   const datePattern = /^\d{2}\/\d{2}\/\d{4}$/;
   const dateCells = cells.filter(c => datePattern.test(c.text)).sort((a, b) => a.x - b.x);
@@ -89,8 +90,55 @@ export function parseShiftCells(cells: Cell[]): ParsedSchedule {
   return { dates, employees: result };
 }
 
+function normalizeEmployeeName(name: string): string {
+  return name.trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+function shiftPriority(shift: ParsedShift): number {
+  return shift.type === 'work' && shift.start && shift.end ? 2 : 1;
+}
+
+export function mergeParsedSchedules(schedules: ParsedSchedule[]): ParsedSchedule {
+  const dateSet = new Set<string>();
+  const employeeMap = new Map<string, ParsedEmployee>();
+
+  for (const schedule of schedules) {
+    for (const date of schedule.dates) dateSet.add(date);
+
+    for (const employee of schedule.employees) {
+      const key = normalizeEmployeeName(employee.name);
+      if (!key) continue;
+
+      const merged = employeeMap.get(key) ?? { name: employee.name.trim(), shifts: [] };
+      const shiftsByDate = new Map<string, ParsedShift>(merged.shifts.map(shift => [shift.date, shift]));
+
+      for (const shift of employee.shifts) {
+        dateSet.add(shift.date);
+        const current = shiftsByDate.get(shift.date);
+        if (!current || shiftPriority(shift) >= shiftPriority(current)) {
+          shiftsByDate.set(shift.date, shift);
+        }
+      }
+
+      merged.shifts = Array.from(shiftsByDate.values()).sort((a, b) => a.date.localeCompare(b.date));
+      employeeMap.set(key, merged);
+    }
+  }
+
+  return {
+    dates: Array.from(dateSet).sort(),
+    employees: Array.from(employeeMap.values()).sort((a, b) => a.name.localeCompare(b.name)),
+  };
+}
+
+export function parseShiftCellFiles(files: PdfExtractedFile[]): ParsedSchedule {
+  return mergeParsedSchedules(files.map(file => parseShiftCells(file.cells)));
+}
+
 /** HTML to inject into a hidden WebView for PDF text extraction */
-export function getPdfExtractorHtml(base64Data: string): string {
+export function getPdfExtractorHtml(base64Data: string | string[]): string {
+  const pdfInputs = JSON.stringify(Array.isArray(base64Data) ? base64Data : [base64Data]);
+
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.9.155/pdf.min.mjs" type="module"></script>
@@ -98,9 +146,10 @@ export function getPdfExtractorHtml(base64Data: string): string {
 import * as pdfjsLib from 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.9.155/pdf.min.mjs';
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.9.155/pdf.worker.min.mjs';
 
-async function extract() {
-  try {
-    const raw = atob('${base64Data}');
+const pdfInputs = ${pdfInputs};
+
+async function extractPdf(base64Data, fileIndex) {
+    const raw = atob(base64Data);
     const uint8 = new Uint8Array(raw.length);
     for (let i = 0; i < raw.length; i++) uint8[i] = raw.charCodeAt(i);
 
@@ -117,12 +166,25 @@ async function extract() {
           text,
           x: Math.round(item.transform[4] * 10) / 10,
           y: Math.round((page.view[3] - item.transform[5]) * 10) / 10,
-          page: p
+          page: p,
+          fileIndex
         });
       }
     }
 
-    window.ReactNativeWebView.postMessage(JSON.stringify({ ok: true, cells }));
+    return cells;
+}
+
+async function extract() {
+  try {
+    const files = [];
+    for (let i = 0; i < pdfInputs.length; i++) {
+      files.push({ cells: await extractPdf(pdfInputs[i], i) });
+    }
+
+    const cells = [];
+    for (const file of files) cells.push(...file.cells);
+    window.ReactNativeWebView.postMessage(JSON.stringify({ ok: true, cells, files }));
   } catch (e) {
     window.ReactNativeWebView.postMessage(JSON.stringify({ ok: false, error: e.message }));
   }

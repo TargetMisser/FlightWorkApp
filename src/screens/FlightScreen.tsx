@@ -1199,16 +1199,16 @@ export default function FlightScreen() {
       let shiftToday: { start: number; end: number } | null = null;
       let shiftTomorrow: { start: number; end: number } | null = null;
       let isRestDay = false;
+      const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+      const todayEnd = new Date(todayStart); todayEnd.setHours(23, 59, 59, 999);
+      const tomorrowStart = new Date(todayStart); tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+      const tomorrowEnd = new Date(tomorrowStart); tomorrowEnd.setHours(23, 59, 59, 999);
       const { status } = await Calendar.requestCalendarPermissionsAsync();
       if (status === 'granted') {
         const cals = await Calendar.getCalendarsAsync(Calendar.EntityTypes.EVENT);
         const cal = cals.find(c => c.allowsModifications && c.isPrimary) || cals.find(c => c.allowsModifications);
         if (cal) {
-          const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
-          const tomorrowEnd = new Date(todayStart); tomorrowEnd.setDate(tomorrowEnd.getDate() + 1); tomorrowEnd.setHours(23, 59, 59, 999);
           const evts = await Calendar.getEventsAsync([cal.id], todayStart, tomorrowEnd);
-          const todayEnd = new Date(todayStart); todayEnd.setHours(23, 59, 59, 999);
-          const tomorrowStart = new Date(todayStart); tomorrowStart.setDate(tomorrowStart.getDate() + 1);
           for (const e of evts) {
             if (e.title.includes('Riposo')) {
               const evtDay = new Date(e.startDate);
@@ -1227,12 +1227,16 @@ export default function FlightScreen() {
         }
       }
       setShifts({ today: shiftToday, tomorrow: shiftTomorrow });
+      const todayIso = `${todayStart.getFullYear()}-${String(todayStart.getMonth() + 1).padStart(2, '0')}-${String(todayStart.getDate()).padStart(2, '0')}`;
+      const tomorrowIso = `${tomorrowStart.getFullYear()}-${String(tomorrowStart.getMonth() + 1).padStart(2, '0')}-${String(tomorrowStart.getDate()).padStart(2, '0')}`;
+      const nextShift = shiftTomorrow ? { date: tomorrowIso, ...shiftTomorrow } : null;
 
       // ── Persist shift data for widget self-update ──
       const shiftKeyData: WidgetShiftData = {
-        date: new Date().toISOString().split('T')[0],
+        date: todayIso,
         shiftToday,
         isRestDay,
+        nextShift,
       };
       AsyncStorage.setItem(WIDGET_SHIFT_KEY, JSON.stringify(shiftKeyData)).catch(() => {});
 
@@ -1241,14 +1245,20 @@ export default function FlightScreen() {
         const fmtT = (ts: number) => new Date(ts * 1000).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
         const fmtOff = (dep: number, off: number) => fmtT(dep - off * 60);
         const nowHH = fmtT(Date.now() / 1000);
+        const nowSec = Date.now() / 1000;
+        const activeWidgetShift = shiftToday && nowSec <= shiftToday.end
+          ? { date: todayIso, ...shiftToday, isNext: false }
+          : shiftToday && nowSec > shiftToday.end && nextShift && nextShift.start > nowSec
+            ? { ...nextShift, isNext: true }
+            : null;
 
         let widgetData: WidgetData;
         if (isRestDay) {
           widgetData = { state: 'rest' };
-        } else if (!shiftToday) {
+        } else if (!activeWidgetShift) {
           widgetData = { state: 'no_shift' };
         } else {
-          const shiftLabel = `${fmtT(shiftToday.start)} – ${fmtT(shiftToday.end)}`;
+          const shiftLabel = `${activeWidgetShift.isNext ? 'Domani ' : ''}${fmtT(activeWidgetShift.start)} – ${fmtT(activeWidgetShift.end)}`;
           const pinnedRawW = await AsyncStorage.getItem(PINNED_FLIGHT_KEY);
           let pinnedFn: string | null = null;
           if (pinnedRawW) {
@@ -1256,7 +1266,7 @@ export default function FlightScreen() {
           }
           const wFilterRaw = await AsyncStorage.getItem(FLIGHT_FILTER_KEY);
           const wAllowedAirlines: string[] = wFilterRaw ? JSON.parse(wFilterRaw) : [];
-          const wFlights: WidgetFlight[] = fetchedDepartures
+          const wFlights: WidgetFlight[] = mergedDeps
             .filter(item => {
               const ts = getBestDepartureTs(item);
               if (ts == null) return false;
@@ -1265,7 +1275,7 @@ export default function FlightScreen() {
               const ops = getAirlineOps(airline);
               const ciO = ts - ops.checkInOpen * 60, ciC = ts - ops.checkInClose * 60;
               const gO = ts - ops.gateOpen * 60, gC = ts - ops.gateClose * 60;
-              return (ciO <= shiftToday!.end && ciC >= shiftToday!.start) || (gO <= shiftToday!.end && gC >= shiftToday!.start);
+              return (ciO <= activeWidgetShift.end && ciC >= activeWidgetShift.start) || (gO <= activeWidgetShift.end && gC >= activeWidgetShift.start);
             })
             .map(item => {
               const ts = getBestDepartureTs(item)!;

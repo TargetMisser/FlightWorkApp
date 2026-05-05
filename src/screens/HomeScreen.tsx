@@ -10,6 +10,7 @@ import { WebView } from 'react-native-webview';
 import * as ImagePicker from 'expo-image-picker';
 import * as Calendar from 'expo-calendar';
 import * as Location from 'expo-location';
+import { requestWidgetUpdate } from 'react-native-android-widget';
 import { useAppTheme, type ThemeColors } from '../context/ThemeContext';
 import ShiftTimeline from '../components/ShiftTimeline';
 
@@ -19,6 +20,8 @@ import {
   replaceShiftForDate,
   replaceShiftsForRange,
 } from '../utils/shiftCalendar';
+import { WIDGET_CACHE_KEY, WIDGET_SHIFT_KEY, type WidgetData, type WidgetShiftData, type WidgetShiftWindow } from '../widgets/widgetTaskHandler';
+import { ShiftWidget } from '../widgets/ShiftWidget';
 import { parseOcrShiftText } from '../utils/ocrShiftParser';
 import { useLanguage } from '../context/LanguageContext';
 
@@ -30,6 +33,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 
 const PINNED_FLIGHT_KEY = 'pinned_flight_v1';
 const HOME_REST_TIMING = { startHour: 12, startMinute: 0, endHour: 14, endMinute: 0, allDay: true };
+type HomeShiftKind = 'today' | 'next' | 'rest' | 'none';
 
 // months comes from useLanguage() context
 
@@ -152,6 +156,7 @@ export default function HomeScreen({ isFocused }: { isFocused?: boolean }) {
   const HOME_SHIFT_TITLES = { work: 'Lavoro', rest: 'Riposo' };
   const today = new Date();
   const [shiftEvent, setShiftEvent] = useState<any>(null);
+  const [shiftKind, setShiftKind] = useState<HomeShiftKind>('none');
   const [weather, setWeather] = useState<{ text: string; iconName: string; temp: number } | null>(null);
   const [loadingShift, setLoadingShift] = useState(true);
   const [uploadOpen, setUploadOpen] = useState(false);
@@ -169,6 +174,65 @@ export default function HomeScreen({ isFocused }: { isFocused?: boolean }) {
   const [pinnedFlight, setPinnedFlight] = useState<any>(null);
 
   const webViewRef = useRef<WebView>(null);
+
+  const toLocalIso = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const toWidgetShiftWindow = (event: any, date: string): WidgetShiftWindow => ({
+    date,
+    start: new Date(event.startDate).getTime() / 1000,
+    end: new Date(event.endDate).getTime() / 1000,
+  });
+
+  const formatWidgetShiftLabel = (shift: WidgetShiftWindow, isNext: boolean) => {
+    const fmt = (ts: number) => new Date(ts * 1000).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+    const label = `${fmt(shift.start)} – ${fmt(shift.end)}`;
+    return isNext ? `Domani ${label}` : label;
+  };
+
+  const pushHomeShiftToWidget = async ({
+    todayIso,
+    shiftToday,
+    isRestDay,
+    nextShift,
+  }: {
+    todayIso: string;
+    shiftToday: { start: number; end: number } | null;
+    isRestDay: boolean;
+    nextShift: WidgetShiftWindow | null;
+  }) => {
+    try {
+      const shiftData: WidgetShiftData = { date: todayIso, shiftToday, isRestDay, nextShift };
+      await AsyncStorage.setItem(WIDGET_SHIFT_KEY, JSON.stringify(shiftData));
+
+      const now = Date.now() / 1000;
+      let widgetData: WidgetData = { state: 'no_shift' };
+      if (isRestDay) {
+        widgetData = { state: 'rest' };
+      } else if (shiftToday && now <= shiftToday.end) {
+        widgetData = {
+          state: 'work_empty',
+          shiftLabel: formatWidgetShiftLabel({ date: todayIso, ...shiftToday }, false),
+          updatedAt: '',
+        };
+      } else if (shiftToday && now > shiftToday.end && nextShift && nextShift.start > now) {
+        widgetData = {
+          state: 'work_empty',
+          shiftLabel: formatWidgetShiftLabel(nextShift, true),
+          updatedAt: '',
+        };
+      }
+
+      await AsyncStorage.setItem(WIDGET_CACHE_KEY, JSON.stringify(widgetData));
+      if (Platform.OS === 'android') {
+        requestWidgetUpdate({ widgetName: 'ShiftFlights', renderWidget: () => (<ShiftWidget data={widgetData} />) as any }).catch(() => {});
+      }
+    } catch {}
+  };
 
   useEffect(() => { fetchShift(); }, []);
   useEffect(() => { fetchWeather(); }, []);
@@ -249,13 +313,59 @@ export default function HomeScreen({ isFocused }: { isFocused?: boolean }) {
       const cals = await Calendar.getCalendarsAsync(Calendar.EntityTypes.EVENT);
       const cal = cals.find(c => c.allowsModifications && c.isPrimary) || cals.find(c => c.allowsModifications);
       if (!cal) { setLoadingShift(false); return; }
-      const d = new Date();
-      d.setHours(0, 0, 0, 0);
-      const dEnd = new Date(); dEnd.setHours(23, 59, 59, 999);
-      const events = await Calendar.getEventsAsync([cal.id], d, dEnd);
-      const lavoro = events.find(e => e.title.includes('Lavoro'));
-      const riposo = events.find(e => e.title.includes('Riposo'));
-      setShiftEvent(lavoro ?? riposo ?? null);
+      const now = new Date();
+      const yesterdayStart = new Date(now); yesterdayStart.setDate(yesterdayStart.getDate() - 1); yesterdayStart.setHours(0, 0, 0, 0);
+      const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0);
+      const todayEnd = new Date(todayStart); todayEnd.setHours(23, 59, 59, 999);
+      const tomorrowStart = new Date(todayStart); tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+      const tomorrowEnd = new Date(tomorrowStart); tomorrowEnd.setHours(23, 59, 59, 999);
+      const events = await Calendar.getEventsAsync([cal.id], yesterdayStart, tomorrowEnd);
+      const workEvents = events
+        .filter(e => e.title.includes('Lavoro'))
+        .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
+      const restEvents = events.filter(e => e.title.includes('Riposo'));
+      const startsInRange = (event: any, start: Date, end: Date) => {
+        const ts = new Date(event.startDate).getTime();
+        return ts >= start.getTime() && ts <= end.getTime();
+      };
+      const currentWork = workEvents.find(e =>
+        new Date(e.startDate).getTime() <= now.getTime() && new Date(e.endDate).getTime() > now.getTime(),
+      );
+      const todayWork = workEvents.find(e => startsInRange(e, todayStart, todayEnd));
+      const todayRest = restEvents.find(e => startsInRange(e, todayStart, todayEnd));
+      const tomorrowWork = workEvents.find(e => startsInRange(e, tomorrowStart, tomorrowEnd));
+
+      let selectedEvent: any = null;
+      let selectedKind: HomeShiftKind = 'none';
+      if (currentWork) {
+        selectedEvent = currentWork;
+        selectedKind = 'today';
+      } else if (todayWork) {
+        const todayWorkEnded = new Date(todayWork.endDate).getTime() <= now.getTime();
+        if (todayWorkEnded && tomorrowWork) {
+          selectedEvent = tomorrowWork;
+          selectedKind = 'next';
+        } else if (!todayWorkEnded) {
+          selectedEvent = todayWork;
+          selectedKind = 'today';
+        }
+      } else if (todayRest) {
+        selectedEvent = todayRest;
+        selectedKind = 'rest';
+      }
+
+      setShiftEvent(selectedEvent);
+      setShiftKind(selectedKind);
+
+      await pushHomeShiftToWidget({
+        todayIso: toLocalIso(todayStart),
+        shiftToday: todayWork ? {
+          start: new Date(todayWork.startDate).getTime() / 1000,
+          end: new Date(todayWork.endDate).getTime() / 1000,
+        } : null,
+        isRestDay: !!todayRest && !todayWork,
+        nextShift: tomorrowWork ? toWidgetShiftWindow(tomorrowWork, toLocalIso(tomorrowStart)) : null,
+      });
     } catch (e) { if (__DEV__) console.error('[shift]', e); } finally { setLoadingShift(false); }
   };
 
@@ -277,12 +387,23 @@ export default function HomeScreen({ isFocused }: { isFocused?: boolean }) {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsMultipleSelection: true, quality: 1, base64: true,
+        allowsMultipleSelection: true,
+        selectionLimit: 0,
+        orderedSelection: true,
+        quality: 1,
+        base64: true,
       });
       if (!result.canceled && result.assets?.length > 0) {
         setImageList(result.assets.map(a => a.uri));
         setProcessing(true); setOcrText('');
-        const base64List = result.assets.map(a => `data:image/jpeg;base64,${a.base64}`);
+        const base64List = result.assets
+          .map(a => a.base64 ? `data:${a.mimeType || 'image/jpeg'};base64,${a.base64}` : null)
+          .filter((item): item is string => !!item);
+        if (base64List.length === 0) {
+          setProcessing(false);
+          Alert.alert('Errore OCR', 'Nessuna immagine leggibile selezionata.');
+          return;
+        }
         const base64Json = JSON.stringify(base64List);
         // Use postMessage pattern to avoid script-injection risks with injectJavaScript
         webViewRef.current?.injectJavaScript(`
@@ -339,6 +460,7 @@ export default function HomeScreen({ isFocused }: { isFocused?: boolean }) {
 
   const isRest = shiftEvent?.title?.includes('Riposo');
   const isWork = shiftEvent?.title?.includes('Lavoro');
+  const isNextShift = isWork && shiftKind === 'next';
   const s = useMemo(() => makeStyles(colors), [colors]);
 
   return (
@@ -377,7 +499,7 @@ export default function HomeScreen({ isFocused }: { isFocused?: boolean }) {
       {pinnedFlight && <PinnedFlightCard item={pinnedFlight} colors={colors} />}
 
       {/* Turno Attuale */}
-      <Text style={s.sectionTitle}>{t('homeCurrentShift')}</Text>
+      <Text style={s.sectionTitle}>{isNextShift ? t('homeNextShift') : t('homeCurrentShift')}</Text>
 
       <View style={s.shiftCard}>
         {loadingShift ? (
@@ -387,9 +509,11 @@ export default function HomeScreen({ isFocused }: { isFocused?: boolean }) {
             <View style={s.shiftStrip} />
             <View style={{ flex: 1 }}>
               <View style={s.shiftBadgeRow}>
-                <View style={s.inProgressBadge}><Text style={s.inProgressText}>{t('homeInProgress')}</Text></View>
+                <View style={s.inProgressBadge}>
+                  <Text style={s.inProgressText}>{isNextShift ? t('homeNextShiftBadge') : t('homeInProgress')}</Text>
+                </View>
               </View>
-              <Text style={s.shiftTitle}>{t('homeShiftWork')}</Text>
+              <Text style={s.shiftTitle}>{isNextShift ? t('homeNextShift') : t('homeShiftWork')}</Text>
               <Text style={s.shiftTime}>
                 {new Date(shiftEvent.startDate).toLocaleTimeString(locale,{hour:'2-digit',minute:'2-digit'})} – {new Date(shiftEvent.endDate).toLocaleTimeString(locale,{hour:'2-digit',minute:'2-digit'})}
               </Text>

@@ -22,6 +22,8 @@ export default function ShiftScreen() {
       let result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsMultipleSelection: true,
+        selectionLimit: 0,
+        orderedSelection: true,
         quality: 1,
         base64: true,
       });
@@ -31,12 +33,19 @@ export default function ShiftScreen() {
         setProcessing(true);
         setOcrText('');
         
-        const base64List = result.assets.map(a => `data:image/jpeg;base64,${a.base64}`);
-        const base64Json = JSON.stringify(base64List).replace(/'/g, "\\'");
+        const base64List = result.assets
+          .map(a => a.base64 ? `data:${a.mimeType || 'image/jpeg'};base64,${a.base64}` : null)
+          .filter((item): item is string => !!item);
+        if (base64List.length === 0) {
+          setProcessing(false);
+          Alert.alert('Errore OCR', 'Nessuna immagine leggibile selezionata.');
+          return;
+        }
+        const base64Json = JSON.stringify(base64List);
         
         const jsCode = `
           if (window.runTesseract) {
-            window.runTesseract('${base64Json}');
+            window.runTesseract(${JSON.stringify(base64Json)});
           } else {
             window.ReactNativeWebView.postMessage(JSON.stringify({ success: false, error: "Motore OCR non pronto." }));
           }

@@ -37,10 +37,17 @@ export type WidgetData =
   | { state: 'no_shift' }
   | { state: 'error' };
 
+export type WidgetShiftWindow = {
+  date: string;
+  start: number;
+  end: number;
+};
+
 export type WidgetShiftData = {
   date: string; // 'YYYY-MM-DD' — the day this shift data refers to
   shiftToday: { start: number; end: number } | null;
   isRestDay: boolean;
+  nextShift?: WidgetShiftWindow | null;
 };
 
 function fmtTs(ts: number): string {
@@ -48,29 +55,73 @@ function fmtTs(ts: number): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
+function toLocalIso(date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function addDays(date: Date, days: number): Date {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+type ResolvedWidgetShift = {
+  shift: WidgetShiftWindow;
+  shiftLabel: string;
+};
+
+function resolveWidgetShift(shiftData: WidgetShiftData): ResolvedWidgetShift | 'rest' | null {
+  const now = Date.now() / 1000;
+  const todayIso = toLocalIso();
+  const tomorrowIso = toLocalIso(addDays(new Date(), 1));
+  const currentShift = shiftData.shiftToday
+    ? { date: shiftData.date, start: shiftData.shiftToday.start, end: shiftData.shiftToday.end }
+    : null;
+  const nextShift = shiftData.nextShift ?? null;
+
+  if (shiftData.date === todayIso) {
+    if (shiftData.isRestDay) return 'rest';
+    if (currentShift && now <= currentShift.end) {
+      return { shift: currentShift, shiftLabel: `${fmtTs(currentShift.start)} – ${fmtTs(currentShift.end)}` };
+    }
+    if (currentShift && now > currentShift.end && nextShift && nextShift.date === tomorrowIso && nextShift.start > now) {
+      return { shift: nextShift, shiftLabel: `Domani ${fmtTs(nextShift.start)} – ${fmtTs(nextShift.end)}` };
+    }
+    return null;
+  }
+
+  // If the app wrote tomorrow's shift yesterday, use it after midnight until fresh data arrives.
+  if (nextShift && nextShift.date === todayIso && now <= nextShift.end) {
+    return { shift: nextShift, shiftLabel: `${fmtTs(nextShift.start)} – ${fmtTs(nextShift.end)}` };
+  }
+
+  return null;
+}
+
 // ─── Read cached data written by the main app ──────────────────────────────────
 async function getWidgetData(): Promise<WidgetData> {
   try {
-    const todayIso = new Date().toISOString().split('T')[0];
     const shiftRaw = await AsyncStorage.getItem(WIDGET_SHIFT_KEY);
 
     if (shiftRaw) {
       const shiftData: WidgetShiftData = JSON.parse(shiftRaw);
-      if (shiftData.date === todayIso) {
-        // Shift key is authoritative for today's work/rest classification.
-        if (shiftData.isRestDay) return { state: 'rest' };
-        if (!shiftData.shiftToday) return { state: 'no_shift' };
+      const resolved = resolveWidgetShift(shiftData);
+      if (resolved === 'rest') return { state: 'rest' };
+      if (resolved) {
+        const { shiftLabel } = resolved;
 
-        // It's a work day — return cached flight data only if it's also a 'work' state.
-        // A stale 'rest' in the cache must not override the shift key.
+        // It's a work day — return cached flight data only if it matches the active shift.
+        // A stale current-shift cache must not override the automatic next-day handoff.
         const cached = await AsyncStorage.getItem(WIDGET_CACHE_KEY);
         if (cached) {
           const data: WidgetData = JSON.parse(cached);
-          if (data.state === 'work' || data.state === 'work_empty') return data;
+          if ((data.state === 'work' || data.state === 'work_empty') && data.shiftLabel === shiftLabel) return data;
         }
         // Cache is stale or missing — show work_empty until periodic update runs.
-        const { start, end } = shiftData.shiftToday;
-        return { state: 'work_empty', shiftLabel: `${fmtTs(start)} – ${fmtTs(end)}`, updatedAt: '' };
+        return { state: 'work_empty', shiftLabel, updatedAt: '' };
       }
     }
 
@@ -92,14 +143,11 @@ async function fetchFreshWidgetData(): Promise<WidgetData> {
     if (!shiftRaw) return getWidgetData();
 
     const shiftData: WidgetShiftData = JSON.parse(shiftRaw);
-    const todayIso = new Date().toISOString().split('T')[0];
+    const resolved = resolveWidgetShift(shiftData);
+    if (resolved === 'rest') return { state: 'rest' };
+    if (!resolved) return { state: 'no_shift' };
 
-    // Shift data is from a different day — cannot be used
-    if (shiftData.date !== todayIso) return { state: 'no_shift' };
-    if (shiftData.isRestDay) return { state: 'rest' };
-    if (!shiftData.shiftToday) return { state: 'no_shift' };
-
-    const shiftToday = shiftData.shiftToday;
+    const activeShift = resolved.shift;
     const airportCode = await getStoredAirportCode();
     const allAirlines = await getStoredAirportAirlines(airportCode);
     const filterRaw = await AsyncStorage.getItem('aerostaff_flight_filter_v1');
@@ -120,7 +168,7 @@ async function fetchFreshWidgetData(): Promise<WidgetData> {
 
     const fmtOff = (dep: number, off: number) => fmtTs(dep - off * 60);
     const nowHH = fmtTs(Date.now() / 1000);
-    const shiftLabel = `${fmtTs(shiftToday.start)} – ${fmtTs(shiftToday.end)}`;
+    const shiftLabel = resolved.shiftLabel;
 
     const filteredDeps = allowedAirlines.length === 0
       ? allDepartures
@@ -136,7 +184,7 @@ async function fetchFreshWidgetData(): Promise<WidgetData> {
         const ops = getAirlineOps(airline);
         const ciO = ts - ops.checkInOpen * 60, ciC = ts - ops.checkInClose * 60;
         const gO = ts - ops.gateOpen * 60, gC = ts - ops.gateClose * 60;
-        return (ciO <= shiftToday.end && ciC >= shiftToday.start) || (gO <= shiftToday.end && gC >= shiftToday.start);
+        return (ciO <= activeShift.end && ciC >= activeShift.start) || (gO <= activeShift.end && gC >= activeShift.start);
       })
       .map(item => {
         const ts = getBestDepartureTs(item)!;

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View, Text, StyleSheet, ActivityIndicator, ScrollView, TouchableOpacity,
   Platform, Modal, Alert, FlatList, TextInput,
@@ -27,6 +27,7 @@ import type { WidgetShiftData } from '../widgets/widgetTaskHandler';
 import { ShiftWidget } from '../widgets/ShiftWidget';
 import {
   getPdfExtractorHtml, parseShiftCells,
+  parseShiftCellFiles,
   type ParsedSchedule, type ParsedEmployee,
 } from '../utils/pdfShiftParser';
 import { useLanguage } from '../context/LanguageContext';
@@ -52,6 +53,8 @@ type CalendarMarkedDates = Record<string, {
   selectedColor?: string;
   selectedTextColor?: string;
 }>;
+
+type CalendarViewMode = 'calendar' | 'week';
 
 function getMonday(d: Date | null | undefined): Date {
   if (!d || isNaN(d.getTime())) return getMonday(new Date());
@@ -95,11 +98,14 @@ export default function CalendarScreen() {
   const [dailyStats, setDailyStats] = useState<Record<string, DayStats>>({});
   const [loading, setLoading] = useState(true);
   const [calId, setCalId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<CalendarViewMode>('calendar');
+  const hasLoadedCalendarRef = useRef(false);
 
   // Import flow state
   const [importModalVisible, setImportModalVisible] = useState(false);
   const [importStep, setImportStep] = useState<'idle' | 'extracting' | 'pickName' | 'preview' | 'saving' | 'done'>('idle');
   const [pdfHtml, setPdfHtml] = useState<string | null>(null);
+  const [importFileCount, setImportFileCount] = useState(0);
   const [parsedSchedule, setParsedSchedule] = useState<ParsedSchedule | null>(null);
   const [selectedEmployee, setSelectedEmployee] = useState<ParsedEmployee | null>(null);
   const [savedName, setSavedName] = useState<string | null>(null);
@@ -171,23 +177,54 @@ export default function CalendarScreen() {
   // Push the saved shift to the widget so it updates immediately without opening FlightScreen
   const pushShiftToWidget = async (date: string, type: 'work' | 'rest', startH?: number, startM?: number, endH?: number, endM?: number) => {
     try {
-      const todayIso = new Date().toISOString().split('T')[0];
-      if (date !== todayIso) return; // only update widget for today's shift
+      const today = new Date();
+      const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
+      const todayIso = toLocalIso(today);
+      const tomorrowIso = toLocalIso(tomorrow);
+      if (date !== todayIso && date !== tomorrowIso) return;
+
+      const existingRaw = await AsyncStorage.getItem(WIDGET_SHIFT_KEY);
+      const existing: WidgetShiftData | null = existingRaw ? JSON.parse(existingRaw) : null;
+      let shiftToday = existing?.date === todayIso ? existing.shiftToday : null;
+      let isRestDay = existing?.date === todayIso ? existing.isRestDay : false;
+      let nextShift = existing?.date === todayIso ? existing.nextShift ?? null : null;
       const isRest = type === 'rest';
-      let shiftToday: { start: number; end: number } | null = null;
-      if (!isRest && startH !== undefined && startM !== undefined && endH !== undefined && endM !== undefined) {
-        const base = new Date(); base.setHours(0, 0, 0, 0);
-        const startTs = new Date(base); startTs.setHours(startH, startM, 0, 0);
-        let endTs = new Date(base); endTs.setHours(endH, endM, 0, 0);
+
+      const buildShiftWindow = (baseDate: Date, sh: number, sm: number, eh: number, em: number) => {
+        const startTs = new Date(baseDate); startTs.setHours(sh, sm, 0, 0);
+        let endTs = new Date(baseDate); endTs.setHours(eh, em, 0, 0);
         if (endTs <= startTs) endTs.setDate(endTs.getDate() + 1);
-        shiftToday = { start: startTs.getTime() / 1000, end: endTs.getTime() / 1000 };
+        return { start: startTs.getTime() / 1000, end: endTs.getTime() / 1000 };
+      };
+
+      if (date === todayIso) {
+        isRestDay = isRest;
+        shiftToday = null;
+        if (!isRest && startH !== undefined && startM !== undefined && endH !== undefined && endM !== undefined) {
+          const base = new Date(today); base.setHours(0, 0, 0, 0);
+          shiftToday = buildShiftWindow(base, startH, startM, endH, endM);
+          isRestDay = false;
+        }
+      } else if (date === tomorrowIso) {
+        nextShift = null;
+        if (!isRest && startH !== undefined && startM !== undefined && endH !== undefined && endM !== undefined) {
+          const base = new Date(tomorrow); base.setHours(0, 0, 0, 0);
+          nextShift = { date: tomorrowIso, ...buildShiftWindow(base, startH, startM, endH, endM) };
+        }
       }
-      const shiftKeyData: WidgetShiftData = { date: todayIso, shiftToday, isRestDay: isRest };
+
+      const shiftKeyData: WidgetShiftData = { date: todayIso, shiftToday, isRestDay, nextShift };
       await AsyncStorage.setItem(WIDGET_SHIFT_KEY, JSON.stringify(shiftKeyData));
       // Invalidate flight cache so widget fetches fresh flights next update
-      const noFlightData = shiftToday
-        ? { state: 'work_empty', shiftLabel: '', updatedAt: '' }
-        : isRest ? { state: 'rest' } : { state: 'no_shift' };
+      const now = Date.now() / 1000;
+      const fmt = (ts: number) => new Date(ts * 1000).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+      const noFlightData = isRestDay
+        ? { state: 'rest' }
+        : shiftToday && now <= shiftToday.end
+          ? { state: 'work_empty', shiftLabel: `${fmt(shiftToday.start)} – ${fmt(shiftToday.end)}`, updatedAt: '' }
+          : shiftToday && now > shiftToday.end && nextShift && nextShift.start > now
+            ? { state: 'work_empty', shiftLabel: `Domani ${fmt(nextShift.start)} – ${fmt(nextShift.end)}`, updatedAt: '' }
+            : { state: 'no_shift' };
       await AsyncStorage.setItem(WIDGET_CACHE_KEY, JSON.stringify(noFlightData));
       if (Platform.OS === 'android') {
         requestWidgetUpdate({ widgetName: 'ShiftFlights', renderWidget: () => (<ShiftWidget data={noFlightData as any} />) as any }).catch(() => {});
@@ -259,7 +296,7 @@ export default function CalendarScreen() {
   }, [lang, months, weekDaysLong, weekDaysShort]);
 
   useEffect(() => {
-    if (!airportLoading) fetchCalendar();
+    if (!airportLoading) fetchCalendar(hasLoadedCalendarRef.current);
   }, [visibleMonth, airportCode, airportLoading]);
 
   useEffect(() => {
@@ -275,14 +312,24 @@ export default function CalendarScreen() {
     try {
       if (!silent) setLoading(true);
       const { status } = await SystemCalendar.requestCalendarPermissionsAsync();
-      if (status !== 'granted') { setLoading(false); return; }
+      if (status !== 'granted') {
+        hasLoadedCalendarRef.current = true;
+        setLoading(false);
+        return;
+      }
       const calendars = await SystemCalendar.getCalendarsAsync(SystemCalendar.EntityTypes.EVENT);
       const cal = calendars.find(c => c.allowsModifications && c.isPrimary) || calendars.find(c => c.allowsModifications);
-      if (!cal) { setLoading(false); return; }
+      if (!cal) {
+        hasLoadedCalendarRef.current = true;
+        setLoading(false);
+        return;
+      }
       setCalId(cal.id);
       const monthStart = getMonthStart(visibleMonth);
       const monthEnd = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1, 1, 0, 0, 0, 0);
-      const events = await SystemCalendar.getEventsAsync([cal.id], monthStart, monthEnd);
+      const rangeStart = new Date(monthStart); rangeStart.setDate(rangeStart.getDate() - 7);
+      const rangeEnd = new Date(monthEnd); rangeEnd.setDate(rangeEnd.getDate() + 7);
+      const events = await SystemCalendar.getEventsAsync([cal.id], rangeStart, rangeEnd);
       const localData: Record<string, ShiftEvent[]> = {};
       events.forEach(e => {
         if (e.title.includes('Lavoro') || e.title.includes('Riposo')) {
@@ -291,9 +338,21 @@ export default function CalendarScreen() {
           localData[iso].push({ id: e.id, title: e.title, startDate: e.startDate, endDate: e.endDate });
         }
       });
-      setEventsData(localData);
+      setEventsData(prev => {
+        const next = { ...prev };
+        for (const iso of Object.keys(next)) {
+          const day = fromIsoDate(iso);
+          if (day >= rangeStart && day < rangeEnd) delete next[iso];
+        }
+        return { ...next, ...localData };
+      });
+      hasLoadedCalendarRef.current = true;
       setLoading(false);
-    } catch (e) { if (__DEV__) console.error(e); setLoading(false); }
+    } catch (e) {
+      if (__DEV__) console.error(e);
+      hasLoadedCalendarRef.current = true;
+      setLoading(false);
+    }
   };
 
   const fetchWeatherAndFlights = async (start: Date, end: Date, localData: Record<string, ShiftEvent[]>) => {
@@ -338,24 +397,33 @@ export default function CalendarScreen() {
       const result = await DocumentPicker.getDocumentAsync({
         type: 'application/pdf',
         copyToCacheDirectory: true,
+        multiple: true,
       });
-      if (result.canceled || !result.assets?.[0]) return;
+      if (result.canceled || !result.assets?.length) return;
+
+      const assets = result.assets.filter(asset => !!asset.uri);
+      if (assets.length === 0) return;
 
       step = 'read';
-      const uri = result.assets[0].uri;
-      const fileInfo = await FileSystem.getInfoAsync(uri);
-      if (!fileInfo.exists) {
-        Alert.alert('Errore', `File non trovato: ${uri}`);
-        return;
+      const base64Files: string[] = [];
+      for (const asset of assets) {
+        const fileInfo = await FileSystem.getInfoAsync(asset.uri);
+        if (!fileInfo.exists) {
+          Alert.alert('Errore', `File non trovato: ${asset.name || asset.uri}`);
+          return;
+        }
+
+        step = 'base64';
+        base64Files.push(await FileSystem.readAsStringAsync(asset.uri, { encoding: FileSystem.EncodingType.Base64 }));
       }
 
-      step = 'base64';
-      const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
-
       step = 'webview';
+      setParsedSchedule(null);
+      setSelectedEmployee(null);
+      setImportFileCount(base64Files.length);
       setImportStep('extracting');
       setImportModalVisible(true);
-      setPdfHtml(getPdfExtractorHtml(base64));
+      setPdfHtml(getPdfExtractorHtml(base64Files));
     } catch (e: any) {
       if (__DEV__) console.error(`Import error at step=${step}:`, e);
       Alert.alert('Errore', `Errore (${step}): ${e?.message || e}`);
@@ -371,14 +439,20 @@ export default function CalendarScreen() {
         Alert.alert('Errore', t('calNoPdfText'));
         setImportModalVisible(false);
         setImportStep('idle');
+        setImportFileCount(0);
         return;
       }
 
-      const schedule = parseShiftCells(data.cells);
+      const files = (Array.isArray(data.files) && data.files.length > 0
+        ? data.files
+        : [{ cells: Array.isArray(data.cells) ? data.cells : [] }]
+      ).map((file: any) => ({ cells: Array.isArray(file?.cells) ? file.cells : [] }));
+      const schedule = files.length > 1 ? parseShiftCellFiles(files) : parseShiftCells(files[0].cells);
       if (schedule.employees.length === 0) {
         Alert.alert('Errore', t('calNoEmployees'));
         setImportModalVisible(false);
         setImportStep('idle');
+        setImportFileCount(0);
         return;
       }
 
@@ -402,6 +476,7 @@ export default function CalendarScreen() {
       Alert.alert('Errore', 'Errore nel parsing del PDF');
       setImportModalVisible(false);
       setImportStep('idle');
+      setImportFileCount(0);
     }
   };
 
@@ -422,6 +497,7 @@ export default function CalendarScreen() {
       if (!calendarId) {
         Alert.alert('Errore', 'Nessun calendario scrivibile');
         setImportStep('idle');
+        setImportFileCount(0);
         return;
       }
       if (!calId) setCalId(calendarId);
@@ -438,17 +514,26 @@ export default function CalendarScreen() {
 
       // Push today's shift to widget if it's included in the import
       const todayIso = toLocalIso(new Date());
+      const tomorrowDate = new Date(); tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+      const tomorrowIso = toLocalIso(tomorrowDate);
       const todayShift = selectedEmployee.shifts.find(s => s.date === todayIso);
       if (todayShift) {
         const [sh, sm] = (todayShift.start || '00:00').split(':').map(Number);
         const [eh, em] = (todayShift.end || '00:00').split(':').map(Number);
         pushShiftToWidget(todayIso, todayShift.type, sh, sm, eh, em);
       }
+      const tomorrowShift = selectedEmployee.shifts.find(s => s.date === tomorrowIso);
+      if (tomorrowShift) {
+        const [sh, sm] = (tomorrowShift.start || '00:00').split(':').map(Number);
+        const [eh, em] = (tomorrowShift.end || '00:00').split(':').map(Number);
+        pushShiftToWidget(tomorrowIso, tomorrowShift.type, sh, sm, eh, em);
+      }
 
       setImportStep('done');
       setTimeout(() => {
         setImportModalVisible(false);
         setImportStep('idle');
+        setImportFileCount(0);
         fetchCalendar(true);
         Alert.alert(t('calImportComplete'), `${saved} turni salvati nel calendario`);
       }, 800);
@@ -456,6 +541,7 @@ export default function CalendarScreen() {
       if (__DEV__) console.error(e);
       Alert.alert('Errore', t('calImportError'));
       setImportStep('idle');
+      setImportFileCount(0);
     }
   };
 
@@ -509,6 +595,36 @@ export default function CalendarScreen() {
     }
     return { totalHours: totalMinutes / 60, shiftsCount: workDays.length, workDays };
   }, [eventsData, visibleMonth]);
+
+  const selectedWeekDays = useMemo(() => {
+    const start = getMonday(fromIsoDate(selectedDay));
+    start.setHours(0, 0, 0, 0);
+    return Array.from({ length: 7 }, (_, index) => {
+      const date = new Date(start);
+      date.setDate(start.getDate() + index);
+      const iso = toLocalIso(date);
+      const events = eventsData[iso] || [];
+      const work = events.find(e => e.title.includes('Lavoro'));
+      const rest = events.find(e => e.title.includes('Riposo'));
+      const minutes = work
+        ? Math.max(0, Math.round((new Date(work.endDate).getTime() - new Date(work.startDate).getTime()) / 60000))
+        : 0;
+      return { date, iso, events, work, rest, minutes, stats: dailyStats[iso] };
+    });
+  }, [dailyStats, eventsData, selectedDay]);
+
+  const weekHoursSummary = useMemo(() => {
+    const totalMinutes = selectedWeekDays.reduce((sum, day) => sum + day.minutes, 0);
+    const shiftsCount = selectedWeekDays.filter(day => !!day.work).length;
+    return { totalHours: totalMinutes / 60, shiftsCount };
+  }, [selectedWeekDays]);
+
+  const weekRangeLabel = useMemo(() => {
+    const first = selectedWeekDays[0]?.date;
+    const last = selectedWeekDays[selectedWeekDays.length - 1]?.date;
+    if (!first || !last) return '';
+    return `${first.toLocaleDateString(locale, { day: '2-digit', month: 'short' })} - ${last.toLocaleDateString(locale, { day: '2-digit', month: 'short' })}`;
+  }, [locale, selectedWeekDays]);
 
   const fmtDate = (iso: string) => {
     const [y, m, d] = iso.split('-');
@@ -601,10 +717,35 @@ export default function CalendarScreen() {
           </View>
         </View>
 
+        <View style={s.viewModeRow}>
+          {(['calendar', 'week'] as const).map(mode => {
+            const active = viewMode === mode;
+            return (
+              <TouchableOpacity
+                key={mode}
+                style={[s.viewModeBtn, active && { backgroundColor: colors.primary }]}
+                activeOpacity={0.85}
+                onPress={() => setViewMode(mode)}
+              >
+                <MaterialIcons
+                  name={mode === 'calendar' ? 'calendar-month' : 'view-week'}
+                  size={16}
+                  color={active ? '#fff' : colors.textSub}
+                />
+                <Text style={[s.viewModeText, { color: active ? '#fff' : colors.textSub }]}>
+                  {mode === 'calendar' ? t('calModeCalendar') : t('calModeWeek')}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
         {loading ? (
           <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 40 }} />
         ) : (
           <>
+            {viewMode === 'calendar' && (
+              <>
             <View style={s.mainCard}>
               <View style={s.selectedDayHeader}>
                 <Text style={s.selectedDayLabel}>{fmtDate(selectedDay)}</Text>
@@ -718,6 +859,80 @@ export default function CalendarScreen() {
                 </Text>
               </View>
             </View>
+              </>
+            )}
+
+            {viewMode === 'week' && (
+              <View style={s.weekCard}>
+                <View style={s.weekHeader}>
+                  <View>
+                    <Text style={s.weekTitle}>{t('calModeWeek')}</Text>
+                    <Text style={s.weekRange}>{weekRangeLabel}</Text>
+                  </View>
+                  <View style={s.weekTotalPill}>
+                    <Text style={s.weekTotalValue}>{weekHoursSummary.totalHours.toFixed(1)} h</Text>
+                    <Text style={s.weekTotalLabel}>
+                      {t('calWeekShiftsCount').replace('{count}', String(weekHoursSummary.shiftsCount))}
+                    </Text>
+                  </View>
+                </View>
+
+                {selectedWeekDays.map(day => {
+                  const selected = day.iso === selectedDay;
+                  const dayName = weekDaysShort[day.date.getDay()];
+                  const dayNumber = String(day.date.getDate()).padStart(2, '0');
+                  const monthNumber = String(day.date.getMonth() + 1).padStart(2, '0');
+                  return (
+                    <TouchableOpacity
+                      key={day.iso}
+                      style={[s.weekRow, selected && { borderColor: colors.primary, backgroundColor: colors.primaryLight }]}
+                      activeOpacity={0.85}
+                      onPress={() => handleDayPress({
+                        dateString: day.iso,
+                        day: day.date.getDate(),
+                        month: day.date.getMonth() + 1,
+                        year: day.date.getFullYear(),
+                        timestamp: day.date.getTime(),
+                      })}
+                    >
+                      <View style={[s.weekDateBox, selected && { backgroundColor: colors.primary }]}>
+                        <Text style={[s.weekDayName, selected && { color: '#fff' }]}>{dayName}</Text>
+                        <Text style={[s.weekDayNumber, selected && { color: '#fff' }]}>{dayNumber}</Text>
+                        <Text style={[s.weekMonthNumber, selected && { color: 'rgba(255,255,255,0.75)' }]}>{monthNumber}</Text>
+                      </View>
+
+                      <View style={s.weekShiftBody}>
+                        {day.work ? (
+                          <>
+                            <View style={s.weekShiftTitleRow}>
+                              <MaterialIcons name="flight" size={17} color={colors.primary} />
+                              <Text style={[s.weekShiftTitle, { color: colors.primaryDark }]}>{t('calShiftWork')}</Text>
+                            </View>
+                            <Text style={s.weekShiftMeta}>
+                              {new Date(day.work.startDate).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}
+                              {' - '}
+                              {new Date(day.work.endDate).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}
+                              {'  ·  '}
+                              {(day.minutes / 60).toFixed(1)} h
+                            </Text>
+                            {day.stats?.flightCount > 0 && (
+                              <Text style={s.weekFlightMeta}>{day.stats.flightCount} voli nel turno</Text>
+                            )}
+                          </>
+                        ) : day.rest ? (
+                          <View style={s.weekRestRow}>
+                            <MaterialIcons name="hotel" size={18} color="#10b981" />
+                            <Text style={s.weekRestText}>{t('calRestDay')}</Text>
+                          </View>
+                        ) : (
+                          <Text style={s.weekEmptyText}>{t('calNoShift')}</Text>
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
           </>
         )}
       </ScrollView>
@@ -857,7 +1072,7 @@ export default function CalendarScreen() {
 
       {/* ─── Import Modal ─── */}
       <Modal visible={importModalVisible} transparent animationType="slide" onRequestClose={() => {
-        if (importStep !== 'saving') { setImportModalVisible(false); setImportStep('idle'); }
+        if (importStep !== 'saving') { setImportModalVisible(false); setImportStep('idle'); setImportFileCount(0); }
       }}>
         <View style={s.modalOverlay}>
           <View style={s.modalBg} />
@@ -866,7 +1081,7 @@ export default function CalendarScreen() {
             <View style={s.modalHeader}>
               <Text style={[s.modalTitle, { color: colors.text }]}>{t('calImportTitle')}</Text>
               {importStep !== 'saving' && (
-                <TouchableOpacity onPress={() => { setImportModalVisible(false); setImportStep('idle'); }}>
+                <TouchableOpacity onPress={() => { setImportModalVisible(false); setImportStep('idle'); setImportFileCount(0); }}>
                   <MaterialIcons name="close" size={24} color={colors.textSub} />
                 </TouchableOpacity>
               )}
@@ -876,7 +1091,9 @@ export default function CalendarScreen() {
             {importStep === 'extracting' && (
               <View style={s.centerBox}>
                 <ActivityIndicator size="large" color={colors.primary} />
-                <Text style={[s.stepText, { color: colors.textSub }]}>{t('calExtracting')}</Text>
+                <Text style={[s.stepText, { color: colors.textSub }]}>
+                  {importFileCount > 1 ? `${t('calExtracting')} (${importFileCount} PDF)` : t('calExtracting')}
+                </Text>
               </View>
             )}
 
@@ -974,6 +1191,27 @@ function makeStyles(c: ThemeColors) {
     pageSub: { fontSize: 11, color: c.textSub, letterSpacing: 1.5, marginTop: 3 },
     importBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 },
     importBtnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+    viewModeRow: {
+      flexDirection: 'row',
+      gap: 8,
+      marginHorizontal: 16,
+      marginTop: 14,
+      backgroundColor: c.card,
+      borderRadius: 16,
+      padding: 6,
+      borderWidth: c.isDark ? 1 : 0,
+      borderColor: c.glassBorder,
+    },
+    viewModeBtn: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+      borderRadius: 12,
+      paddingVertical: 10,
+    },
+    viewModeText: { fontSize: 13, fontWeight: '800' },
     calendarCard: {
       backgroundColor: c.card,
       borderRadius: 20,
@@ -1012,6 +1250,56 @@ function makeStyles(c: ThemeColors) {
     calendarSummaryLabel: { color: c.textSub, fontSize: 12, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase' },
     calendarSummaryValue: { color: c.primary, fontSize: 28, fontWeight: '800', marginTop: 6 },
     calendarSummaryMeta: { color: c.textSub, fontSize: 13, fontWeight: '600', marginTop: 4 },
+    weekCard: {
+      backgroundColor: c.card,
+      borderRadius: 20,
+      marginHorizontal: 16,
+      marginTop: 16,
+      padding: 16,
+      shadowColor: c.primary,
+      shadowOpacity: c.isDark ? 0 : 0.08,
+      shadowRadius: 10,
+      elevation: c.isDark ? 0 : 4,
+      borderWidth: c.isDark ? 1 : 0,
+      borderColor: c.glassBorder,
+    },
+    weekHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 14 },
+    weekTitle: { color: c.primaryDark, fontSize: 20, fontWeight: '900' },
+    weekRange: { color: c.textSub, fontSize: 12, fontWeight: '700', marginTop: 3, textTransform: 'uppercase' },
+    weekTotalPill: { backgroundColor: c.primaryLight, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 8, alignItems: 'flex-end' },
+    weekTotalValue: { color: c.primary, fontSize: 18, fontWeight: '900' },
+    weekTotalLabel: { color: c.primaryDark, fontSize: 10, fontWeight: '800', marginTop: 1 },
+    weekRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      borderWidth: 1,
+      borderColor: c.border,
+      borderRadius: 16,
+      padding: 10,
+      marginTop: 9,
+      backgroundColor: c.bg,
+    },
+    weekDateBox: {
+      width: 54,
+      borderRadius: 14,
+      backgroundColor: c.card,
+      alignItems: 'center',
+      paddingVertical: 8,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    weekDayName: { color: c.textSub, fontSize: 10, fontWeight: '900', textTransform: 'uppercase' },
+    weekDayNumber: { color: c.text, fontSize: 22, fontWeight: '900', lineHeight: 26 },
+    weekMonthNumber: { color: c.textMuted, fontSize: 10, fontWeight: '800' },
+    weekShiftBody: { flex: 1, minHeight: 58, justifyContent: 'center' },
+    weekShiftTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+    weekShiftTitle: { fontSize: 16, fontWeight: '900' },
+    weekShiftMeta: { color: c.text, fontSize: 15, fontWeight: '800', marginTop: 5 },
+    weekFlightMeta: { color: c.textSub, fontSize: 12, fontWeight: '700', marginTop: 3 },
+    weekRestRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    weekRestText: { color: '#10b981', fontSize: 16, fontWeight: '900' },
+    weekEmptyText: { color: c.textSub, fontSize: 14, fontWeight: '700' },
     mainCard: {
       backgroundColor: c.card, borderRadius: 14,
       marginHorizontal: 16, marginTop: 16,

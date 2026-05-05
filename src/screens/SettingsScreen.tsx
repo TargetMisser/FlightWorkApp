@@ -3,7 +3,6 @@ import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, ActivityIndicator,
   Modal, KeyboardAvoidingView, Platform, TextInput, Linking,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAppTheme, ThemeMode } from '../context/ThemeContext';
 import { useAirport } from '../context/AirportContext';
@@ -67,7 +66,6 @@ type ThemeOption = {
   icon: keyof typeof MaterialIcons.glyphMap;
   previewBg: string;
   previewAccent: string;
-  previewGradient?: [string, string];
 };
 
 const THEME_OPTIONS: ThemeOption[] = [
@@ -86,15 +84,6 @@ const THEME_OPTIONS: ThemeOption[] = [
     icon: 'dark-mode',
     previewBg: '#0F172A',
     previewAccent: '#FF9A42',
-  },
-  {
-    id: 'weather',
-    label: 'Meteo',
-    sublabel: 'Cambia in base a cielo, ora e meteo',
-    icon: 'wb-cloudy',
-    previewBg: '#0d1f3c',
-    previewAccent: '#60A5FA',
-    previewGradient: ['#1a3a6e', '#0d1f3c'],
   },
 ];
 
@@ -116,29 +105,16 @@ function ThemeCard({ option, selected, onSelect, activeLabel }: {
       activeOpacity={0.8}
     >
       {/* Anteprima miniatura */}
-      {option.previewGradient ? (
-        <LinearGradient colors={option.previewGradient} style={styles.preview}>
-          <View style={[styles.previewBar, { backgroundColor: 'rgba(255,255,255,0.12)' }]} />
-          <View style={styles.previewContent}>
-            <View style={[styles.previewCard, { backgroundColor: 'rgba(255,255,255,0.15)' }]} />
-            <View style={[styles.previewCard, { backgroundColor: 'rgba(255,255,255,0.15)', width: '60%' }]} />
-          </View>
-          <View style={[styles.previewTab, { backgroundColor: 'rgba(255,255,255,0.10)' }]}>
-            <View style={[styles.previewDot, { backgroundColor: option.previewAccent }]} />
-          </View>
-        </LinearGradient>
-      ) : (
-        <View style={[styles.preview, { backgroundColor: option.previewBg }]}>
-          <View style={[styles.previewBar, { backgroundColor: option.previewBg === '#F3F4F6' ? '#fff' : 'rgba(255,255,255,0.12)' }]} />
-          <View style={styles.previewContent}>
-            <View style={[styles.previewCard, { backgroundColor: option.previewBg === '#F3F4F6' ? '#fff' : 'rgba(255,255,255,0.15)' }]} />
-            <View style={[styles.previewCard, { backgroundColor: option.previewBg === '#F3F4F6' ? '#fff' : 'rgba(255,255,255,0.15)', width: '60%' }]} />
-          </View>
-          <View style={[styles.previewTab, { backgroundColor: option.previewBg === '#F3F4F6' ? '#fff' : 'rgba(255,255,255,0.12)' }]}>
-            <View style={[styles.previewDot, { backgroundColor: option.previewAccent }]} />
-          </View>
+      <View style={[styles.preview, { backgroundColor: option.previewBg }]}>
+        <View style={[styles.previewBar, { backgroundColor: option.previewBg === '#F3F4F6' ? '#fff' : 'rgba(255,255,255,0.12)' }]} />
+        <View style={styles.previewContent}>
+          <View style={[styles.previewCard, { backgroundColor: option.previewBg === '#F3F4F6' ? '#fff' : 'rgba(255,255,255,0.15)' }]} />
+          <View style={[styles.previewCard, { backgroundColor: option.previewBg === '#F3F4F6' ? '#fff' : 'rgba(255,255,255,0.15)', width: '60%' }]} />
         </View>
-      )}
+        <View style={[styles.previewTab, { backgroundColor: option.previewBg === '#F3F4F6' ? '#fff' : 'rgba(255,255,255,0.12)' }]}>
+          <View style={[styles.previewDot, { backgroundColor: option.previewAccent }]} />
+        </View>
+      </View>
 
       {/* Info */}
       <View style={styles.themeInfo}>
@@ -232,8 +208,8 @@ export default function SettingsScreen() {
 
   const translatedOptions = THEME_OPTIONS.map(opt => ({
     ...opt,
-    label: opt.id === 'light' ? t('themeLight') : opt.id === 'dark' ? t('themeDark') : t('themeWeather'),
-    sublabel: opt.id === 'light' ? t('themeLightSub') : opt.id === 'dark' ? t('themeDarkSub') : t('themeWeatherSub'),
+    label: opt.id === 'light' ? t('themeLight') : t('themeDark'),
+    sublabel: opt.id === 'light' ? t('themeLightSub') : t('themeDarkSub'),
   }));
   const [airLabsInput, setAirLabsInput] = useState('');
   const [providerPreference, setProviderPreference] = useState<FlightProviderPreference>('auto');

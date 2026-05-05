@@ -88,7 +88,7 @@ function GlassTab({ icon, label, focused, activeColor, inactiveColor, onPress }:
 
 // ─── Inner app (inside ThemeProvider) ────────────────────────────────────────
 function AppInner() {
-  const { colors, mode } = useAppTheme();
+  const { colors } = useAppTheme();
   const { t } = useLanguage();
   const { profileInitials } = useAirport();
   const [activeTab, setActiveTab]   = useState<Tab>('Shifts');
@@ -199,7 +199,6 @@ function AppInner() {
 
 
   const appBarTitle = overlay ? overlayTitles[overlay] : 'AeroStaff Pro';
-  const isWeather   = mode === 'weather' && !!colors.gradient;
   const tabInactiveColor = colors.isDark ? 'rgba(235,239,245,0.78)' : colors.tabIconInactive;
 
   return (
@@ -227,9 +226,6 @@ function AppInner() {
         )}
         <View style={styles.titleRow}>
           <Text style={[styles.appBarTitle, { color: colors.text }]}>{appBarTitle}</Text>
-          {isWeather && (
-            <Text style={styles.weatherChip}>{colors.weatherIcon} {colors.weatherLabel}</Text>
-          )}
         </View>
         <TouchableOpacity onPress={() => setProfileModalOpen(true)} activeOpacity={0.85}>
           <LinearGradient
@@ -244,32 +240,16 @@ function AppInner() {
       </ExpoBlurView>
 
       {/* Screen Content */}
-      {isWeather ? (
-        <LinearGradient
-          colors={colors.gradient as [string, string, ...string[]]}
-          style={styles.content}
+      <View style={[styles.content, { backgroundColor: colors.bg, overflow: 'hidden' }]}>
+        {overlay ? renderOverlay() : TABS.map((tab, i) => (
+          <Animated.View
+            key={tab.id}
+            style={[StyleSheet.absoluteFill, { transform: [{ translateX: Animated.add(offsetX, i * SCREEN_W) }] }]}
           >
-          {overlay ? renderOverlay() : TABS.map((tab, i) => (
-            <Animated.View
-              key={tab.id}
-              style={[StyleSheet.absoluteFill, { transform: [{ translateX: Animated.add(offsetX, i * SCREEN_W) }] }]}
-            >
-              {renderTabScreen(tab.id)}
-            </Animated.View>
-          ))}
-        </LinearGradient>
-      ) : (
-        <View style={[styles.content, { backgroundColor: colors.bg, overflow: 'hidden' }]}>
-          {overlay ? renderOverlay() : TABS.map((tab, i) => (
-            <Animated.View
-              key={tab.id}
-              style={[StyleSheet.absoluteFill, { transform: [{ translateX: Animated.add(offsetX, i * SCREEN_W) }] }]}
-            >
-              {renderTabScreen(tab.id)}
-            </Animated.View>
-          ))}
-        </View>
-      )}
+            {renderTabScreen(tab.id)}
+          </Animated.View>
+        ))}
+      </View>
 
       {/* Bottom Nav — Glassmorphic Floating Pill (hidden on overlay screens) */}
       {!overlay && (
@@ -359,12 +339,6 @@ const styles = StyleSheet.create({
   iconBtn: { padding: 6, borderRadius: 8, marginRight: 6 },
   titleRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
   appBarTitle: { fontSize: 18, fontWeight: '700', letterSpacing: 0.3 },
-  weatherChip: {
-    fontSize: 11, color: 'rgba(255,255,255,0.8)',
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    paddingHorizontal: 8, paddingVertical: 3,
-    borderRadius: 20,
-  },
   avatar: {
     width: 34, height: 34, borderRadius: 17,
     justifyContent: 'center', alignItems: 'center',
