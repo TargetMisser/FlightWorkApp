@@ -19,6 +19,7 @@ import {
   replaceShiftForDate,
   replaceShiftsForRange,
 } from '../utils/shiftCalendar';
+import { parseOcrShiftText } from '../utils/ocrShiftParser';
 import { useLanguage } from '../context/LanguageContext';
 
 const GOLD = '#F59E0B';
@@ -310,44 +311,28 @@ export default function HomeScreen({ isFocused }: { isFocused?: boolean }) {
     try {
       const calendarId = await getWritableCalendarId();
       if (!calendarId) { Alert.alert('Errore', 'Nessun calendario scrivibile.'); return; }
-      const norText = ocrText.replace(/[OoQ]/g, '0').replace(/[Il|]/g, '1');
-      const dateRegex = /\b(\d{2})[\/\-](\d{2})[\/\-](\d{4})\b/g;
-      const dates: any[] = []; let m;
-      while ((m = dateRegex.exec(norText)) !== null) dates.push({ day: +m[1], month: +m[2]-1, year: +m[3], raw: m[0] });
-      const safeText = norText.replace(/\b20\d{2}\b/g, ' ANNO ');
-      const shiftRegex = /\b([01]?\d|2\d)[.,:]?(\d{2})\s*[-–—_~|]+\s*([01]?\d|2\d)[.,:]?(\d{2})\b|\b(R|RIP|RIP0S0|R1P0S0|R1POSO)\b/g;
-      const shifts: any[] = [];
-      while ((m = shiftRegex.exec(safeText)) !== null) {
-        if (m[5]) shifts.push({ isRest: true, raw: m[0] });
-        else shifts.push({ isRest: false, startH: +m[1], startM: +m[2], endH: +m[3], endM: +m[4], raw: m[0] });
-      }
-
-      const parsedShifts = [];
-      for (let i = 0; i < Math.min(dates.length, shifts.length); i++) {
-        const d = dates[i];
-        const s = shifts[i];
-        const date = `${d.year}-${String(d.month + 1).padStart(2, '0')}-${String(d.day).padStart(2, '0')}`;
-
-        if (s.isRest) {
-          parsedShifts.push({ date, type: 'rest' as const });
-        } else {
-          parsedShifts.push({
-            date,
-            type: 'work' as const,
-            startTime: `${String(s.startH).padStart(2, '0')}:${String(s.startM).padStart(2, '0')}`,
-            endTime: `${String(s.endH).padStart(2, '0')}:${String(s.endM).padStart(2, '0')}`,
-          });
-        }
+      const result = parseOcrShiftText(ocrText);
+      if (result.shifts.length === 0) {
+        Alert.alert(
+          t('homeNoSchedule'),
+          result.warning ?? `Date: ${result.datesFound}, Orari: ${result.shiftsFound}`,
+        );
+        return;
       }
 
       const saved = await replaceShiftsForRange({
         calendarId,
-        shifts: parsedShifts,
+        shifts: result.shifts,
         titles: HOME_SHIFT_TITLES,
         restTiming: HOME_REST_TIMING,
       });
 
-      Alert.alert(saved > 0 ? t('homeShiftSynced') : t('homeNoSchedule'), saved > 0 ? `${saved} turni salvati.` : `Date: ${dates.length}, Orari: ${shifts.length}`);
+      Alert.alert(
+        saved > 0 ? t('homeShiftSynced') : t('homeNoSchedule'),
+        saved > 0
+          ? `${saved} turni salvati.`
+          : `Date: ${result.datesFound}, Orari: ${result.shiftsFound}`,
+      );
       if (saved > 0) fetchShift(true);
     } catch (e: any) { Alert.alert(t('homeCalErr'), e.message); }
   };

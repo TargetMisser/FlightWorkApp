@@ -3,6 +3,7 @@ import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getAirlineOps } from './airlineOps';
 import { fetchAirportScheduleRaw } from './fr24api';
+import { getBestArrivalTs, getBestDepartureTs } from './flightTimes';
 import {
   showShiftOngoingNotification,
   dismissShiftOngoingNotification,
@@ -144,7 +145,7 @@ export async function autoScheduleNotifications(): Promise<number> {
 
     // Filter departures during shift + selected profile airlines
     const shiftDepartures = allDepartures.filter((item: any) => {
-      const ts = item.flight?.time?.scheduled?.departure;
+      const ts = getBestDepartureTs(item);
       return ts
         && ts >= shiftStart
         && ts <= shiftEnd
@@ -153,7 +154,7 @@ export async function autoScheduleNotifications(): Promise<number> {
 
     // Filter arrivals during shift + selected profile airlines
     const shiftArrivals = allArrivals.filter((item: any) => {
-      const ts = item.flight?.time?.scheduled?.arrival;
+      const ts = getBestArrivalTs(item);
       return ts
         && ts >= shiftStart
         && ts <= shiftEnd
@@ -169,14 +170,14 @@ export async function autoScheduleNotifications(): Promise<number> {
 
     if (now >= shiftStart && now <= shiftEnd) {
       const upcoming = shiftDepartures
-        .filter((f: any) => (f.flight?.time?.scheduled?.departure ?? 0) > now)
+        .filter((f: any) => (getBestDepartureTs(f) ?? 0) > now)
         .sort((a: any, b: any) =>
-          (a.flight?.time?.scheduled?.departure ?? 0) - (b.flight?.time?.scheduled?.departure ?? 0),
+          (getBestDepartureTs(a) ?? 0) - (getBestDepartureTs(b) ?? 0),
         );
       const next = upcoming[0];
       let flightInfo: string;
       if (next) {
-        const depTs = next.flight?.time?.scheduled?.departure as number;
+        const depTs = getBestDepartureTs(next) as number;
         const fn    = next.flight?.identification?.number?.default ?? '';
         const dest  = next.flight?.airport?.destination?.code?.iata ?? '';
         const time  = new Date(depTs * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
@@ -203,7 +204,7 @@ export async function autoScheduleNotifications(): Promise<number> {
     // ── Arrival notifications: 10 min before landing ──
     for (const item of shiftArrivals) {
       try {
-        const arrTs: number | undefined = item.flight?.time?.scheduled?.arrival;
+        const arrTs = getBestArrivalTs(item);
         if (!arrTs || isNaN(arrTs)) continue;
         const secondsUntilNotify = arrTs - 10 * 60 - now;
         if (secondsUntilNotify <= 0 || isNaN(secondsUntilNotify)) continue;
@@ -238,7 +239,7 @@ export async function autoScheduleNotifications(): Promise<number> {
     // ── Departure notifications: check-in/gate open-close warnings ──
     for (const item of shiftDepartures) {
       try {
-        const depTs: number | undefined = item.flight?.time?.scheduled?.departure;
+        const depTs = getBestDepartureTs(item);
         if (!depTs || isNaN(depTs)) continue;
 
         const airline = item.flight?.airline?.name || 'Sconosciuta';

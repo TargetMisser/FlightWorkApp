@@ -22,6 +22,7 @@ import { ShiftWidget } from '../widgets/ShiftWidget';
 import { useLanguage } from '../context/LanguageContext';
 import type { TranslationKey } from '../i18n/translations';
 import { dismissPinnedFlightNotification, showOrUpdatePinnedFlightNotification } from '../utils/pinnedFlightOngoingNotification';
+import { getBestArrivalTs, getBestDepartureTs } from '../utils/flightTimes';
 import {
   appendNotificationDebugEvent,
   buildNotificationData,
@@ -73,7 +74,9 @@ function normalizeAirlineKey(value: unknown): string {
 }
 
 function buildFlightradar24FlightUrl(flightNumber: string): string | null {
-  const normalized = normalizeFlightNumber(flightNumber).replace(/[^A-Z0-9]/g, '').toLowerCase();
+  // FR24 expects the published flight number. Do not use StaffMonitor's
+  // normalizer here: it intentionally strips leading zeros for table matching.
+  const normalized = flightNumber.trim().toUpperCase().replace(/[^A-Z0-9]/g, '').toLowerCase();
   if (!normalized || normalized === 'na') return null;
   return `https://www.flightradar24.com/data/flights/${normalized}`;
 }
@@ -753,7 +756,7 @@ async function scheduleShiftNotifications(
   if (settings.includeArrivals) {
     for (const item of shiftArrivals) {
       if (!canNotify(item)) continue;
-      const ts: number | undefined = item.flight?.time?.scheduled?.arrival;
+      const ts = getBestArrivalTs(item);
       if (!ts) continue;
       const secondsUntilNotify = ts - settings.arrivalLeadMinutes * 60 - now;
       if (secondsUntilNotify <= 0) continue;
@@ -788,7 +791,7 @@ async function scheduleShiftNotifications(
   if (settings.includeDepartures) {
     for (const item of shiftDepartures) {
       if (!canNotify(item)) continue;
-      const ts: number | undefined = item.flight?.time?.scheduled?.departure;
+      const ts = getBestDepartureTs(item);
       if (!ts) continue;
       const secondsUntilNotify = ts - settings.departureLeadMinutes * 60 - now;
       if (secondsUntilNotify <= 0) continue;
@@ -883,7 +886,7 @@ async function schedulePinnedNotifications(
   const airline = item.flight?.airline?.name || 'Sconosciuta';
 
   if (tab === 'arrivals') {
-    const ts: number | undefined = item.flight?.time?.scheduled?.arrival;
+    const ts = getBestArrivalTs(item);
     if (!ts) return;
     const origin = item.flight?.airport?.origin?.name || item.flight?.airport?.origin?.code?.iata || 'N/A';
     const arrTime = new Date(ts * 1000).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
@@ -909,7 +912,7 @@ async function schedulePinnedNotifications(
       ids.push(id);
     }
   } else {
-    const ts = item.flight?.time?.scheduled?.departure;
+    const ts = getBestDepartureTs(item);
     if (!ts) return;
     const dest = item.flight?.airport?.destination?.name || item.flight?.airport?.destination?.code?.iata || 'N/A';
     const depTime = new Date(ts * 1000).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
@@ -1170,8 +1173,8 @@ export default function FlightScreen() {
           const pinned = JSON.parse(pinnedRaw);
           const pinTab = pinned._pinTab || 'departures';
           const pinTs = pinTab === 'arrivals'
-            ? pinned.flight?.time?.scheduled?.arrival
-            : pinned.flight?.time?.scheduled?.departure;
+            ? getBestArrivalTs(pinned)
+            : getBestDepartureTs(pinned);
           const pinId = pinned.flight?.identification?.number?.default;
           const pool = pinTab === 'arrivals' ? fetchedArrivals : fetchedDepartures;
           const stillPresent = !!pinId && pool.some(item => item.flight?.identification?.number?.default === pinId);
@@ -1255,7 +1258,7 @@ export default function FlightScreen() {
           const wAllowedAirlines: string[] = wFilterRaw ? JSON.parse(wFilterRaw) : [];
           const wFlights: WidgetFlight[] = fetchedDepartures
             .filter(item => {
-              const ts = item.flight?.time?.scheduled?.departure;
+              const ts = getBestDepartureTs(item);
               if (ts == null) return false;
               const airline = item.flight?.airline?.name || '';
               if (wAllowedAirlines.length > 0 && !wAllowedAirlines.some(k => airline.toLowerCase().includes(k))) return false;
@@ -1265,7 +1268,7 @@ export default function FlightScreen() {
               return (ciO <= shiftToday!.end && ciC >= shiftToday!.start) || (gO <= shiftToday!.end && gC >= shiftToday!.start);
             })
             .map(item => {
-              const ts = item.flight.time.scheduled.departure;
+              const ts = getBestDepartureTs(item)!;
               const airline = item.flight?.airline?.name || 'Sconosciuta';
               const ops = getAirlineOps(airline);
               const fn = item.flight?.identification?.number?.default || 'N/A';
@@ -1303,11 +1306,11 @@ export default function FlightScreen() {
       // Schedula notifiche se attive (solo turno di oggi)
       if (notificationsEnabledNow && shiftToday) {
         const shiftArrivals = fetchedArrivals.filter(item => {
-          const ts = item.flight?.time?.scheduled?.arrival;
+          const ts = getBestArrivalTs(item);
           return ts && ts >= shiftToday.start && ts <= shiftToday.end;
         });
         const shiftDepartures = fetchedDepartures.filter(item => {
-          const ts = item.flight?.time?.scheduled?.departure;
+          const ts = getBestDepartureTs(item);
           return ts && ts >= shiftToday.start && ts <= shiftToday.end;
         });
         const count = await scheduleShiftNotifications(
@@ -1391,11 +1394,11 @@ export default function FlightScreen() {
     }
 
     const shiftArrivals = arrivals.filter(item => {
-      const ts = item.flight?.time?.scheduled?.arrival;
+      const ts = getBestArrivalTs(item);
       return ts && ts >= shifts.today!.start && ts <= shifts.today!.end;
     });
     const shiftDepartures = departures.filter(item => {
-      const ts = item.flight?.time?.scheduled?.departure;
+      const ts = getBestDepartureTs(item);
       return ts && ts >= shifts.today!.start && ts <= shifts.today!.end;
     });
     const count = await scheduleShiftNotifications(
