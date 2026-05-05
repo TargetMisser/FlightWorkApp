@@ -16,7 +16,7 @@ import {
 } from './flightProviders';
 import { getAirLabsApiKey, getFlightProviderPreference } from './flightProviderSettings';
 
-const FETCH_TIMEOUT = 10000; // 10 seconds
+const FETCH_TIMEOUT = 15000; // AirLabs live + route prediction can take a little longer on mobile networks.
 const SCHEDULE_CACHE_KEY = 'aerostaff_schedule_provider_cache_v1';
 const SCHEDULE_CACHE_TTL_MS = 30 * 60 * 1000;
 
