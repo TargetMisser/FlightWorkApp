@@ -1556,13 +1556,15 @@ export default function FlightScreen() {
   }, []);
 
   const userShift = activeDay === 'today' ? shifts.today : shifts.tomorrow;
-  const selectedDate = activeDay === 'today' ? new Date() : (() => { const d = new Date(); d.setDate(d.getDate() + 1); return d; })();
-  const isSameDay = (d1: Date, d2: Date) =>
-    d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
+  // ⚡ Bolt Optimization: Stabilize selectedDate to prevent recreation on every render, enabling currentData memoization
+  const selectedDate = useMemo(() => activeDay === 'today' ? new Date() : (() => { const d = new Date(); d.setDate(d.getDate() + 1); return d; })(), [activeDay]);
+  const isSameDay = useCallback((d1: Date, d2: Date) =>
+    d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate(), []);
 
   const allSelected = airportAirlines.length > 0 && airportAirlines.every(k => selectedAirlines.includes(k));
 
-  const currentData = (() => {
+  // ⚡ Bolt Optimization: Memoize currentData to prevent re-filtering hundreds of flights on every render
+  const currentData = useMemo(() => {
     const source = activeTab === 'arrivals' ? allArrivalsFull : allDeparturesFull;
     const seen = new Set<string>();
     return source.filter(item => {
@@ -1577,7 +1579,7 @@ export default function FlightScreen() {
       const name = (item.flight?.airline?.name || '').toLowerCase();
       return selectedAirlines.some(key => name.includes(key));
     });
-  })();
+  }, [activeTab, allArrivalsFull, allDeparturesFull, selectedDate, selectedAirlines, isSameDay]);
 
   const renderFlight = useCallback(({ item }: { item: any }) => (
     <FlightRow
