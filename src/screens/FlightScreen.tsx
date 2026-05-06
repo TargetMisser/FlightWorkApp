@@ -1690,6 +1690,8 @@ export default function FlightScreen() {
           data={currentData}
           keyExtractor={(item, i) => item.flight?.identification?.id || String(i)}
           renderItem={renderFlight}
+          // Performance optimization: reduce memory footprint on long lists
+          windowSize={5}
           contentContainerStyle={{ padding: 16, paddingBottom: 96 }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchAll(); }} tintColor={colors.primary} />}
           ListEmptyComponent={<Text style={{ textAlign: 'center', marginTop: 40, color: '#9CA3AF', fontSize: 15 }}>{t('flightNoFlights')}</Text>}
